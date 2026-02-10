@@ -6,7 +6,9 @@ import { parseMessage, parseStreamingChunk } from '@/lib/ai/parser'
 import { MessageBubble } from './message-bubble'
 import { TypingIndicator } from './typing-indicator'
 import { ChatInput } from './chat-input'
-import type { ChatMessage, SessionType, DomainName, StructuredBlock } from '@/types/chat'
+import { BuildingCardPlaceholder } from './building-card-placeholder'
+import { QuickReplyButtons } from './quick-reply-buttons'
+import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
 
 interface ChatViewProps {
   userId: string
@@ -303,14 +305,31 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
     <div className="flex flex-col h-full">
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {messages.map((message) => (
-          <MessageBubble
-            key={message.id}
-            message={message}
-            parsedContent={parseMessage(message.content)}
-            onCorrectDomain={handleCorrectDomain}
-          />
-        ))}
+        {messages.map((message, index) => {
+          const parsed = parseMessage(message.content)
+          const isLastMessage = index === messages.length - 1
+          const hasDomainCard = parsed.block?.type === 'domain_summary'
+          const showQuickReplies = isLastMessage && hasDomainCard && sessionType === 'life_mapping' && !isStreaming
+
+          return (
+            <div key={message.id}>
+              <MessageBubble
+                message={message}
+                parsedContent={parsed}
+                onCorrectDomain={handleCorrectDomain}
+              />
+              {showQuickReplies && (
+                <div className="mt-3">
+                  <QuickReplyButtons
+                    domainsExplored={domainsExplored}
+                    onSelect={handleSend}
+                    disabled={isStreaming}
+                  />
+                </div>
+              )}
+            </div>
+          )
+        })}
 
         {/* Streaming message */}
         {isStreaming && streamingDisplay && (
@@ -323,13 +342,8 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
               </div>
             ) : null}
             {streamingDisplay.pendingBlock && (
-              <div className="flex justify-start">
-                <div className="max-w-[85%] rounded-lg px-4 py-3 bg-bg-card border border-border shadow-sm">
-                  <div className="flex items-center gap-2 text-text-secondary text-sm">
-                    <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                    Building your map...
-                  </div>
-                </div>
+              <div className="w-full max-w-[95%]">
+                <BuildingCardPlaceholder />
               </div>
             )}
           </>
