@@ -11,6 +11,7 @@ import { QuickReplyButtons } from './quick-reply-buttons'
 import { ErrorMessage } from './error-message'
 import { getOrCreateLifeMap, upsertDomain, updateLifeMapSynthesis } from '@/lib/supabase/life-map'
 import { completeSession, updateDomainsExplored, updateSessionSummary } from '@/lib/supabase/sessions'
+import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
 
 interface ChatViewProps {
@@ -34,6 +35,7 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
   const [domainsExplored, setDomainsExplored] = useState<Set<DomainName>>(new Set())
   const [prefillText, setPrefillText] = useState<string | undefined>()
   const [retryCount, setRetryCount] = useState(0)
+  const [showPushPrompt, setShowPushPrompt] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
@@ -286,6 +288,11 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
               .from('users')
               .update({ onboarding_completed: true })
               .eq('id', userId)
+
+            // Prompt for push notifications after first life mapping
+            if (isPushSupported() && Notification.permission === 'default') {
+              setShowPushPrompt(true)
+            }
           } catch {
             console.error('Failed to persist synthesis')
           }
@@ -411,6 +418,34 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
               if (lastUserMsg) sendMessage(lastUserMsg.content, true)
             }}
           />
+        )}
+
+        {/* Push notification prompt */}
+        {showPushPrompt && (
+          <div className="flex justify-start">
+            <div className="max-w-[85%] rounded-lg px-4 py-3 bg-bg-card border border-primary/20">
+              <p className="text-sm text-text mb-3">
+                Want me to remind you when it&apos;s time to check in?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    await requestPushPermission()
+                    setShowPushPrompt(false)
+                  }}
+                  className="h-9 px-4 bg-primary text-white text-sm font-medium rounded-md hover:bg-primary-hover transition-colors"
+                >
+                  Allow
+                </button>
+                <button
+                  onClick={() => setShowPushPrompt(false)}
+                  className="h-9 px-4 text-text-secondary text-sm font-medium rounded-md hover:bg-border/30 transition-colors"
+                >
+                  Skip
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
