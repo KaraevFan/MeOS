@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import { useVoiceRecorder } from '@/lib/voice/recorder'
 
 interface ChatInputProps {
   onSend: (text: string) => void
@@ -9,9 +10,21 @@ interface ChatInputProps {
   prefill?: string
 }
 
+type VoiceState = 'idle' | 'recording' | 'processing'
+
 export function ChatInput({ onSend, disabled, prefill }: ChatInputProps) {
   const [text, setText] = useState('')
+  const [voiceState, setVoiceState] = useState<VoiceState>('idle')
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  const {
+    isRecording,
+    duration,
+    error: voiceError,
+    isSupported: voiceSupported,
+    startRecording,
+    stopRecording,
+  } = useVoiceRecorder()
 
   useEffect(() => {
     if (prefill) {
@@ -34,42 +47,118 @@ export function ChatInput({ onSend, disabled, prefill }: ChatInputProps) {
     }
   }
 
+  async function handleVoiceTap() {
+    if (disabled) return
+
+    if (voiceState === 'idle') {
+      setVoiceState('recording')
+      await startRecording()
+    } else if (voiceState === 'recording' && isRecording) {
+      setVoiceState('processing')
+      try {
+        const blob = await stopRecording()
+
+        // Send to transcription API
+        const formData = new FormData()
+        formData.append('audio', blob, 'recording.webm')
+
+        const response = await fetch('/api/transcribe', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          throw new Error('Transcription failed')
+        }
+
+        const result = await response.json()
+        if (result.text) {
+          // Auto-send voice transcription
+          onSend(result.text)
+        }
+      } catch {
+        // Fall back to showing error
+        setText('')
+      } finally {
+        setVoiceState('idle')
+      }
+    }
+  }
+
+  // Reset voice state if recording stops externally
+  useEffect(() => {
+    if (!isRecording && voiceState === 'recording') {
+      setVoiceState('idle')
+    }
+  }, [isRecording, voiceState])
+
+  function formatDuration(seconds: number): string {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
   return (
     <div className="border-t border-border bg-bg px-4 py-3 pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-end gap-3 max-w-lg mx-auto">
-        {/* Voice button placeholder — will be functional in Task 11 */}
-        <button
-          type="button"
-          disabled={disabled}
-          className={cn(
-            'flex-shrink-0 w-[64px] h-[64px] rounded-full bg-primary',
-            'flex items-center justify-center',
-            'shadow-glow animate-pulse',
-            'transition-all duration-200',
-            'disabled:opacity-50 disabled:animate-none',
-            'hover:bg-primary-hover active:scale-95'
-          )}
-          aria-label="Voice input (coming soon)"
-          onClick={() => {
-            // Voice functionality added in Task 11
-          }}
-        >
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        {/* Voice button */}
+        {voiceSupported && (
+          <button
+            type="button"
+            disabled={disabled && voiceState === 'idle'}
+            onClick={handleVoiceTap}
+            className={cn(
+              'flex-shrink-0 rounded-full bg-primary',
+              'flex flex-col items-center justify-center',
+              'transition-all duration-200',
+              'hover:bg-primary-hover active:scale-95',
+              // Size states
+              voiceState === 'idle' && 'w-[64px] h-[64px] shadow-glow animate-pulse',
+              voiceState === 'recording' && 'w-[72px] h-[72px] bg-primary-hover shadow-glow',
+              voiceState === 'processing' && 'w-[64px] h-[64px] opacity-70',
+              // Disabled
+              disabled && voiceState === 'idle' && 'opacity-50 animate-none'
+            )}
+            aria-label={
+              voiceState === 'idle' ? 'Start recording' :
+              voiceState === 'recording' ? 'Stop recording' :
+              'Processing audio'
+            }
           >
-            <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
-            <path d="M19 10v2a7 7 0 01-14 0v-2" />
-            <line x1="12" y1="19" x2="12" y2="23" />
-            <line x1="8" y1="23" x2="16" y2="23" />
-          </svg>
-        </button>
+            {voiceState === 'processing' ? (
+              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg
+                width={voiceState === 'recording' ? '32' : '28'}
+                height={voiceState === 'recording' ? '32' : '28'}
+                viewBox="0 0 24 24"
+                fill={voiceState === 'recording' ? 'white' : 'none'}
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                {voiceState === 'recording' ? (
+                  // Stop icon (square)
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                ) : (
+                  // Mic icon
+                  <>
+                    <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+                    <path d="M19 10v2a7 7 0 01-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                    <line x1="8" y1="23" x2="16" y2="23" />
+                  </>
+                )}
+              </svg>
+            )}
+            {voiceState === 'recording' && (
+              <span className="text-white text-[10px] font-medium mt-0.5">
+                {formatDuration(duration)}
+              </span>
+            )}
+          </button>
+        )}
 
         <div className="flex-1 flex items-end gap-2">
           <textarea
@@ -77,8 +166,8 @@ export function ChatInput({ onSend, disabled, prefill }: ChatInputProps) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
-            disabled={disabled}
+            placeholder={voiceState === 'recording' ? 'Recording...' : voiceState === 'processing' ? 'Processing...' : 'Type a message...'}
+            disabled={disabled || voiceState !== 'idle'}
             rows={1}
             className={cn(
               'flex-1 resize-none overflow-hidden',
@@ -101,7 +190,7 @@ export function ChatInput({ onSend, disabled, prefill }: ChatInputProps) {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={disabled || !text.trim()}
+            disabled={disabled || !text.trim() || voiceState !== 'idle'}
             className={cn(
               'flex-shrink-0 w-10 h-10 rounded-full',
               'flex items-center justify-center',
@@ -128,6 +217,16 @@ export function ChatInput({ onSend, disabled, prefill }: ChatInputProps) {
           </button>
         </div>
       </div>
+
+      {/* Voice error */}
+      {voiceError && (
+        <p className="text-accent-terra text-xs mt-2 text-center">{voiceError}</p>
+      )}
+
+      {/* Processing label */}
+      {voiceState === 'processing' && (
+        <p className="text-text-secondary text-xs mt-2 text-center">Processing your voice...</p>
+      )}
     </div>
   )
 }
