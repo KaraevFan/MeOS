@@ -19,7 +19,7 @@ export default async function ChatPage({
   const sessionType = (params.type === 'weekly_checkin' ? 'weekly_checkin' : 'life_mapping') as SessionType
 
   return (
-    <div className="h-[calc(100dvh-64px)]">
+    <div className="fixed inset-0 bottom-16 pb-[env(safe-area-inset-bottom)]">
       <ChatView userId={user.id} sessionType={sessionType} />
     </div>
   )

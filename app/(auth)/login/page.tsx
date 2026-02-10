@@ -127,6 +127,13 @@ export default function LoginPage() {
       {error && (
         <p className="mt-md text-sm text-accent-terra">{error}</p>
       )}
+
+      {loading && !error && (
+        <div className="mt-lg flex items-center justify-center gap-2">
+          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-text-secondary">Redirecting...</span>
+        </div>
+      )}
     </div>
   )
 }
