@@ -1,0 +1,118 @@
+# CLAUDE.md
+
+## Project Overview
+
+**MeOS** is a voice-first AI life partner app. An AI guide called "Sage" helps users map their life through guided conversation and stay aligned through weekly check-ins. Currently in Sprint 1 build phase — going from spec to working MVP.
+
+## Key Documentation
+
+Read these BEFORE implementing anything — they are the source of truth:
+
+- `MVP_PRD.md` — Complete build spec: product principles, Sage persona, data model, system prompts, conversation flows, sprint plan
+- `UX_design.md` — Design philosophy, color palette, typography, screen specs, interaction patterns, user journey
+
+When in doubt about product decisions, behavior, or design direction, consult these docs rather than guessing.
+
+## Tech Stack
+
+- **Frontend:** Next.js 14+ (App Router) + Tailwind CSS — mobile-first PWA
+- **Backend/DB:** Supabase (Postgres + Auth + Realtime)
+- **AI:** Claude API (conversation engine)
+- **Voice:** Whisper API or Deepgram (speech-to-text)
+- **Hosting:** Vercel
+
+## Project Structure
+
+```
+/app                    # Next.js App Router pages and layouts
+  /api                  # API routes (Claude API proxy, voice transcription, session processing)
+  /(auth)               # Auth pages (login, callback)
+  /(main)               # Authenticated app shell with bottom tab nav
+    /home               # Home screen
+    /chat               # Conversation view (primary interface)
+    /life-map           # Life Map structured view
+    /history            # Past sessions list
+/components
+  /ui                   # Reusable UI primitives (buttons, cards, inputs)
+  /chat                 # Chat-specific components (message bubbles, domain cards, voice button)
+  /life-map             # Life map display components
+/lib
+  /supabase             # Supabase client, auth helpers, database queries
+  /ai                   # Claude API integration, system prompts, structured output parsing
+  /voice                # Voice recording (MediaRecorder) + transcription API
+  /utils                # General utilities
+/types                  # TypeScript type definitions
+/public                 # Static assets, PWA manifest, service worker
+```
+
+## Commands
+
+```bash
+npm run dev             # Start dev server
+npm run build           # Production build
+npm run lint            # ESLint
+npm run type-check      # TypeScript strict check
+npx supabase db push    # Push migrations to Supabase
+npx supabase gen types  # Generate TypeScript types from DB schema
+```
+
+## Code Style & Conventions
+
+- TypeScript strict mode. No `any` types — use `unknown` + type guards.
+- Use named exports, not default exports (except Next.js pages/layouts which require default).
+- Prefer server components by default. Use `'use client'` only when needed (interactivity, hooks, browser APIs).
+- Tailwind utility classes only — no custom CSS files.
+- Use `cn()` helper (clsx + tailwind-merge) for conditional class names.
+- Async data fetching in server components, not in useEffect.
+- Supabase Row Level Security (RLS) on all tables — never trust client-side auth alone.
+
+## Critical Architecture Decisions
+
+### Structured Output Parsing
+
+Sage outputs structured blocks that the frontend must parse and render as cards:
+- `[DOMAIN_SUMMARY]...[/DOMAIN_SUMMARY]` → renders as a domain card inline in chat
+- `[LIFE_MAP_SYNTHESIS]...[/LIFE_MAP_SYNTHESIS]` → renders as synthesis card at session end
+- `[SESSION_SUMMARY]...[/SESSION_SUMMARY]` → used for post-session processing, not displayed
+
+The parser must be robust — Sage may produce slightly malformed output. Fail gracefully (show as plain text) rather than crashing.
+
+### Conversation Memory (Token Management)
+
+Do NOT inject full session transcripts into Claude API calls. Instead:
+1. Current life map (structured data) as system context
+2. AI-generated summaries of last 3-5 sessions
+3. Active patterns
+4. Last stated commitment
+
+Full transcripts are stored in DB for user review only.
+
+### Voice Flow
+
+Record → Stop → Transcribe → Display as message → Send to Claude. No real-time streaming transcription in MVP. Keep it simple.
+
+## Design Constraints (Non-Negotiable)
+
+- **Warm palette:** Soft amber/gold primary, cream backgrounds, dark warm gray text, earth tone accents. NOT cold blues or sterile whites.
+- **Voice button is the hero:** 60px circle, warm amber, center-bottom, most prominent element.
+- **Mobile-first PWA.** Touch targets minimum 44px.
+- **No empty states** — every screen has a warm nudge toward conversation.
+- **No guilt-inducing UI** — gentle consistency acknowledgment, never streaks or scores.
+- **Sage responses are concise** — 2-4 sentences typical, longer only when synthesizing.
+
+## Gotchas & Guardrails
+
+- Supabase Auth uses PKCE flow for SSR. Use `@supabase/ssr` package, not `@supabase/auth-helpers-nextjs` (deprecated).
+- Claude API calls must go through our API route — never expose the API key client-side.
+- Voice recording uses MediaRecorder API — check browser compatibility, provide text fallback.
+- PWA service worker must NOT cache API routes or Supabase realtime connections.
+- Life map domain status enum is exactly: `thriving | stable | needs_attention | in_crisis`. Don't invent new values.
+- Session types enum: `life_mapping | weekly_checkin | monthly_review | quarterly_review`. Only `life_mapping` and `weekly_checkin` are implemented in MVP.
+
+## Skills
+
+- `.claude/skills/meos-design/SKILL.md` — MeOS design system. Read this before building ANY frontend component. Contains design tokens, component patterns, anti-patterns, and typography rules. Prevents generic AI aesthetics.
+
+## What's Out of Scope (Sprint 1)
+
+Don't build these yet: daily nudges, content intake, habit tracking, social features, native app, payments, TTS, data visualizations, pattern detection beyond basic theme tracking.
