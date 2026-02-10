@@ -8,6 +8,8 @@ import { TypingIndicator } from './typing-indicator'
 import { ChatInput } from './chat-input'
 import { BuildingCardPlaceholder } from './building-card-placeholder'
 import { QuickReplyButtons } from './quick-reply-buttons'
+import { getOrCreateLifeMap, upsertDomain, updateLifeMapSynthesis } from '@/lib/supabase/life-map'
+import { completeSession, updateDomainsExplored, updateSessionSummary } from '@/lib/supabase/sessions'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
 
 interface ChatViewProps {
@@ -250,24 +252,71 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
         has_structured_block: hasBlock,
       })
 
-      // Track domains explored
+      // Handle structured blocks — persist to life map and manage session lifecycle
       if (hasBlock) {
         const parsed = parseMessage(accumulated)
+
         if (parsed.block?.type === 'domain_summary') {
           const domain = parsed.block.data.domain
-          setDomainsExplored((prev) => {
-            const next = new Set(prev)
-            next.add(domain)
-            return next
-          })
+          const newDomains = new Set(domainsExplored)
+          newDomains.add(domain)
+          setDomainsExplored(newDomains)
 
-          // Persist to session
-          await supabase
-            .from('sessions')
-            .update({
-              domains_explored: [...domainsExplored, domain],
-            })
-            .eq('id', sessionId)
+          // Persist domain to life map
+          try {
+            const lifeMap = await getOrCreateLifeMap(supabase, userId)
+            await upsertDomain(supabase, lifeMap.id, parsed.block.data)
+            await updateDomainsExplored(supabase, sessionId, [...newDomains])
+          } catch {
+            // Non-critical — don't break the conversation
+            console.error('Failed to persist domain to life map')
+          }
+        }
+
+        if (parsed.block?.type === 'life_map_synthesis') {
+          // Persist synthesis and complete session
+          try {
+            const lifeMap = await getOrCreateLifeMap(supabase, userId)
+            await updateLifeMapSynthesis(supabase, lifeMap.id, parsed.block.data)
+            await completeSession(supabase, sessionId)
+
+            // Mark onboarding complete
+            await supabase
+              .from('users')
+              .update({ onboarding_completed: true })
+              .eq('id', userId)
+          } catch {
+            console.error('Failed to persist synthesis')
+          }
+        }
+
+        if (parsed.block?.type === 'session_summary') {
+          // Persist session summary and complete session (weekly check-in)
+          try {
+            const data = parsed.block.data
+            const summaryText = [
+              `Date: ${data.date}`,
+              `Sentiment: ${data.sentiment}`,
+              `Energy: ${data.energyLevel ?? 'N/A'}`,
+              `Themes: ${data.keyThemes.join(', ')}`,
+              `Commitments: ${data.commitments.join(', ')}`,
+              `Updates: ${data.lifeMapUpdates}`,
+              `Patterns: ${data.patternsObserved}`,
+            ].join('\n')
+
+            await updateSessionSummary(
+              supabase,
+              sessionId,
+              summaryText,
+              data.keyThemes,
+              data.commitments,
+              data.sentiment,
+              data.energyLevel
+            )
+            await completeSession(supabase, sessionId)
+          } catch {
+            console.error('Failed to persist session summary')
+          }
         }
       }
     } catch (err) {
