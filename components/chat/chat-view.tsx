@@ -8,6 +8,7 @@ import { TypingIndicator } from './typing-indicator'
 import { ChatInput } from './chat-input'
 import { BuildingCardPlaceholder } from './building-card-placeholder'
 import { QuickReplyButtons } from './quick-reply-buttons'
+import { ErrorMessage } from './error-message'
 import { getOrCreateLifeMap, upsertDomain, updateLifeMapSynthesis } from '@/lib/supabase/life-map'
 import { completeSession, updateDomainsExplored, updateSessionSummary } from '@/lib/supabase/sessions'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
@@ -403,26 +404,13 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
 
         {/* Error state */}
         {error && !isStreaming && (
-          <div className="flex justify-start">
-            <div className="max-w-[85%] rounded-lg px-4 py-3 bg-bg-card border border-accent-terra/20">
-              <p className="text-accent-terra text-sm">
-                {retryCount >= 3
-                  ? "Sage is having trouble right now. Your conversation is saved — come back and pick up where you left off."
-                  : "Sage couldn't respond. Tap to retry."}
-              </p>
-              {retryCount < 3 && (
-                <button
-                  onClick={() => {
-                    const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
-                    if (lastUserMsg) sendMessage(lastUserMsg.content, true)
-                  }}
-                  className="mt-2 text-sm text-primary font-medium hover:underline"
-                >
-                  Retry
-                </button>
-              )}
-            </div>
-          </div>
+          <ErrorMessage
+            retryCount={retryCount}
+            onRetry={() => {
+              const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
+              if (lastUserMsg) sendMessage(lastUserMsg.content, true)
+            }}
+          />
         )}
       </div>
 
