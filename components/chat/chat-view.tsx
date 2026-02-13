@@ -9,23 +9,107 @@ import { ChatInput } from './chat-input'
 import { BuildingCardPlaceholder } from './building-card-placeholder'
 import { QuickReplyButtons } from './quick-reply-buttons'
 import { ErrorMessage } from './error-message'
+import { PulseCheckCard } from './pulse-check-card'
 import { getOrCreateLifeMap, upsertDomain, updateLifeMapSynthesis } from '@/lib/supabase/life-map'
 import { completeSession, updateDomainsExplored, updateSessionSummary } from '@/lib/supabase/sessions'
+import { savePulseCheckRatings, pulseRatingToDomainStatus } from '@/lib/supabase/pulse-check'
 import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
+import type { PulseCheckRating } from '@/types/pulse-check'
+import type { SessionState, SessionStateResult } from '@/lib/supabase/session-state'
 
 interface ChatViewProps {
   userId: string
   sessionType?: SessionType
+  initialSessionState?: SessionStateResult
 }
 
-const SAGE_OPENING_LIFE_MAPPING = `Hey — I'm Sage. I'm here to help you get a clearer picture of where you are in life and where you want to go. There's no right way to do this. I'll ask you some questions, you talk through whatever comes up, and I'll help organize it as we go. You'll see your life map building in real time. We can go as deep or as light as you want — you're in control of the pace. Sound good?
+function StateQuickReplies({
+  state,
+  unexploredDomains,
+  onSelect,
+  disabled,
+  pulseCheckRatings: ratings,
+}: {
+  state: SessionState
+  unexploredDomains?: DomainName[]
+  onSelect: (text: string) => void
+  disabled: boolean
+  pulseCheckRatings?: PulseCheckRating[] | null
+}) {
+  const buttonClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm bg-bg border border-border text-text hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
+  const primaryClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm bg-primary/10 border border-primary/30 text-primary font-medium hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
 
-So — before we get into specifics, how are you feeling about life right now? Just the honest, unfiltered version.`
+  switch (state) {
+    case 'mapping_in_progress': {
+      let domains = unexploredDomains || []
+      if (ratings && ratings.length > 0) {
+        const ratingMap = new Map(ratings.map((r) => [r.domain, r.ratingNumeric]))
+        domains = [...domains].sort((a, b) => (ratingMap.get(a) ?? 3) - (ratingMap.get(b) ?? 3))
+      }
+      return (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+          {domains.map((d) => (
+            <button key={d} onClick={() => onSelect(`Let's explore ${d}`)} disabled={disabled} className={buttonClass}>{d}</button>
+          ))}
+          <button onClick={() => onSelect("Just want to talk.")} disabled={disabled} className={buttonClass}>Just talk</button>
+          <button onClick={() => onSelect("Let's wrap up and synthesize what we've covered.")} disabled={disabled} className={primaryClass}>Wrap up</button>
+        </div>
+      )
+    }
+    case 'mapping_complete':
+      return (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+          <button onClick={() => onSelect("I'd like to start my check-in early.")} disabled={disabled} className={primaryClass}>Start check-in early</button>
+          <button onClick={() => onSelect("Something's on my mind.")} disabled={disabled} className={buttonClass}>Something on my mind</button>
+          <button onClick={() => onSelect("I'd like to update my life map.")} disabled={disabled} className={buttonClass}>Update my life map</button>
+        </div>
+      )
+    case 'checkin_due':
+    case 'checkin_overdue':
+      return (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+          <button onClick={() => onSelect("Let's do it.")} disabled={disabled} className={primaryClass}>Let&apos;s do it</button>
+          <button onClick={() => onSelect("Not right now.")} disabled={disabled} className={buttonClass}>Not right now</button>
+        </div>
+      )
+    case 'mid_conversation':
+      return (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+          <button onClick={() => onSelect("Let's continue.")} disabled={disabled} className={primaryClass}>Continue</button>
+          <button onClick={() => onSelect("Start fresh.")} disabled={disabled} className={buttonClass}>Start fresh</button>
+        </div>
+      )
+    default:
+      return null
+  }
+}
 
-const SAGE_OPENING_CHECKIN = `Hey, welcome back. How are you doing?`
+const SAGE_OPENING_NEW_USER = `Hey — I'm Sage. I'm going to help you build a map of where you are in life right now.
 
-export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps) {
+Before we talk, I want to get a quick pulse. Rate each of these areas — don't overthink it, just your gut right now.`
+
+function getSageOpening(state: string, userName?: string): string {
+  const name = userName ? ` ${userName.charAt(0).toUpperCase() + userName.slice(1)}` : ''
+  switch (state) {
+    case 'new_user':
+      return SAGE_OPENING_NEW_USER
+    case 'mapping_in_progress':
+      return `Welcome back${name ? ',' + name : ''}. Want to keep going with your life map?`
+    case 'mapping_complete':
+      return `Hey${name ? ',' + name : ''}. I'm here whenever. Anything on your mind?`
+    case 'checkin_due':
+      return `Hey${name ? ',' + name : ''} — it's check-in time. Ready to look at how this week went?`
+    case 'checkin_overdue':
+      return `Hey${name ? ',' + name : ''} — we missed our check-in. No pressure. Want to catch up now?`
+    case 'mid_conversation':
+      return `Hey — we were in the middle of things. Want to pick up where we left off, or start fresh?`
+    default:
+      return SAGE_OPENING_NEW_USER
+  }
+}
+
+export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -36,6 +120,10 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
   const [prefillText, setPrefillText] = useState<string | undefined>()
   const [retryCount, setRetryCount] = useState(0)
   const [showPushPrompt, setShowPushPrompt] = useState(false)
+  const [showPulseCheck, setShowPulseCheck] = useState(false)
+  const [pulseCheckSubmitting, setPulseCheckSubmitting] = useState(false)
+  const [pulseCheckError, setPulseCheckError] = useState<string | null>(null)
+  const [pulseCheckRatings, setPulseCheckRatings] = useState<PulseCheckRating[] | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
@@ -106,10 +194,11 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
           if (newSession) {
             setSessionId(newSession.id)
 
+            const state = initialSessionState?.state || 'new_user'
+            const needsPulseCheck = state === 'new_user' && sessionType === 'life_mapping'
+
             // Add Sage's opening message
-            const openingMessage = sessionType === 'life_mapping'
-              ? SAGE_OPENING_LIFE_MAPPING
-              : SAGE_OPENING_CHECKIN
+            const openingMessage = getSageOpening(state, initialSessionState?.userName)
 
             const { data: savedMsg } = await supabase
               .from('messages')
@@ -132,6 +221,11 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
                 createdAt: savedMsg.created_at,
               }])
             }
+
+            // Show pulse check for new users
+            if (needsPulseCheck) {
+              setShowPulseCheck(true)
+            }
           }
         }
       } catch {
@@ -145,7 +239,59 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, sessionType])
 
-  async function sendMessage(text: string, retry = false) {
+  async function handlePulseCheckSubmit(ratings: PulseCheckRating[]) {
+    if (!sessionId) return
+
+    setPulseCheckSubmitting(true)
+    setPulseCheckError(null)
+
+    try {
+      // Save ratings to DB
+      await savePulseCheckRatings(supabase, sessionId, userId, ratings, true)
+
+      // Seed life_map_domains with initial status
+      const lifeMap = await getOrCreateLifeMap(supabase, userId)
+      for (const rating of ratings) {
+        await upsertDomain(supabase, lifeMap.id, {
+          domain: rating.domain as DomainName,
+          currentState: '',
+          whatsWorking: [],
+          whatsNotWorking: [],
+          keyTension: '',
+          statedIntention: '',
+          status: pulseRatingToDomainStatus(rating.rating),
+        })
+      }
+
+      // Store ratings in state for later use
+      setPulseCheckRatings(ratings)
+      setShowPulseCheck(false)
+
+      // Build pulse check context for Sage's pattern-read response
+      const ratingsText = ratings
+        .map((r) => `- ${r.domain}: ${r.rating} (${r.ratingNumeric}/5)`)
+        .join('\n')
+
+      const pulseContext = `The user just completed a life pulse check. Here are their self-ratings:
+${ratingsText}
+
+Your job now:
+1. Briefly reflect back the overall pattern you see (1-2 sentences). Note any contrasts.
+2. Propose starting with the domain that seems most pressing (lowest rated), but give the user choice.
+3. Ask a specific opening question — NOT "tell me about X" but something like "You rated X as 'struggling' — what's the main source of tension there?"
+
+Do NOT list all 8 domains back. Keep it conversational.`
+
+      // Send an invisible trigger message to get Sage's response
+      sendMessage('I completed the pulse check.', false, pulseContext)
+    } catch {
+      setPulseCheckError("Couldn't save your ratings. Tap to try again.")
+    } finally {
+      setPulseCheckSubmitting(false)
+    }
+  }
+
+  async function sendMessage(text: string, retry = false, extraSystemContext?: string) {
     if (!sessionId || isStreaming) return
 
     const userMessage: ChatMessage = {
@@ -188,6 +334,7 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
           sessionId,
           sessionType,
           messages: apiMessages,
+          ...(extraSystemContext ? { pulseCheckContext: extraSystemContext } : {}),
         }),
       })
 
@@ -259,28 +406,40 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
       if (hasBlock) {
         const parsed = parseMessage(accumulated)
 
-        if (parsed.block?.type === 'domain_summary') {
-          const domain = parsed.block.data.domain
+        // Extract all domain summary blocks from the message
+        const domainBlocks = parsed.segments.filter(
+          (s): s is Extract<typeof s, { type: 'block'; blockType: 'domain_summary' }> =>
+            s.type === 'block' && s.blockType === 'domain_summary'
+        )
+
+        if (domainBlocks.length > 0) {
           const newDomains = new Set(domainsExplored)
-          newDomains.add(domain)
+          for (const block of domainBlocks) {
+            newDomains.add(block.data.domain)
+          }
           setDomainsExplored(newDomains)
 
-          // Persist domain to life map
           try {
             const lifeMap = await getOrCreateLifeMap(supabase, userId)
-            await upsertDomain(supabase, lifeMap.id, parsed.block.data)
+            for (const block of domainBlocks) {
+              await upsertDomain(supabase, lifeMap.id, block.data)
+            }
             await updateDomainsExplored(supabase, sessionId, [...newDomains])
           } catch {
-            // Non-critical — don't break the conversation
-            console.error('Failed to persist domain to life map')
+            console.error('Failed to persist domains to life map')
           }
         }
 
-        if (parsed.block?.type === 'life_map_synthesis') {
-          // Persist synthesis and complete session
+        // Handle synthesis block
+        const synthesisBlock = parsed.segments.find(
+          (s): s is Extract<typeof s, { type: 'block'; blockType: 'life_map_synthesis' }> =>
+            s.type === 'block' && s.blockType === 'life_map_synthesis'
+        )
+
+        if (synthesisBlock) {
           try {
             const lifeMap = await getOrCreateLifeMap(supabase, userId)
-            await updateLifeMapSynthesis(supabase, lifeMap.id, parsed.block.data)
+            await updateLifeMapSynthesis(supabase, lifeMap.id, synthesisBlock.data)
             await completeSession(supabase, sessionId)
 
             // Mark onboarding complete
@@ -298,10 +457,15 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
           }
         }
 
-        if (parsed.block?.type === 'session_summary') {
-          // Persist session summary and complete session (weekly check-in)
+        // Handle session summary block
+        const summaryBlock = parsed.segments.find(
+          (s): s is Extract<typeof s, { type: 'block'; blockType: 'session_summary' }> =>
+            s.type === 'block' && s.blockType === 'session_summary'
+        )
+
+        if (summaryBlock) {
           try {
-            const data = parsed.block.data
+            const data = summaryBlock.data
             const summaryText = [
               `Date: ${data.date}`,
               `Sentiment: ${data.sentiment}`,
@@ -365,8 +529,15 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
         {messages.map((message, index) => {
           const parsed = parseMessage(message.content)
           const isLastMessage = index === messages.length - 1
-          const hasDomainCard = parsed.block?.type === 'domain_summary'
-          const showQuickReplies = isLastMessage && hasDomainCard && sessionType === 'life_mapping' && !isStreaming
+          const hasDomainCard = parsed.segments.some(
+            (s) => s.type === 'block' && s.blockType === 'domain_summary'
+          )
+          const showDomainQuickReplies = isLastMessage && hasDomainCard && sessionType === 'life_mapping' && !isStreaming
+
+          // Show state-aware quick replies after opening message (first assistant msg, no user messages yet)
+          const hasNoUserMessages = !messages.some((m) => m.role === 'user')
+          const isOpeningMessage = index === 0 && message.role === 'assistant'
+          const showStateQuickReplies = isLastMessage && isOpeningMessage && hasNoUserMessages && !isStreaming && !showPulseCheck
 
           return (
             <div key={message.id}>
@@ -375,14 +546,24 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
                 parsedContent={parsed}
                 onCorrectDomain={handleCorrectDomain}
               />
-              {showQuickReplies && (
+              {showDomainQuickReplies && (
                 <div className="mt-3">
                   <QuickReplyButtons
                     domainsExplored={domainsExplored}
                     onSelect={handleSend}
                     disabled={isStreaming}
+                    pulseCheckRatings={pulseCheckRatings}
                   />
                 </div>
+              )}
+              {showStateQuickReplies && initialSessionState && (
+                <StateQuickReplies
+                  state={initialSessionState.state}
+                  unexploredDomains={initialSessionState.unexploredDomains}
+                  onSelect={handleSend}
+                  disabled={isStreaming}
+                  pulseCheckRatings={pulseCheckRatings}
+                />
               )}
             </div>
           )
@@ -404,6 +585,18 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
               </div>
             )}
           </>
+        )}
+
+        {/* Pulse check card */}
+        {showPulseCheck && (
+          <PulseCheckCard
+            onSubmit={handlePulseCheckSubmit}
+            isSubmitting={pulseCheckSubmitting}
+            submitError={pulseCheckError}
+            onRetry={() => {
+              if (pulseCheckRatings) handlePulseCheckSubmit(pulseCheckRatings)
+            }}
+          />
         )}
 
         {/* Typing indicator — before first token */}
@@ -452,8 +645,9 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
       {/* Input area */}
       <ChatInput
         onSend={handleSend}
-        disabled={isStreaming}
+        disabled={isStreaming || showPulseCheck}
         prefill={prefillText}
+        placeholder={showPulseCheck ? 'Rate your life areas above to begin.' : undefined}
       />
     </div>
   )

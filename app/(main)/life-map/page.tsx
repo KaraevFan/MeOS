@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLifeMap } from '@/lib/supabase/life-map'
+import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { SynthesisSection } from '@/components/life-map/synthesis-section'
 import { DomainGrid } from '@/components/life-map/domain-grid'
 
@@ -13,7 +14,10 @@ export default async function LifeMapPage() {
     redirect('/login')
   }
 
-  const lifeMap = await getCurrentLifeMap(supabase, user.id)
+  const [lifeMap, baselineRatings] = await Promise.all([
+    getCurrentLifeMap(supabase, user.id),
+    getBaselineRatings(supabase, user.id),
+  ])
 
   if (!lifeMap || lifeMap.domains.length === 0) {
     return (
@@ -39,7 +43,7 @@ export default async function LifeMapPage() {
 
       <SynthesisSection lifeMap={lifeMap} />
 
-      <DomainGrid domains={lifeMap.domains} />
+      <DomainGrid domains={lifeMap.domains} baselineRatings={baselineRatings} />
 
       <p className="text-[11px] text-text-secondary text-center">
         Last updated {new Date(lifeMap.updated_at).toLocaleDateString('en-US', {

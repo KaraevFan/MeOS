@@ -58,8 +58,12 @@ export type StructuredBlock =
   | { type: 'life_map_synthesis'; data: LifeMapSynthesis }
   | { type: 'session_summary'; data: SessionSummary }
 
+export type ParsedSegment =
+  | { type: 'text'; content: string }
+  | { type: 'block'; blockType: 'domain_summary'; data: DomainSummary }
+  | { type: 'block'; blockType: 'life_map_synthesis'; data: LifeMapSynthesis }
+  | { type: 'block'; blockType: 'session_summary'; data: SessionSummary }
+
 export interface ParsedMessage {
-  textBefore: string
-  block: StructuredBlock | null
-  textAfter: string
+  segments: ParsedSegment[]
 }

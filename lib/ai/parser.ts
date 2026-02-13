@@ -1,5 +1,6 @@
 import type {
   ParsedMessage,
+  ParsedSegment,
   StructuredBlock,
   DomainSummary,
   LifeMapSynthesis,
@@ -95,27 +96,68 @@ function parseBlockContent(type: 'domain_summary' | 'life_map_synthesis' | 'sess
   }
 }
 
+/**
+ * Parse a complete message into an array of segments (text and structured blocks).
+ * Handles 1, 2, 3+ blocks per message. Malformed blocks (no closing tag) fall back to text.
+ */
 export function parseMessage(content: string): ParsedMessage {
-  for (const tag of BLOCK_TAGS) {
-    const openIndex = content.indexOf(tag.open)
-    if (openIndex === -1) continue
+  const segments: ParsedSegment[] = []
+  let remaining = content
 
-    const closeIndex = content.indexOf(tag.close, openIndex)
-    if (closeIndex === -1) {
-      // Malformed — no closing tag, return as plain text
-      return { textBefore: content, block: null, textAfter: '' }
+  while (remaining.length > 0) {
+    // Find the earliest opening tag in remaining text
+    let earliestOpen = -1
+    let matchedTag: (typeof BLOCK_TAGS)[number] | null = null
+
+    for (const tag of BLOCK_TAGS) {
+      const idx = remaining.indexOf(tag.open)
+      if (idx !== -1 && (earliestOpen === -1 || idx < earliestOpen)) {
+        earliestOpen = idx
+        matchedTag = tag
+      }
     }
 
-    const textBefore = content.slice(0, openIndex).trim()
-    const blockContent = content.slice(openIndex + tag.open.length, closeIndex)
-    const textAfter = content.slice(closeIndex + tag.close.length).trim()
+    if (earliestOpen === -1 || !matchedTag) {
+      // No more blocks — rest is text
+      const text = remaining.trim()
+      if (text) {
+        segments.push({ type: 'text', content: text })
+      }
+      break
+    }
 
-    const block = parseBlockContent(tag.type, blockContent)
+    // Check for closing tag
+    const closeIndex = remaining.indexOf(matchedTag.close, earliestOpen + matchedTag.open.length)
+    if (closeIndex === -1) {
+      // Malformed — no closing tag, treat rest as text
+      const text = remaining.trim()
+      if (text) {
+        segments.push({ type: 'text', content: text })
+      }
+      break
+    }
 
-    return { textBefore, block, textAfter }
+    // Add text before the block
+    const textBefore = remaining.slice(0, earliestOpen).trim()
+    if (textBefore) {
+      segments.push({ type: 'text', content: textBefore })
+    }
+
+    // Parse the block
+    const blockContent = remaining.slice(earliestOpen + matchedTag.open.length, closeIndex)
+    const block = parseBlockContent(matchedTag.type, blockContent)
+    segments.push({ type: 'block', blockType: block.type, data: block.data } as ParsedSegment)
+
+    // Advance past this block
+    remaining = remaining.slice(closeIndex + matchedTag.close.length)
   }
 
-  return { textBefore: content, block: null, textAfter: '' }
+  // If no segments found, return the content as text
+  if (segments.length === 0) {
+    return { segments: [{ type: 'text', content }] }
+  }
+
+  return { segments }
 }
 
 export function parseStreamingChunk(accumulated: string): {
