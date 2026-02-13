@@ -53,7 +53,7 @@ function SegmentRenderer({
   if (segment.blockType === 'life_map_synthesis') {
     return (
       <div className="w-full max-w-[95%]">
-        <SynthesisCard synthesis={segment.data} />
+        <SynthesisCard synthesis={segment.data} isInline />
       </div>
     )
   }

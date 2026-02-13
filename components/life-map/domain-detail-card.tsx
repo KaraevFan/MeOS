@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { LifeMapDomain } from '@/types/database'
+import type { PulseCheckRating } from '@/types/pulse-check'
 
 const STATUS_COLORS: Record<string, string> = {
   thriving: 'bg-status-thriving',
@@ -18,11 +19,28 @@ const STATUS_LABELS: Record<string, string> = {
   in_crisis: 'In crisis',
 }
 
-interface DomainDetailCardProps {
-  domain: LifeMapDomain
+const PULSE_RATING_COLORS: Record<string, string> = {
+  thriving: 'bg-status-thriving',
+  good: 'bg-status-stable',
+  okay: 'bg-status-stable',
+  struggling: 'bg-status-attention',
+  in_crisis: 'bg-status-crisis',
 }
 
-export function DomainDetailCard({ domain }: DomainDetailCardProps) {
+const PULSE_RATING_LABELS: Record<string, string> = {
+  thriving: 'Thriving',
+  good: 'Good',
+  okay: 'Okay',
+  struggling: 'Struggling',
+  in_crisis: 'In crisis',
+}
+
+interface DomainDetailCardProps {
+  domain: LifeMapDomain
+  pulseRating?: PulseCheckRating
+}
+
+export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps) {
   const [expanded, setExpanded] = useState(false)
 
   const statusColor = STATUS_COLORS[domain.status || 'stable'] || 'bg-status-stable'
@@ -150,6 +168,15 @@ export function DomainDetailCard({ domain }: DomainDetailCardProps) {
                   <li key={i}>{item}</li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {pulseRating && (
+            <div className="flex items-center gap-1.5">
+              <div className={cn('w-1.5 h-1.5 rounded-full', PULSE_RATING_COLORS[pulseRating.rating] || 'bg-border')} />
+              <p className="text-[11px] text-text-secondary">
+                Initial pulse: {PULSE_RATING_LABELS[pulseRating.rating] || pulseRating.rating}
+              </p>
             </div>
           )}
 

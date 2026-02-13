@@ -44,7 +44,7 @@ export function SynthesisSection({ lifeMap }: SynthesisSectionProps) {
             {lifeMap.quarterly_priorities.map((p, i) => (
               <li key={i} className="flex items-start gap-2">
                 <span className="text-primary font-bold">{i + 1}.</span>
-                <span>{p}</span>
+                <span>{p.replace(/^\d+[\)\.]\s*/, '')}</span>
               </li>
             ))}
           </ol>
@@ -72,7 +72,7 @@ export function SynthesisSection({ lifeMap }: SynthesisSectionProps) {
       {lifeMap.anti_goals && lifeMap.anti_goals.length > 0 && (
         <div>
           <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1.5">
-            Explicitly not doing now
+            Anti-goals
           </p>
           <ul className="text-sm text-text space-y-1">
             {lifeMap.anti_goals.map((g, i) => (

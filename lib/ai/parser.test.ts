@@ -345,6 +345,6 @@ Next?`
     expect(result.displayText).toBe('Summary:')
     expect(result.pendingBlock).toBe(false)
     expect(result.completedBlock).not.toBeNull()
-    expect(result.completedBlock!.type).toBe('domain_summary')
+    expect(result.completedBlock?.type).toBe('domain_summary')
   })
 })
