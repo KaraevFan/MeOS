@@ -23,7 +23,7 @@ export async function getHomeData(
   // Get user profile
   const { data: user } = await supabase
     .from('users')
-    .select('email, onboarding_completed')
+    .select('email, onboarding_completed, next_checkin_at')
     .eq('id', userId)
     .single()
 
@@ -33,27 +33,13 @@ export async function getHomeData(
   const email = user?.email || ''
   const firstName = email.split('@')[0]?.split(/[._+-]/)[0] || null
 
-  // Get last completed check-in to calculate next check-in date
+  // Use next_checkin_at from users table (set by completeSession)
   let nextCheckinDate: string | null = null
   let checkinOverdue = false
 
-  if (onboardingCompleted) {
-    const { data: lastCheckin } = await supabase
-      .from('sessions')
-      .select('completed_at')
-      .eq('user_id', userId)
-      .eq('status', 'completed')
-      .order('completed_at', { ascending: false })
-      .limit(1)
-      .single()
-
-    if (lastCheckin?.completed_at) {
-      const lastDate = new Date(lastCheckin.completed_at)
-      const nextDate = new Date(lastDate)
-      nextDate.setDate(nextDate.getDate() + 7)
-      nextCheckinDate = nextDate.toISOString()
-      checkinOverdue = nextDate <= new Date()
-    }
+  if (onboardingCompleted && user?.next_checkin_at) {
+    nextCheckinDate = user.next_checkin_at
+    checkinOverdue = new Date(user.next_checkin_at) <= new Date()
   }
 
   // Get quarterly priorities from current life map

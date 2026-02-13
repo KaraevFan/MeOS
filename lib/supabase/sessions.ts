@@ -78,15 +78,29 @@ export async function completeSession(
   supabase: SupabaseClient,
   sessionId: string
 ) {
-  const { error } = await supabase
+  // Complete the session
+  const { data: session, error } = await supabase
     .from('sessions')
     .update({
       status: 'completed',
       completed_at: new Date().toISOString(),
     })
     .eq('id', sessionId)
+    .select('user_id')
+    .single()
 
   if (error) throw error
+
+  // Set next check-in date to 7 days from now
+  if (session) {
+    const nextCheckin = new Date()
+    nextCheckin.setDate(nextCheckin.getDate() + 7)
+
+    await supabase
+      .from('users')
+      .update({ next_checkin_at: nextCheckin.toISOString() })
+      .eq('id', session.user_id)
+  }
 }
 
 export async function updateDomainsExplored(

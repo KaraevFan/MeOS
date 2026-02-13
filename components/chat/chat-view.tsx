@@ -16,19 +16,100 @@ import { savePulseCheckRatings, pulseRatingToDomainStatus } from '@/lib/supabase
 import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
 import type { PulseCheckRating } from '@/types/pulse-check'
+import type { SessionState, SessionStateResult } from '@/lib/supabase/session-state'
 
 interface ChatViewProps {
   userId: string
   sessionType?: SessionType
+  initialSessionState?: SessionStateResult
 }
 
-const SAGE_OPENING_LIFE_MAPPING = `Hey — I'm Sage. I'm going to help you build a map of where you are in life right now.
+function StateQuickReplies({
+  state,
+  unexploredDomains,
+  onSelect,
+  disabled,
+  pulseCheckRatings: ratings,
+}: {
+  state: SessionState
+  unexploredDomains?: DomainName[]
+  onSelect: (text: string) => void
+  disabled: boolean
+  pulseCheckRatings?: PulseCheckRating[] | null
+}) {
+  const buttonClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm bg-bg border border-border text-text hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
+  const primaryClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm bg-primary/10 border border-primary/30 text-primary font-medium hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
+
+  switch (state) {
+    case 'mapping_in_progress': {
+      let domains = unexploredDomains || []
+      if (ratings && ratings.length > 0) {
+        const ratingMap = new Map(ratings.map((r) => [r.domain, r.ratingNumeric]))
+        domains = [...domains].sort((a, b) => (ratingMap.get(a) ?? 3) - (ratingMap.get(b) ?? 3))
+      }
+      return (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+          {domains.map((d) => (
+            <button key={d} onClick={() => onSelect(`Let's explore ${d}`)} disabled={disabled} className={buttonClass}>{d}</button>
+          ))}
+          <button onClick={() => onSelect("Just want to talk.")} disabled={disabled} className={buttonClass}>Just talk</button>
+          <button onClick={() => onSelect("Let's wrap up and synthesize what we've covered.")} disabled={disabled} className={primaryClass}>Wrap up</button>
+        </div>
+      )
+    }
+    case 'mapping_complete':
+      return (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+          <button onClick={() => onSelect("I'd like to start my check-in early.")} disabled={disabled} className={primaryClass}>Start check-in early</button>
+          <button onClick={() => onSelect("Something's on my mind.")} disabled={disabled} className={buttonClass}>Something on my mind</button>
+          <button onClick={() => onSelect("I'd like to update my life map.")} disabled={disabled} className={buttonClass}>Update my life map</button>
+        </div>
+      )
+    case 'checkin_due':
+    case 'checkin_overdue':
+      return (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+          <button onClick={() => onSelect("Let's do it.")} disabled={disabled} className={primaryClass}>Let&apos;s do it</button>
+          <button onClick={() => onSelect("Not right now.")} disabled={disabled} className={buttonClass}>Not right now</button>
+        </div>
+      )
+    case 'mid_conversation':
+      return (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+          <button onClick={() => onSelect("Let's continue.")} disabled={disabled} className={primaryClass}>Continue</button>
+          <button onClick={() => onSelect("Start fresh.")} disabled={disabled} className={buttonClass}>Start fresh</button>
+        </div>
+      )
+    default:
+      return null
+  }
+}
+
+const SAGE_OPENING_NEW_USER = `Hey — I'm Sage. I'm going to help you build a map of where you are in life right now.
 
 Before we talk, I want to get a quick pulse. Rate each of these areas — don't overthink it, just your gut right now.`
 
-const SAGE_OPENING_CHECKIN = `Hey, welcome back. How are you doing?`
+function getSageOpening(state: string, userName?: string): string {
+  const name = userName ? ` ${userName.charAt(0).toUpperCase() + userName.slice(1)}` : ''
+  switch (state) {
+    case 'new_user':
+      return SAGE_OPENING_NEW_USER
+    case 'mapping_in_progress':
+      return `Welcome back${name ? ',' + name : ''}. Want to keep going with your life map?`
+    case 'mapping_complete':
+      return `Hey${name ? ',' + name : ''}. I'm here whenever. Anything on your mind?`
+    case 'checkin_due':
+      return `Hey${name ? ',' + name : ''} — it's check-in time. Ready to look at how this week went?`
+    case 'checkin_overdue':
+      return `Hey${name ? ',' + name : ''} — we missed our check-in. No pressure. Want to catch up now?`
+    case 'mid_conversation':
+      return `Hey — we were in the middle of things. Want to pick up where we left off, or start fresh?`
+    default:
+      return SAGE_OPENING_NEW_USER
+  }
+}
 
-export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps) {
+export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -113,22 +194,11 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
           if (newSession) {
             setSessionId(newSession.id)
 
-            // Check if user needs pulse check (new user doing life mapping)
-            const { data: userProfile } = await supabase
-              .from('users')
-              .select('onboarding_completed')
-              .eq('id', userId)
-              .single()
-
-            const isNewUser = !userProfile?.onboarding_completed
-            const needsPulseCheck = isNewUser && sessionType === 'life_mapping'
+            const state = initialSessionState?.state || 'new_user'
+            const needsPulseCheck = state === 'new_user' && sessionType === 'life_mapping'
 
             // Add Sage's opening message
-            const openingMessage = needsPulseCheck
-              ? SAGE_OPENING_LIFE_MAPPING
-              : sessionType === 'life_mapping'
-                ? SAGE_OPENING_LIFE_MAPPING
-                : SAGE_OPENING_CHECKIN
+            const openingMessage = getSageOpening(state, initialSessionState?.userName)
 
             const { data: savedMsg } = await supabase
               .from('messages')
@@ -462,7 +532,12 @@ Do NOT list all 8 domains back. Keep it conversational.`
           const hasDomainCard = parsed.segments.some(
             (s) => s.type === 'block' && s.blockType === 'domain_summary'
           )
-          const showQuickReplies = isLastMessage && hasDomainCard && sessionType === 'life_mapping' && !isStreaming
+          const showDomainQuickReplies = isLastMessage && hasDomainCard && sessionType === 'life_mapping' && !isStreaming
+
+          // Show state-aware quick replies after opening message (first assistant msg, no user messages yet)
+          const hasNoUserMessages = !messages.some((m) => m.role === 'user')
+          const isOpeningMessage = index === 0 && message.role === 'assistant'
+          const showStateQuickReplies = isLastMessage && isOpeningMessage && hasNoUserMessages && !isStreaming && !showPulseCheck
 
           return (
             <div key={message.id}>
@@ -471,7 +546,7 @@ Do NOT list all 8 domains back. Keep it conversational.`
                 parsedContent={parsed}
                 onCorrectDomain={handleCorrectDomain}
               />
-              {showQuickReplies && (
+              {showDomainQuickReplies && (
                 <div className="mt-3">
                   <QuickReplyButtons
                     domainsExplored={domainsExplored}
@@ -480,6 +555,15 @@ Do NOT list all 8 domains back. Keep it conversational.`
                     pulseCheckRatings={pulseCheckRatings}
                   />
                 </div>
+              )}
+              {showStateQuickReplies && initialSessionState && (
+                <StateQuickReplies
+                  state={initialSessionState.state}
+                  unexploredDomains={initialSessionState.unexploredDomains}
+                  onSelect={handleSend}
+                  disabled={isStreaming}
+                  pulseCheckRatings={pulseCheckRatings}
+                />
               )}
             </div>
           )
