@@ -477,6 +477,7 @@ Do NOT list all 8 domains back. Keep it conversational.`
                     domainsExplored={domainsExplored}
                     onSelect={handleSend}
                     disabled={isStreaming}
+                    pulseCheckRatings={pulseCheckRatings}
                   />
                 </div>
               )}
