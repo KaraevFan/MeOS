@@ -259,28 +259,40 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
       if (hasBlock) {
         const parsed = parseMessage(accumulated)
 
-        if (parsed.block?.type === 'domain_summary') {
-          const domain = parsed.block.data.domain
+        // Extract all domain summary blocks from the message
+        const domainBlocks = parsed.segments.filter(
+          (s): s is Extract<typeof s, { type: 'block'; blockType: 'domain_summary' }> =>
+            s.type === 'block' && s.blockType === 'domain_summary'
+        )
+
+        if (domainBlocks.length > 0) {
           const newDomains = new Set(domainsExplored)
-          newDomains.add(domain)
+          for (const block of domainBlocks) {
+            newDomains.add(block.data.domain)
+          }
           setDomainsExplored(newDomains)
 
-          // Persist domain to life map
           try {
             const lifeMap = await getOrCreateLifeMap(supabase, userId)
-            await upsertDomain(supabase, lifeMap.id, parsed.block.data)
+            for (const block of domainBlocks) {
+              await upsertDomain(supabase, lifeMap.id, block.data)
+            }
             await updateDomainsExplored(supabase, sessionId, [...newDomains])
           } catch {
-            // Non-critical — don't break the conversation
-            console.error('Failed to persist domain to life map')
+            console.error('Failed to persist domains to life map')
           }
         }
 
-        if (parsed.block?.type === 'life_map_synthesis') {
-          // Persist synthesis and complete session
+        // Handle synthesis block
+        const synthesisBlock = parsed.segments.find(
+          (s): s is Extract<typeof s, { type: 'block'; blockType: 'life_map_synthesis' }> =>
+            s.type === 'block' && s.blockType === 'life_map_synthesis'
+        )
+
+        if (synthesisBlock) {
           try {
             const lifeMap = await getOrCreateLifeMap(supabase, userId)
-            await updateLifeMapSynthesis(supabase, lifeMap.id, parsed.block.data)
+            await updateLifeMapSynthesis(supabase, lifeMap.id, synthesisBlock.data)
             await completeSession(supabase, sessionId)
 
             // Mark onboarding complete
@@ -298,10 +310,15 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
           }
         }
 
-        if (parsed.block?.type === 'session_summary') {
-          // Persist session summary and complete session (weekly check-in)
+        // Handle session summary block
+        const summaryBlock = parsed.segments.find(
+          (s): s is Extract<typeof s, { type: 'block'; blockType: 'session_summary' }> =>
+            s.type === 'block' && s.blockType === 'session_summary'
+        )
+
+        if (summaryBlock) {
           try {
-            const data = parsed.block.data
+            const data = summaryBlock.data
             const summaryText = [
               `Date: ${data.date}`,
               `Sentiment: ${data.sentiment}`,
@@ -365,7 +382,9 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
         {messages.map((message, index) => {
           const parsed = parseMessage(message.content)
           const isLastMessage = index === messages.length - 1
-          const hasDomainCard = parsed.block?.type === 'domain_summary'
+          const hasDomainCard = parsed.segments.some(
+            (s) => s.type === 'block' && s.blockType === 'domain_summary'
+          )
           const showQuickReplies = isLastMessage && hasDomainCard && sessionType === 'life_mapping' && !isStreaming
 
           return (

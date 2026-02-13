@@ -4,9 +4,8 @@ import { parseMessage, parseStreamingChunk } from './parser'
 describe('parseMessage', () => {
   it('returns plain text when no structured blocks', () => {
     const result = parseMessage('Hello, how are you doing today?')
-    expect(result.textBefore).toBe('Hello, how are you doing today?')
-    expect(result.block).toBeNull()
-    expect(result.textAfter).toBe('')
+    expect(result.segments).toHaveLength(1)
+    expect(result.segments[0]).toEqual({ type: 'text', content: 'Hello, how are you doing today?' })
   })
 
   it('parses a DOMAIN_SUMMARY block correctly', () => {
@@ -25,20 +24,24 @@ Status: needs_attention
 Want to explore another area?`
 
     const result = parseMessage(content)
-    expect(result.textBefore).toBe("Great, let me summarize what I'm hearing.")
-    expect(result.textAfter).toBe('Want to explore another area?')
-    expect(result.block).not.toBeNull()
-    expect(result.block!.type).toBe('domain_summary')
+    expect(result.segments).toHaveLength(3)
 
-    if (result.block!.type === 'domain_summary') {
-      const data = result.block!.data
-      expect(data.domain).toBe('Career / Work')
-      expect(data.currentState).toBe('Senior PM at a mid-stage startup, 2 years in. Competent but not excited.')
-      expect(data.whatsWorking).toEqual(['Good at the craft', 'team respects you'])
-      expect(data.whatsNotWorking).toEqual(["Feeling like building someone else's dream"])
-      expect(data.keyTension).toBe('Security vs. entrepreneurial ambition')
-      expect(data.statedIntention).toBe('Explore starting something on the side within 3 months')
-      expect(data.status).toBe('needs_attention')
+    expect(result.segments[0]).toEqual({ type: 'text', content: "Great, let me summarize what I'm hearing." })
+    expect(result.segments[2]).toEqual({ type: 'text', content: 'Want to explore another area?' })
+
+    const block = result.segments[1]
+    expect(block.type).toBe('block')
+    if (block.type === 'block') {
+      expect(block.blockType).toBe('domain_summary')
+      if (block.blockType === 'domain_summary') {
+        expect(block.data.domain).toBe('Career / Work')
+        expect(block.data.currentState).toBe('Senior PM at a mid-stage startup, 2 years in. Competent but not excited.')
+        expect(block.data.whatsWorking).toEqual(['Good at the craft', 'team respects you'])
+        expect(block.data.whatsNotWorking).toEqual(["Feeling like building someone else's dream"])
+        expect(block.data.keyTension).toBe('Security vs. entrepreneurial ambition')
+        expect(block.data.statedIntention).toBe('Explore starting something on the side within 3 months')
+        expect(block.data.status).toBe('needs_attention')
+      }
     }
   })
 
@@ -58,9 +61,10 @@ Status: stable
 Shall we continue?`
 
     const result = parseMessage(content)
-    expect(result.textBefore).toBe("Here's what I captured:")
-    expect(result.textAfter).toBe('Shall we continue?')
-    expect(result.block).not.toBeNull()
+    expect(result.segments).toHaveLength(3)
+    expect(result.segments[0]).toEqual({ type: 'text', content: "Here's what I captured:" })
+    expect(result.segments[1].type).toBe('block')
+    expect(result.segments[2]).toEqual({ type: 'text', content: 'Shall we continue?' })
   })
 
   it('parses a LIFE_MAP_SYNTHESIS block', () => {
@@ -73,16 +77,19 @@ Anti-goals: Don't optimize for promotion, Don't start another course
 [/LIFE_MAP_SYNTHESIS]`
 
     const result = parseMessage(content)
-    expect(result.block).not.toBeNull()
-    expect(result.block!.type).toBe('life_map_synthesis')
+    expect(result.segments).toHaveLength(1)
 
-    if (result.block!.type === 'life_map_synthesis') {
-      const data = result.block!.data
-      expect(data.narrative).toBe("You're at a crossroads. Career stability masks creative restlessness.")
-      expect(data.primaryCompoundingEngine).toBe('Building a creative side project')
-      expect(data.quarterlyPriorities).toEqual(['Launch side project', 'Fix sleep', 'Reconnect with friends'])
-      expect(data.keyTensions).toEqual(['Security vs. ambition', 'Solitude vs. connection'])
-      expect(data.antiGoals).toEqual(["Don't optimize for promotion", "Don't start another course"])
+    const block = result.segments[0]
+    expect(block.type).toBe('block')
+    if (block.type === 'block') {
+      expect(block.blockType).toBe('life_map_synthesis')
+      if (block.blockType === 'life_map_synthesis') {
+        expect(block.data.narrative).toBe("You're at a crossroads. Career stability masks creative restlessness.")
+        expect(block.data.primaryCompoundingEngine).toBe('Building a creative side project')
+        expect(block.data.quarterlyPriorities).toEqual(['Launch side project', 'Fix sleep', 'Reconnect with friends'])
+        expect(block.data.keyTensions).toEqual(['Security vs. ambition', 'Solitude vs. connection'])
+        expect(block.data.antiGoals).toEqual(["Don't optimize for promotion", "Don't start another course"])
+      }
     }
   })
 
@@ -98,18 +105,21 @@ Patterns observed: Third week mentioning creative restlessness
 [/SESSION_SUMMARY]`
 
     const result = parseMessage(content)
-    expect(result.block).not.toBeNull()
-    expect(result.block!.type).toBe('session_summary')
+    expect(result.segments).toHaveLength(1)
 
-    if (result.block!.type === 'session_summary') {
-      const data = result.block!.data
-      expect(data.date).toBe('2026-02-10')
-      expect(data.sentiment).toBe('Reflective and hopeful')
-      expect(data.energyLevel).toBe(3)
-      expect(data.keyThemes).toEqual(['Career transition', 'Creative expression'])
-      expect(data.commitments).toEqual(['Start side project research this week'])
-      expect(data.lifeMapUpdates).toBe('Career domain updated to needs_attention')
-      expect(data.patternsObserved).toBe('Third week mentioning creative restlessness')
+    const block = result.segments[0]
+    expect(block.type).toBe('block')
+    if (block.type === 'block') {
+      expect(block.blockType).toBe('session_summary')
+      if (block.blockType === 'session_summary') {
+        expect(block.data.date).toBe('2026-02-10')
+        expect(block.data.sentiment).toBe('Reflective and hopeful')
+        expect(block.data.energyLevel).toBe(3)
+        expect(block.data.keyThemes).toEqual(['Career transition', 'Creative expression'])
+        expect(block.data.commitments).toEqual(['Start side project research this week'])
+        expect(block.data.lifeMapUpdates).toBe('Career domain updated to needs_attention')
+        expect(block.data.patternsObserved).toBe('Third week mentioning creative restlessness')
+      }
     }
   })
 
@@ -122,9 +132,11 @@ Current state: Doing well
 No closing tag here`
 
     const result = parseMessage(content)
-    expect(result.textBefore).toBe(content)
-    expect(result.block).toBeNull()
-    expect(result.textAfter).toBe('')
+    expect(result.segments).toHaveLength(1)
+    expect(result.segments[0].type).toBe('text')
+    if (result.segments[0].type === 'text') {
+      expect(result.segments[0].content).toBe(content)
+    }
   })
 
   it('handles malformed block with missing fields gracefully', () => {
@@ -134,19 +146,168 @@ Current state: Tight but manageable
 [/DOMAIN_SUMMARY]`
 
     const result = parseMessage(content)
-    expect(result.block).not.toBeNull()
-    expect(result.block!.type).toBe('domain_summary')
+    expect(result.segments).toHaveLength(1)
 
-    if (result.block!.type === 'domain_summary') {
-      const data = result.block!.data
-      expect(data.domain).toBe('Finances')
-      expect(data.currentState).toBe('Tight but manageable')
-      expect(data.whatsWorking).toEqual([])
-      expect(data.whatsNotWorking).toEqual([])
-      expect(data.keyTension).toBe('')
-      expect(data.statedIntention).toBe('')
-      expect(data.status).toBe('stable')
+    const block = result.segments[0]
+    expect(block.type).toBe('block')
+    if (block.type === 'block' && block.blockType === 'domain_summary') {
+      expect(block.data.domain).toBe('Finances')
+      expect(block.data.currentState).toBe('Tight but manageable')
+      expect(block.data.whatsWorking).toEqual([])
+      expect(block.data.whatsNotWorking).toEqual([])
+      expect(block.data.keyTension).toBe('')
+      expect(block.data.statedIntention).toBe('')
+      expect(block.data.status).toBe('stable')
     }
+  })
+
+  // --- Multi-block tests ---
+
+  it('parses two domain summaries in one message with text between', () => {
+    const content = `Here are both domains:
+
+[DOMAIN_SUMMARY]
+Domain: Career / Work
+Current state: PM at startup
+What's working: Good craft
+What's not working: Not excited
+Key tension: Security vs ambition
+Stated intention: Start side project
+Status: needs_attention
+[/DOMAIN_SUMMARY]
+
+Now let's look at finances.
+
+[DOMAIN_SUMMARY]
+Domain: Finances
+Current state: Tight but manageable
+What's working: No debt
+What's not working: Low savings
+Key tension: Spending vs saving
+Stated intention: Build emergency fund
+Status: stable
+[/DOMAIN_SUMMARY]
+
+What else would you like to explore?`
+
+    const result = parseMessage(content)
+    expect(result.segments).toHaveLength(5)
+    expect(result.segments[0]).toEqual({ type: 'text', content: 'Here are both domains:' })
+    expect(result.segments[1].type).toBe('block')
+    expect(result.segments[2]).toEqual({ type: 'text', content: "Now let's look at finances." })
+    expect(result.segments[3].type).toBe('block')
+    expect(result.segments[4]).toEqual({ type: 'text', content: 'What else would you like to explore?' })
+
+    if (result.segments[1].type === 'block') {
+      expect(result.segments[1].blockType).toBe('domain_summary')
+      if (result.segments[1].blockType === 'domain_summary') {
+        expect(result.segments[1].data.domain).toBe('Career / Work')
+      }
+    }
+    if (result.segments[3].type === 'block') {
+      expect(result.segments[3].blockType).toBe('domain_summary')
+      if (result.segments[3].blockType === 'domain_summary') {
+        expect(result.segments[3].data.domain).toBe('Finances')
+      }
+    }
+  })
+
+  it('parses three domain summaries back-to-back', () => {
+    const content = `[DOMAIN_SUMMARY]
+Domain: Career / Work
+Current state: OK
+What's working: Craft
+What's not working: Energy
+Key tension: Balance
+Stated intention: Rest
+Status: stable
+[/DOMAIN_SUMMARY]
+[DOMAIN_SUMMARY]
+Domain: Health / Body
+Current state: Fine
+What's working: Exercise
+What's not working: Sleep
+Key tension: Time
+Stated intention: Sleep earlier
+Status: needs_attention
+[/DOMAIN_SUMMARY]
+[DOMAIN_SUMMARY]
+Domain: Finances
+Current state: Tight
+What's working: No debt
+What's not working: Savings
+Key tension: Spending
+Stated intention: Save more
+Status: stable
+[/DOMAIN_SUMMARY]`
+
+    const result = parseMessage(content)
+    const blocks = result.segments.filter((s) => s.type === 'block')
+    expect(blocks).toHaveLength(3)
+    if (blocks[0].type === 'block' && blocks[0].blockType === 'domain_summary') {
+      expect(blocks[0].data.domain).toBe('Career / Work')
+    }
+    if (blocks[1].type === 'block' && blocks[1].blockType === 'domain_summary') {
+      expect(blocks[1].data.domain).toBe('Health / Body')
+    }
+    if (blocks[2].type === 'block' && blocks[2].blockType === 'domain_summary') {
+      expect(blocks[2].data.domain).toBe('Finances')
+    }
+  })
+
+  it('handles mixed block types (domain + synthesis)', () => {
+    const content = `[DOMAIN_SUMMARY]
+Domain: Career / Work
+Current state: OK
+What's working: Craft
+What's not working: Energy
+Key tension: Balance
+Stated intention: Rest
+Status: stable
+[/DOMAIN_SUMMARY]
+
+[LIFE_MAP_SYNTHESIS]
+Narrative: Overall picture
+Primary compounding engine: Side project
+Quarterly priorities: Build, Rest, Connect
+Key tensions: Work vs rest
+Anti-goals: No overcommitting
+[/LIFE_MAP_SYNTHESIS]`
+
+    const result = parseMessage(content)
+    const blocks = result.segments.filter((s) => s.type === 'block')
+    expect(blocks).toHaveLength(2)
+    if (blocks[0].type === 'block') expect(blocks[0].blockType).toBe('domain_summary')
+    if (blocks[1].type === 'block') expect(blocks[1].blockType).toBe('life_map_synthesis')
+  })
+
+  it('handles malformed second block (first renders, second falls back to text)', () => {
+    const content = `[DOMAIN_SUMMARY]
+Domain: Career / Work
+Current state: OK
+What's working: Craft
+What's not working: Energy
+Key tension: Balance
+Stated intention: Rest
+Status: stable
+[/DOMAIN_SUMMARY]
+
+[DOMAIN_SUMMARY]
+Domain: Broken block no closing tag`
+
+    const result = parseMessage(content)
+    expect(result.segments).toHaveLength(2)
+    expect(result.segments[0].type).toBe('block')
+    expect(result.segments[1].type).toBe('text')
+    if (result.segments[1].type === 'text') {
+      expect(result.segments[1].content).toContain('Broken block no closing tag')
+    }
+  })
+
+  it('handles no blocks (pure text message)', () => {
+    const result = parseMessage('Just a regular message with no blocks at all.')
+    expect(result.segments).toHaveLength(1)
+    expect(result.segments[0]).toEqual({ type: 'text', content: 'Just a regular message with no blocks at all.' })
   })
 })
 
