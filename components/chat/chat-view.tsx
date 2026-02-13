@@ -9,19 +9,22 @@ import { ChatInput } from './chat-input'
 import { BuildingCardPlaceholder } from './building-card-placeholder'
 import { QuickReplyButtons } from './quick-reply-buttons'
 import { ErrorMessage } from './error-message'
+import { PulseCheckCard } from './pulse-check-card'
 import { getOrCreateLifeMap, upsertDomain, updateLifeMapSynthesis } from '@/lib/supabase/life-map'
 import { completeSession, updateDomainsExplored, updateSessionSummary } from '@/lib/supabase/sessions'
+import { savePulseCheckRatings, pulseRatingToDomainStatus } from '@/lib/supabase/pulse-check'
 import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
+import type { PulseCheckRating } from '@/types/pulse-check'
 
 interface ChatViewProps {
   userId: string
   sessionType?: SessionType
 }
 
-const SAGE_OPENING_LIFE_MAPPING = `Hey — I'm Sage. I'm here to help you get a clearer picture of where you are in life and where you want to go. There's no right way to do this. I'll ask you some questions, you talk through whatever comes up, and I'll help organize it as we go. You'll see your life map building in real time. We can go as deep or as light as you want — you're in control of the pace. Sound good?
+const SAGE_OPENING_LIFE_MAPPING = `Hey — I'm Sage. I'm going to help you build a map of where you are in life right now.
 
-So — before we get into specifics, how are you feeling about life right now? Just the honest, unfiltered version.`
+Before we talk, I want to get a quick pulse. Rate each of these areas — don't overthink it, just your gut right now.`
 
 const SAGE_OPENING_CHECKIN = `Hey, welcome back. How are you doing?`
 
@@ -36,6 +39,10 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
   const [prefillText, setPrefillText] = useState<string | undefined>()
   const [retryCount, setRetryCount] = useState(0)
   const [showPushPrompt, setShowPushPrompt] = useState(false)
+  const [showPulseCheck, setShowPulseCheck] = useState(false)
+  const [pulseCheckSubmitting, setPulseCheckSubmitting] = useState(false)
+  const [pulseCheckError, setPulseCheckError] = useState<string | null>(null)
+  const [pulseCheckRatings, setPulseCheckRatings] = useState<PulseCheckRating[] | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
@@ -106,10 +113,22 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
           if (newSession) {
             setSessionId(newSession.id)
 
+            // Check if user needs pulse check (new user doing life mapping)
+            const { data: userProfile } = await supabase
+              .from('users')
+              .select('onboarding_completed')
+              .eq('id', userId)
+              .single()
+
+            const isNewUser = !userProfile?.onboarding_completed
+            const needsPulseCheck = isNewUser && sessionType === 'life_mapping'
+
             // Add Sage's opening message
-            const openingMessage = sessionType === 'life_mapping'
+            const openingMessage = needsPulseCheck
               ? SAGE_OPENING_LIFE_MAPPING
-              : SAGE_OPENING_CHECKIN
+              : sessionType === 'life_mapping'
+                ? SAGE_OPENING_LIFE_MAPPING
+                : SAGE_OPENING_CHECKIN
 
             const { data: savedMsg } = await supabase
               .from('messages')
@@ -132,6 +151,11 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
                 createdAt: savedMsg.created_at,
               }])
             }
+
+            // Show pulse check for new users
+            if (needsPulseCheck) {
+              setShowPulseCheck(true)
+            }
           }
         }
       } catch {
@@ -145,7 +169,59 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, sessionType])
 
-  async function sendMessage(text: string, retry = false) {
+  async function handlePulseCheckSubmit(ratings: PulseCheckRating[]) {
+    if (!sessionId) return
+
+    setPulseCheckSubmitting(true)
+    setPulseCheckError(null)
+
+    try {
+      // Save ratings to DB
+      await savePulseCheckRatings(supabase, sessionId, userId, ratings, true)
+
+      // Seed life_map_domains with initial status
+      const lifeMap = await getOrCreateLifeMap(supabase, userId)
+      for (const rating of ratings) {
+        await upsertDomain(supabase, lifeMap.id, {
+          domain: rating.domain as DomainName,
+          currentState: '',
+          whatsWorking: [],
+          whatsNotWorking: [],
+          keyTension: '',
+          statedIntention: '',
+          status: pulseRatingToDomainStatus(rating.rating),
+        })
+      }
+
+      // Store ratings in state for later use
+      setPulseCheckRatings(ratings)
+      setShowPulseCheck(false)
+
+      // Build pulse check context for Sage's pattern-read response
+      const ratingsText = ratings
+        .map((r) => `- ${r.domain}: ${r.rating} (${r.ratingNumeric}/5)`)
+        .join('\n')
+
+      const pulseContext = `The user just completed a life pulse check. Here are their self-ratings:
+${ratingsText}
+
+Your job now:
+1. Briefly reflect back the overall pattern you see (1-2 sentences). Note any contrasts.
+2. Propose starting with the domain that seems most pressing (lowest rated), but give the user choice.
+3. Ask a specific opening question — NOT "tell me about X" but something like "You rated X as 'struggling' — what's the main source of tension there?"
+
+Do NOT list all 8 domains back. Keep it conversational.`
+
+      // Send an invisible trigger message to get Sage's response
+      sendMessage('I completed the pulse check.', false, pulseContext)
+    } catch {
+      setPulseCheckError("Couldn't save your ratings. Tap to try again.")
+    } finally {
+      setPulseCheckSubmitting(false)
+    }
+  }
+
+  async function sendMessage(text: string, retry = false, extraSystemContext?: string) {
     if (!sessionId || isStreaming) return
 
     const userMessage: ChatMessage = {
@@ -188,6 +264,7 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
           sessionId,
           sessionType,
           messages: apiMessages,
+          ...(extraSystemContext ? { pulseCheckContext: extraSystemContext } : {}),
         }),
       })
 
@@ -425,6 +502,18 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
           </>
         )}
 
+        {/* Pulse check card */}
+        {showPulseCheck && (
+          <PulseCheckCard
+            onSubmit={handlePulseCheckSubmit}
+            isSubmitting={pulseCheckSubmitting}
+            submitError={pulseCheckError}
+            onRetry={() => {
+              if (pulseCheckRatings) handlePulseCheckSubmit(pulseCheckRatings)
+            }}
+          />
+        )}
+
         {/* Typing indicator — before first token */}
         {isStreaming && !streamingText && <TypingIndicator />}
 
@@ -471,8 +560,9 @@ export function ChatView({ userId, sessionType = 'life_mapping' }: ChatViewProps
       {/* Input area */}
       <ChatInput
         onSend={handleSend}
-        disabled={isStreaming}
+        disabled={isStreaming || showPulseCheck}
         prefill={prefillText}
+        placeholder={showPulseCheck ? 'Rate your life areas above to begin.' : undefined}
       />
     </div>
   )

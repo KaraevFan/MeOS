@@ -24,6 +24,7 @@ export async function POST(request: Request) {
     sessionId: string
     sessionType: SessionType
     messages: { role: 'user' | 'assistant'; content: string }[]
+    pulseCheckContext?: string
   }
 
   try {
@@ -35,12 +36,17 @@ export async function POST(request: Request) {
     })
   }
 
-  const { sessionType, messages } = body
+  const { sessionType, messages, pulseCheckContext } = body
 
   // Build system prompt with context
   let systemPrompt: string
   try {
     systemPrompt = await buildConversationContext(sessionType, user.id)
+
+    // Inject pulse check context if provided
+    if (pulseCheckContext) {
+      systemPrompt += `\n\n${pulseCheckContext}`
+    }
   } catch {
     return new Response(JSON.stringify({ error: 'Failed to build conversation context' }), {
       status: 500,

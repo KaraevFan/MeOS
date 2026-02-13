@@ -8,11 +8,12 @@ interface ChatInputProps {
   onSend: (text: string) => void
   disabled: boolean
   prefill?: string
+  placeholder?: string
 }
 
 type VoiceState = 'idle' | 'recording' | 'processing'
 
-export function ChatInput({ onSend, disabled, prefill }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputProps) {
   const [text, setText] = useState('')
   const [voiceState, setVoiceState] = useState<VoiceState>('idle')
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -166,7 +167,7 @@ export function ChatInput({ onSend, disabled, prefill }: ChatInputProps) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={voiceState === 'recording' ? 'Recording...' : voiceState === 'processing' ? 'Processing...' : 'Type a message...'}
+            placeholder={voiceState === 'recording' ? 'Recording...' : voiceState === 'processing' ? 'Processing...' : placeholder || 'Type a message...'}
             disabled={disabled || voiceState !== 'idle'}
             rows={1}
             className={cn(

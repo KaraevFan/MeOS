@@ -4,6 +4,7 @@ export interface User {
   created_at: string
   onboarding_completed: boolean
   sage_persona_notes: string | null
+  next_checkin_at: string | null
 }
 
 export interface LifeMap {
