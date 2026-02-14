@@ -6,12 +6,17 @@
 
 ## Key Documentation
 
-Read these BEFORE implementing anything — they are the source of truth:
+### Origin docs (source of truth — read BEFORE implementing anything):
 
-- `MVP_PRD.md` — Complete build spec: product principles, Sage persona, data model, system prompts, conversation flows, sprint plan
-- `UX_design.md` — Design philosophy, color palette, typography, screen specs, interaction patterns, user journey
+- `Docs/vision.md` — Product vision, positioning, and long-term direction
+- `Docs/MVP_PRD.md` — Complete build spec: product principles, Sage persona, data model, system prompts, conversation flows, sprint plan
+- `Docs/UX_design.md` — Design philosophy, color palette, typography, screen specs, interaction patterns, user journey
 
 When in doubt about product decisions, behavior, or design direction, consult these docs rather than guessing.
+
+### Generated docs (`Docs/generated/`) — machine-derived reference material:
+
+These are generated from the origin docs + codebase for human readability. Do NOT treat as source of truth — regenerate if stale.
 
 ## Tech Stack
 
