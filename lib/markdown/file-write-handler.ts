@@ -56,8 +56,9 @@ export function resolveFileUpdatePath(update: FileUpdateData): string | null {
 function isWritePermitted(path: string, sessionType: SessionType | string): boolean {
   const allowedPrefixes = SESSION_WRITE_PERMISSIONS[sessionType]
   if (!allowedPrefixes) {
-    // Unknown session type — be permissive (allow all valid paths)
-    return true
+    // Unknown session type — deny by default
+    console.warn(`[FileWriteHandler] Unknown session type "${sessionType}" — write denied`)
+    return false
   }
   return allowedPrefixes.some((prefix) => path.startsWith(prefix) || path === prefix)
 }

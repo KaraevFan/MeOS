@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
-import { FILE_TO_DOMAIN_MAP } from '@/lib/markdown/constants'
+import { FILE_TO_DOMAIN_MAP, DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { extractMarkdownSection, extractBulletList } from '@/lib/markdown/extract'
 import { SynthesisSection } from '@/components/life-map/synthesis-section'
 import { DomainGrid } from '@/components/life-map/domain-grid'
@@ -85,32 +85,31 @@ export default async function LifeMapPage() {
 
   const ufs = new UserFileSystem(supabase, user.id)
 
-  // Read overview + domain files + baseline ratings in parallel
-  const [overview, domainFiles, baselineRatings] = await Promise.all([
-    ufs.readOverview().catch(() => null),
-    ufs.listFiles('life-map/').catch(() => [] as string[]),
+  // Known domain filenames from constant map
+  const knownDomainFilenames = Object.values(DOMAIN_FILE_MAP)
+
+  // Read overview + all known domains + baseline ratings in parallel
+  const [overview, baselineRatings, ...domainFileResults] = await Promise.allSettled([
+    ufs.readOverview(),
     getBaselineRatings(supabase, user.id),
+    ...knownDomainFilenames.map(async (filename) => {
+      const file = await ufs.readDomain(filename)
+      if (!file) return null
+      const domainName = FILE_TO_DOMAIN_MAP[filename] ?? filename
+      return domainFileToDomain(file.content, file.frontmatter, domainName)
+    }),
   ])
 
-  // Read all domain files
-  const domainFileResults = await Promise.allSettled(
-    domainFiles
-      .filter((f) => !f.includes('_overview'))
-      .map(async (filePath) => {
-        const filename = filePath.replace('life-map/', '').replace('.md', '')
-        const file = await ufs.readDomain(filename)
-        if (!file) return null
-        const domainName = FILE_TO_DOMAIN_MAP[filename] ?? filename
-        return domainFileToDomain(file.content, file.frontmatter, domainName)
-      })
-  )
+  // Unwrap settled results
+  const overviewData = overview.status === 'fulfilled' ? overview.value : null
+  const baselineRatingsData = baselineRatings.status === 'fulfilled' ? baselineRatings.value : []
 
   const domains: LifeMapDomain[] = domainFileResults
     .filter((r): r is PromiseFulfilledResult<LifeMapDomain | null> => r.status === 'fulfilled')
     .map((r) => r.value)
     .filter((d): d is LifeMapDomain => d !== null)
 
-  if (!overview && domains.length === 0) {
+  if (!overviewData && domains.length === 0) {
     return (
       <div className="px-md pt-2xl max-w-lg mx-auto">
         <h1 className="text-xl font-bold tracking-tight mb-2">Your Life Map</h1>
@@ -128,8 +127,8 @@ export default async function LifeMapPage() {
     )
   }
 
-  const lifeMap = overview
-    ? overviewToLifeMap(overview.content, overview.frontmatter, user.id)
+  const lifeMap = overviewData
+    ? overviewToLifeMap(overviewData.content, overviewData.frontmatter, user.id)
     : {
         id: 'file-based',
         user_id: user.id,
@@ -145,7 +144,7 @@ export default async function LifeMapPage() {
         updated_at: new Date().toISOString(),
       } satisfies LifeMap
 
-  const lastUpdated = overview?.frontmatter.last_updated as string | undefined
+  const lastUpdated = overviewData?.frontmatter.last_updated as string | undefined
 
   return (
     <div className="px-md pt-lg pb-lg max-w-lg mx-auto space-y-lg">
@@ -153,7 +152,7 @@ export default async function LifeMapPage() {
 
       <SynthesisSection lifeMap={lifeMap} />
 
-      <DomainGrid domains={domains} baselineRatings={baselineRatings} />
+      <DomainGrid domains={domains} baselineRatings={baselineRatingsData} />
 
       {lastUpdated && (
         <p className="text-[11px] text-text-secondary text-center">

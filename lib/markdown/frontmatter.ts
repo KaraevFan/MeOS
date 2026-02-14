@@ -11,6 +11,14 @@ function now(): string {
   return new Date().toISOString()
 }
 
+/** Sanitize a string value for safe YAML frontmatter inclusion.
+ *  Strips characters that could break YAML parsing even with gray-matter quoting. */
+function sanitizeYamlValue(value: string | undefined | null): string | undefined {
+  if (value == null) return undefined
+  // Remove YAML document markers and null bytes
+  return value.replace(/[\x00]/g, '').trim()
+}
+
 function bumpVersion(existing: number | undefined): number {
   return (existing ?? 0) + 1
 }
@@ -20,7 +28,7 @@ export function generateDomainFrontmatter(
   updates: Partial<DomainFileFrontmatter>
 ): DomainFileFrontmatter {
   return {
-    domain: updates.domain ?? existing?.domain ?? '',
+    domain: sanitizeYamlValue(updates.domain ?? existing?.domain) ?? '',
     status: updates.status ?? existing?.status ?? 'stable',
     score: updates.score ?? existing?.score,
     last_updated: now(),
@@ -52,8 +60,8 @@ export function generateLifePlanFrontmatter(
   return {
     type: 'life-plan',
     quarter: updates.quarter ?? existing?.quarter ?? getCurrentQuarter(),
-    quarter_theme: updates.quarter_theme ?? existing?.quarter_theme,
-    north_star_domain: updates.north_star_domain ?? existing?.north_star_domain,
+    quarter_theme: sanitizeYamlValue(updates.quarter_theme ?? existing?.quarter_theme),
+    north_star_domain: sanitizeYamlValue(updates.north_star_domain ?? existing?.north_star_domain),
     status: updates.status ?? existing?.status ?? 'active',
     created_at: existing?.created_at ?? now(),
     last_updated: now(),
@@ -83,11 +91,11 @@ export function generateSageContextFrontmatter(
   updates: Partial<SageContextFrontmatter>
 ): SageContextFrontmatter {
   return {
-    user_name: updates.user_name ?? existing?.user_name,
+    user_name: sanitizeYamlValue(updates.user_name ?? existing?.user_name),
     member_since: updates.member_since ?? existing?.member_since,
     total_sessions: updates.total_sessions ?? existing?.total_sessions ?? 0,
     last_session: updates.last_session ?? existing?.last_session,
-    life_map_completion: updates.life_map_completion ?? existing?.life_map_completion,
+    life_map_completion: sanitizeYamlValue(updates.life_map_completion ?? existing?.life_map_completion),
   }
 }
 

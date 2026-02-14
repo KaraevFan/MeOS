@@ -35,7 +35,7 @@ import type {
 import type { DomainName } from '@/types/chat'
 
 const MAX_RETRIES = 2
-const RETRY_DELAYS = [1000, 3000]
+const RETRY_DELAYS = [200, 800]
 
 /**
  * Core service for reading/writing markdown files to Supabase Storage.
@@ -129,6 +129,15 @@ export class UserFileSystem {
    * List files under a prefix. Returns relative paths (without user prefix).
    */
   async listFiles(prefix: string): Promise<string[]> {
+    // Validate prefix is within allowed paths
+    if (prefix.includes('..')) {
+      throw new Error(`[UserFileSystem] Path traversal rejected: ${prefix}`)
+    }
+    const isAllowed = ALLOWED_PATH_PREFIXES.some((allowed) => prefix.startsWith(allowed))
+    if (!isAllowed) {
+      throw new Error(`[UserFileSystem] Prefix outside allowed paths: ${prefix}`)
+    }
+
     const fullPrefix = `${this.basePath}/${prefix}`
     const { data, error } = await this.supabase.storage
       .from(STORAGE_BUCKET)
@@ -145,11 +154,16 @@ export class UserFileSystem {
   }
 
   /**
-   * Check if a file exists in storage.
+   * Check if a file exists in storage (metadata-only, no content download).
    */
   async fileExists(path: string): Promise<boolean> {
-    const result = await this.readFile(path)
-    return result !== null
+    this.validatePath(path)
+    const fullPrefix = `${this.basePath}/${path.substring(0, path.lastIndexOf('/') + 1)}`
+    const filename = path.substring(path.lastIndexOf('/') + 1)
+    const { data } = await this.supabase.storage
+      .from(STORAGE_BUCKET)
+      .list(fullPrefix, { search: filename, limit: 1 })
+    return (data?.length ?? 0) > 0
   }
 
   /**
@@ -262,35 +276,36 @@ export class UserFileSystem {
   async writeDomain(
     domainFilename: string,
     content: string,
-    overrides?: Partial<DomainFileFrontmatter>
+    overrides?: Partial<DomainFileFrontmatter>,
+    existingFrontmatter?: Partial<DomainFileFrontmatter> | null
   ): Promise<void> {
-    const existing = await this.readDomain(domainFilename)
+    const existing = existingFrontmatter !== undefined ? existingFrontmatter : (await this.readDomain(domainFilename))?.frontmatter ?? null
     const frontmatter = generateDomainFrontmatter(
-      existing?.frontmatter ?? null,
+      existing,
       { domain: domainFilename, ...overrides }
     )
     await this.writeFile(`life-map/${domainFilename}.md`, frontmatter, content)
-    await this.updateFileIndex(`life-map/${domainFilename}.md`, FILE_TYPES.DOMAIN, frontmatter, domainFilename)
+    this.updateFileIndex(`life-map/${domainFilename}.md`, FILE_TYPES.DOMAIN, frontmatter, domainFilename)
   }
 
-  async writeOverview(content: string, overrides?: Partial<OverviewFileFrontmatter>): Promise<void> {
-    const existing = await this.readOverview()
+  async writeOverview(content: string, overrides?: Partial<OverviewFileFrontmatter>, existingFrontmatter?: Partial<OverviewFileFrontmatter> | null): Promise<void> {
+    const existing = existingFrontmatter !== undefined ? existingFrontmatter : (await this.readOverview())?.frontmatter ?? null
     const frontmatter = generateOverviewFrontmatter(
-      existing?.frontmatter ?? null,
+      existing,
       { user_id: this.userId, ...overrides }
     )
     await this.writeFile('life-map/_overview.md', frontmatter, content)
-    await this.updateFileIndex('life-map/_overview.md', FILE_TYPES.OVERVIEW, frontmatter)
+    this.updateFileIndex('life-map/_overview.md', FILE_TYPES.OVERVIEW, frontmatter)
   }
 
-  async writeLifePlan(content: string, overrides?: Partial<LifePlanFileFrontmatter>): Promise<void> {
-    const existing = await this.readLifePlan()
+  async writeLifePlan(content: string, overrides?: Partial<LifePlanFileFrontmatter>, existingFrontmatter?: Partial<LifePlanFileFrontmatter> | null): Promise<void> {
+    const existing = existingFrontmatter !== undefined ? existingFrontmatter : (await this.readLifePlan())?.frontmatter ?? null
     const frontmatter = generateLifePlanFrontmatter(
-      existing?.frontmatter ?? null,
+      existing,
       overrides ?? {}
     )
     await this.writeFile('life-plan/current.md', frontmatter, content)
-    await this.updateFileIndex('life-plan/current.md', FILE_TYPES.LIFE_PLAN, frontmatter)
+    this.updateFileIndex('life-plan/current.md', FILE_TYPES.LIFE_PLAN, frontmatter)
   }
 
   async writeCheckIn(date: string, content: string, metadata: Partial<CheckInFileFrontmatter>): Promise<void> {
@@ -298,27 +313,27 @@ export class UserFileSystem {
     const sessionType = metadata.type === 'weekly-check-in' ? 'weekly' : metadata.type ?? 'weekly'
     const filename = `${date}-${sessionType}.md`
     await this.writeFile(`check-ins/${filename}`, frontmatter, content)
-    await this.updateFileIndex(`check-ins/${filename}`, FILE_TYPES.CHECK_IN, frontmatter)
+    this.updateFileIndex(`check-ins/${filename}`, FILE_TYPES.CHECK_IN, frontmatter)
   }
 
-  async writeSageContext(content: string, overrides?: Partial<SageContextFrontmatter>): Promise<void> {
-    const existing = await this.readSageContext()
+  async writeSageContext(content: string, overrides?: Partial<SageContextFrontmatter>, existingFrontmatter?: Partial<SageContextFrontmatter> | null): Promise<void> {
+    const existing = existingFrontmatter !== undefined ? existingFrontmatter : (await this.readSageContext())?.frontmatter ?? null
     const frontmatter = generateSageContextFrontmatter(
-      existing?.frontmatter ?? null,
+      existing,
       overrides ?? {}
     )
     await this.writeFile('sage/context.md', frontmatter, content)
-    await this.updateFileIndex('sage/context.md', FILE_TYPES.SAGE_CONTEXT, frontmatter)
+    this.updateFileIndex('sage/context.md', FILE_TYPES.SAGE_CONTEXT, frontmatter)
   }
 
-  async writePatterns(content: string, overrides?: Partial<PatternsFrontmatter>): Promise<void> {
-    const existing = await this.readPatterns()
+  async writePatterns(content: string, overrides?: Partial<PatternsFrontmatter>, existingFrontmatter?: Partial<PatternsFrontmatter> | null): Promise<void> {
+    const existing = existingFrontmatter !== undefined ? existingFrontmatter : (await this.readPatterns())?.frontmatter ?? null
     const frontmatter = generatePatternsFrontmatter(
-      existing?.frontmatter ?? null,
+      existing,
       overrides ?? {}
     )
     await this.writeFile('sage/patterns.md', frontmatter, content)
-    await this.updateFileIndex('sage/patterns.md', FILE_TYPES.SAGE_PATTERNS, frontmatter)
+    this.updateFileIndex('sage/patterns.md', FILE_TYPES.SAGE_PATTERNS, frontmatter)
   }
 
   // ============================================
@@ -384,18 +399,18 @@ export class UserFileSystem {
   private validatePath(path: string): void {
     // Check for path traversal
     if (path.includes('..')) {
-      throw new Error(`[UserFileSystem] Path traversal rejected: ${path}`)
+      throw new Error('[UserFileSystem] Path traversal rejected')
     }
 
     // Check against safe regex
     if (!SAFE_PATH_REGEX.test(path)) {
-      throw new Error(`[UserFileSystem] Invalid path format: ${path}`)
+      throw new Error('[UserFileSystem] Invalid path format')
     }
 
     // Check against allowed prefixes
     const isAllowed = ALLOWED_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))
     if (!isAllowed) {
-      throw new Error(`[UserFileSystem] Path outside allowed prefixes: ${path}`)
+      throw new Error('[UserFileSystem] Path outside allowed prefixes')
     }
   }
 

@@ -11,8 +11,8 @@ export const ALLOWED_PATH_PREFIXES = [
   'sage/',
 ] as const
 
-/** Strict path regex: lowercase alphanumeric, hyphens, underscores, forward slashes, ending in .md */
-export const SAFE_PATH_REGEX = /^[a-z0-9\-_/]+\.md$/
+/** Strict path regex: lowercase alphanumeric, hyphens, underscores, max 3 directory levels, ending in .md */
+export const SAFE_PATH_REGEX = /^[a-z0-9\-_]+(?:\/[a-z0-9\-_]+){0,2}\.md$/
 
 /** Domain display name to filename mapping */
 export const DOMAIN_FILE_MAP: Record<DomainName, string> = {
@@ -59,4 +59,4 @@ export const SESSION_WRITE_PERMISSIONS: Record<string, string[]> = {
 }
 
 /** Maximum FILE_UPDATE blocks per message (rate limit) */
-export const MAX_FILE_UPDATE_BLOCKS_PER_MESSAGE = 15
+export const MAX_FILE_UPDATE_BLOCKS_PER_MESSAGE = 10

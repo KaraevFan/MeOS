@@ -9,6 +9,9 @@ import type {
   DomainStatus,
   DomainName,
 } from '@/types/chat'
+import { FILE_TYPES } from '@/lib/markdown/constants'
+
+const VALID_FILE_TYPES: Set<string> = new Set(Object.values(FILE_TYPES))
 
 // ============================================
 // Legacy block tags (kept for backward compat rendering)
@@ -36,6 +39,13 @@ function parseFileUpdateBlock(openTag: string, body: string): FileUpdateData | n
   if (!match) return null
 
   const fileType = match[1]
+
+  // Reject unknown file types (prevents prompt injection of arbitrary types)
+  if (!VALID_FILE_TYPES.has(fileType)) {
+    console.warn(`[Parser] Rejected unknown FILE_UPDATE type: "${fileType}"`)
+    return null
+  }
+
   const name = match[2] || undefined
 
   return {

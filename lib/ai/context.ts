@@ -61,29 +61,40 @@ async function fetchAndInjectFileContext(userId: string): Promise<string | null>
     parts.push(lifePlan.value.content)
   }
 
-  // 5. Recent check-ins
+  // 5. Recent check-ins (parallel reads)
   if (checkInFilenames.status === 'fulfilled' && checkInFilenames.value.length > 0) {
+    const checkInResults = await Promise.allSettled(
+      checkInFilenames.value.map((filename) => ufs.readCheckIn(filename))
+    )
     parts.push('\nRECENT CHECK-INS:')
-    for (const filename of checkInFilenames.value) {
-      const checkIn = await ufs.readCheckIn(filename).catch(() => null)
-      if (checkIn) {
-        const date = checkIn.frontmatter.date ?? filename
+    for (const result of checkInResults) {
+      if (result.status === 'fulfilled' && result.value) {
+        const date = result.value.frontmatter.date ?? 'unknown'
         parts.push(`\n--- ${date} ---`)
-        parts.push(checkIn.content)
+        parts.push(result.value.content)
       }
     }
   }
 
-  // 6. Domain files for domains needing attention
-  const domainFiles = await ufs.listFiles('life-map/').catch(() => [] as string[])
-  for (const filePath of domainFiles) {
-    if (filePath.includes('_overview')) continue
-    const filename = filePath.replace('life-map/', '').replace('.md', '')
-    const domain = await ufs.readDomain(filename).catch(() => null)
-    if (domain && (domain.frontmatter.status === 'needs_attention' || domain.frontmatter.status === 'in_crisis')) {
-      const name = domain.frontmatter.domain ?? filename
-      parts.push(`\n=== ${name.toUpperCase()} (${domain.frontmatter.status.replace('_', ' ')}) ===`)
-      parts.push(domain.content)
+  // 6. Flagged domain files — query file_index instead of reading all 8 domains
+  const { data: flaggedDomains } = await supabase
+    .from('file_index')
+    .select('domain_name')
+    .eq('user_id', userId)
+    .eq('file_type', 'domain')
+    .in('status', ['needs_attention', 'in_crisis'])
+
+  if (flaggedDomains && flaggedDomains.length > 0) {
+    const flaggedResults = await Promise.allSettled(
+      flaggedDomains.map((row) => ufs.readDomain(row.domain_name))
+    )
+    for (const result of flaggedResults) {
+      if (result.status === 'fulfilled' && result.value) {
+        const name = result.value.frontmatter.domain ?? 'unknown'
+        const status = result.value.frontmatter.status ?? 'needs_attention'
+        parts.push(`\n=== ${name.toUpperCase()} (${status.replace('_', ' ')}) ===`)
+        parts.push(result.value.content)
+      }
     }
   }
 

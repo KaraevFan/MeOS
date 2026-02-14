@@ -647,6 +647,12 @@ async function main() {
   // Get users to migrate
   let users: { id: string }[]
   if (SINGLE_USER) {
+    // Verify user exists before proceeding
+    const { data: userCheck } = await supabase.from('users').select('id').eq('id', SINGLE_USER).maybeSingle()
+    if (!userCheck) {
+      console.error(`User ${SINGLE_USER} not found in database`)
+      process.exit(1)
+    }
     users = [{ id: SINGLE_USER }]
   } else {
     const { data } = await supabase.from('users').select('id')
