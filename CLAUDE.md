@@ -44,6 +44,7 @@ These are generated from the origin docs + codebase for human readability. Do NO
 /lib
   /supabase             # Supabase client, auth helpers, database queries
   /ai                   # Claude API integration, system prompts, structured output parsing
+  /markdown             # Markdown file system: UserFileSystem, file write handler, frontmatter
   /voice                # Voice recording (MediaRecorder) + transcription API
   /utils                # General utilities
 /types                  # TypeScript type definitions
@@ -73,24 +74,69 @@ npx supabase gen types  # Generate TypeScript types from DB schema
 
 ## Critical Architecture Decisions
 
+### Markdown-Native Data Architecture
+
+Life map content is stored as **markdown files in Supabase Storage** — not in relational tables. Postgres handles orchestration (sessions, auth, pulse checks); Storage holds identity/content data.
+
+**File structure per user** (in `user-files` bucket under `users/{user_id}/`):
+```
+life-map/
+  _overview.md          # Narrative summary, north star, priorities, tensions, boundaries
+  career.md             # Domain: Career / Work
+  relationships.md      # Domain: Relationships
+  health.md             # etc.
+  ...
+life-plan/
+  current.md            # Quarter theme, active commitments, next steps, boundaries
+check-ins/
+  2026-02-14-weekly.md  # Check-in summaries
+sage/
+  context.md            # Sage's working model of the user
+  patterns.md           # Observed patterns
+```
+
+**Key files:**
+- `lib/markdown/user-file-system.ts` — Core `UserFileSystem` service for all file reads/writes
+- `lib/markdown/file-write-handler.ts` — Handles `[FILE_UPDATE]` blocks from Sage output
+- `lib/markdown/constants.ts` — Domain file map, path validation, session write permissions
+- `lib/markdown/frontmatter.ts` — Auto-generates YAML frontmatter for each file type
+- `lib/markdown/extract.ts` — Markdown section extraction helpers
+- `types/markdown-files.ts` — Zod schemas for all file frontmatter types
+
 ### Structured Output Parsing
 
-Sage outputs structured blocks that the frontend must parse and render as cards:
-- `[DOMAIN_SUMMARY]...[/DOMAIN_SUMMARY]` → renders as a domain card inline in chat
-- `[LIFE_MAP_SYNTHESIS]...[/LIFE_MAP_SYNTHESIS]` → renders as synthesis card at session end
-- `[SESSION_SUMMARY]...[/SESSION_SUMMARY]` → used for post-session processing, not displayed
+Sage outputs `[FILE_UPDATE]` blocks with semantic identifiers that the system resolves to file paths:
+```
+[FILE_UPDATE type="domain" name="Career / Work"]
+# Career
+## Current State
+...
+[/FILE_UPDATE]
+```
 
-The parser must be robust — Sage may produce slightly malformed output. Fail gracefully (show as plain text) rather than crashing.
+Available types: `domain`, `overview`, `life-plan`, `check-in`, `sage-context`, `sage-patterns`.
+
+The parser (`lib/ai/parser.ts`) handles both new `[FILE_UPDATE]` blocks and legacy `[DOMAIN_SUMMARY]`/`[LIFE_MAP_SYNTHESIS]`/`[SESSION_SUMMARY]` blocks for backward compat. Legacy blocks are rendered but no longer produced by updated prompts.
+
+**Sage writes markdown body only — the system generates YAML frontmatter automatically.**
+
+### Session-Scoped Write Permissions
+
+To prevent prompt injection, each session type has a whitelist of paths it can write to:
+- `life_mapping` → `life-map/*`, `life-plan/current.md`, `sage/*`
+- `weekly_checkin` → `check-ins/*`, `life-plan/current.md`, `life-map/*`, `sage/*`
 
 ### Conversation Memory (Token Management)
 
-Do NOT inject full session transcripts into Claude API calls. Instead:
-1. Current life map (structured data) as system context
-2. AI-generated summaries of last 3-5 sessions
-3. Active patterns
-4. Last stated commitment
+Context injection reads from markdown files (not DB tables):
+1. `sage/context.md` — Sage's working model
+2. `life-map/_overview.md` — Life map overview
+3. `life-plan/current.md` — Current life plan
+4. Last 3 `check-ins/*.md` — Recent check-in summaries
+5. Domain files for domains with `needs_attention`/`in_crisis` status
+6. Pulse check baseline (still from relational DB)
 
-Full transcripts are stored in DB for user review only.
+Full transcripts are stored in `messages` table for user review only.
 
 ### Voice Flow
 
