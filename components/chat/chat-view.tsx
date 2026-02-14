@@ -17,14 +17,17 @@ import { handleAllFileUpdates } from '@/lib/markdown/file-write-handler'
 import type { FileUpdateData } from '@/types/chat'
 import { savePulseCheckRatings, pulseRatingToDomainStatus } from '@/lib/supabase/pulse-check'
 import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
+import { PinnedContextCard } from './pinned-context-card'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
 import type { PulseCheckRating } from '@/types/pulse-check'
 import type { SessionState, SessionStateResult } from '@/lib/supabase/session-state'
+import type { Commitment } from '@/lib/markdown/extract'
 
 interface ChatViewProps {
   userId: string
   sessionType?: SessionType
   initialSessionState?: SessionStateResult
+  initialCommitments?: Commitment[]
 }
 
 function StateQuickReplies({
@@ -112,7 +115,7 @@ function getSageOpening(state: string, userName?: string): string {
   }
 }
 
-export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState }: ChatViewProps) {
+export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -590,6 +593,11 @@ Do NOT list all 8 domains back. Keep it conversational.`
 
   return (
     <div className="flex flex-col h-full">
+      {/* Pinned context card for weekly check-ins */}
+      {sessionType === 'weekly_checkin' && initialCommitments && initialCommitments.length > 0 && (
+        <PinnedContextCard commitments={initialCommitments} />
+      )}
+
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.map((message, index) => {

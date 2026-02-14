@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
-import { extractMarkdownSection, extractBulletList } from '@/lib/markdown/extract'
+import { extractMarkdownSection, extractBulletList, extractCommitments } from '@/lib/markdown/extract'
+import type { Commitment } from '@/lib/markdown/extract'
 
 export interface HomeData {
   greeting: string
@@ -10,7 +11,11 @@ export interface HomeData {
   checkinOverdue: boolean
   quarterlyPriorities: string[]
   sageLine: string | null
-  compoundingEngine: string | null
+  northStar: string | null
+  northStarFull: string | null
+  commitments: Commitment[]
+  boundaries: string[]
+  quarterTheme: string | null
   daysSinceMapping: number | null
 }
 
@@ -25,10 +30,11 @@ function getSageLine(context: {
   daysSinceMapping: number | null
   daysSinceCheckin: number | null
   topPriority: string | null
-  compoundingEngine: string | null
+  northStar: string | null
+  topCommitment: string | null
   nextCheckinAt: string | null
 }): string | null {
-  const { daysSinceMapping, daysSinceCheckin, topPriority, compoundingEngine, nextCheckinAt } = context
+  const { daysSinceMapping, daysSinceCheckin, topPriority, northStar, topCommitment, nextCheckinAt } = context
 
   // Check-in imminent
   if (nextCheckinAt) {
@@ -49,14 +55,24 @@ function getSageLine(context: {
     return "You mapped your life yesterday. Today's the first day of doing something about it."
   }
 
-  // First week
-  if (daysSinceMapping !== null && daysSinceMapping <= 7 && compoundingEngine) {
-    return `Day ${daysSinceMapping} of focusing on ${compoundingEngine}. How's momentum?`
+  // First week — reference commitment name if available
+  if (daysSinceMapping !== null && daysSinceMapping <= 7) {
+    if (topCommitment) {
+      return `Day ${daysSinceMapping} of "${topCommitment}." How's momentum?`
+    }
+    if (northStar) {
+      return `Day ${daysSinceMapping} of focusing on ${northStar}. How's momentum?`
+    }
   }
 
   // Week 2
   if (daysSinceMapping !== null && daysSinceMapping <= 14) {
     return "Two weeks in. Are things tracking, or has reality intervened?"
+  }
+
+  // With north star
+  if (northStar) {
+    return `Your north star: ${northStar}. One thing today?`
   }
 
   // Generic with priority
@@ -94,31 +110,55 @@ export async function getHomeData(
     checkinOverdue = new Date(user.next_checkin_at) <= new Date()
   }
 
-  // Get quarterly priorities + compounding engine from markdown files
+  // Read from markdown files
   let quarterlyPriorities: string[] = []
-  let compoundingEngine: string | null = null
+  let northStar: string | null = null
+  let northStarFull: string | null = null
+  let commitments: Commitment[] = []
+  let boundaries: string[] = []
+  let quarterTheme: string | null = null
   let daysSinceMapping: number | null = null
 
   if (onboardingCompleted) {
     const ufs = new UserFileSystem(supabase, userId)
-    const overview = await ufs.readOverview().catch(() => null)
 
-    if (overview) {
-      // Extract priorities from "This Quarter's Focus" section
-      quarterlyPriorities = extractBulletList(overview.content, "This Quarter's Focus").slice(0, 3)
+    // Read overview + life plan in parallel
+    const [overview, lifePlan] = await Promise.allSettled([
+      ufs.readOverview(),
+      ufs.readLifePlan(),
+    ])
 
-      // Extract compounding engine / north star from "Your North Star" section
-      const northStar = extractMarkdownSection(overview.content, 'Your North Star')
-      if (northStar) {
-        // Extract bold text: **Career transition** — because...
-        const boldMatch = northStar.match(/\*\*(.+?)\*\*/)
-        compoundingEngine = boldMatch ? boldMatch[1] : northStar.split('\n')[0] || null
+    // Extract from overview
+    const overviewData = overview.status === 'fulfilled' ? overview.value : null
+    if (overviewData) {
+      quarterlyPriorities = extractBulletList(overviewData.content, "This Quarter's Focus").slice(0, 3)
+
+      // North star: bold label (short) + full paragraph
+      const northStarSection = extractMarkdownSection(overviewData.content, 'Your North Star')
+      if (northStarSection) {
+        northStarFull = northStarSection.split('\n').filter((l) => l.trim()).join('\n')
+        const boldMatch = northStarSection.match(/\*\*(.+?)\*\*/)
+        northStar = boldMatch ? boldMatch[1] : northStarSection.split('\n')[0] || null
       }
 
-      // Days since mapping from frontmatter last_updated
-      if (overview.frontmatter.last_updated) {
-        const mapDate = new Date(overview.frontmatter.last_updated)
+      // Boundaries from overview (identity-level)
+      boundaries = extractBulletList(overviewData.content, 'Boundaries')
+
+      // Days since mapping
+      if (overviewData.frontmatter.last_updated) {
+        const mapDate = new Date(overviewData.frontmatter.last_updated)
         daysSinceMapping = Math.floor((Date.now() - mapDate.getTime()) / (1000 * 60 * 60 * 24))
+      }
+    }
+
+    // Extract from life plan
+    const lifePlanData = lifePlan.status === 'fulfilled' ? lifePlan.value : null
+    if (lifePlanData) {
+      commitments = extractCommitments(lifePlanData.content)
+
+      const themeSection = extractMarkdownSection(lifePlanData.content, 'Quarter Theme')
+      if (themeSection) {
+        quarterTheme = themeSection.split('\n')[0]?.trim() || null
       }
     }
   }
@@ -141,12 +181,16 @@ export async function getHomeData(
     }
   }
 
+  // First non-complete commitment for sage line interpolation
+  const activeCommitment = commitments.find((c) => c.status !== 'complete')
+
   const sageLine = onboardingCompleted
     ? getSageLine({
         daysSinceMapping,
         daysSinceCheckin,
         topPriority: quarterlyPriorities[0] || null,
-        compoundingEngine,
+        northStar,
+        topCommitment: activeCommitment?.label || null,
         nextCheckinAt: nextCheckinDate,
       })
     : null
@@ -159,7 +203,11 @@ export async function getHomeData(
     checkinOverdue,
     quarterlyPriorities,
     sageLine,
-    compoundingEngine,
+    northStar,
+    northStarFull,
+    commitments,
+    boundaries,
+    quarterTheme,
     daysSinceMapping,
   }
 }

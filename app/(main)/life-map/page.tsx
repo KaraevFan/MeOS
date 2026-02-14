@@ -4,9 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { FILE_TO_DOMAIN_MAP, DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
-import { extractMarkdownSection, extractBulletList } from '@/lib/markdown/extract'
-import { SynthesisSection } from '@/components/life-map/synthesis-section'
-import { DomainGrid } from '@/components/life-map/domain-grid'
+import { extractMarkdownSection, extractBulletList, extractCommitments } from '@/lib/markdown/extract'
+import { LifeMapTabs } from '@/components/life-map/life-map-tabs'
 import type { LifeMap, LifeMapDomain } from '@/types/database'
 
 /**
@@ -21,7 +20,7 @@ function overviewToLifeMap(
   const northStar = extractMarkdownSection(content, 'Your North Star')
   const priorities = extractBulletList(content, "This Quarter's Focus")
   const tensions = extractBulletList(content, 'Tensions to Watch')
-  const antiGoals = extractBulletList(content, 'Boundaries')
+  const boundaries = extractBulletList(content, 'Boundaries')
 
   // Extract bold text from north star: **Career transition** — because...
   let engine: string | null = null
@@ -38,7 +37,7 @@ function overviewToLifeMap(
     primary_compounding_engine: engine,
     quarterly_priorities: priorities.length > 0 ? priorities : null,
     key_tensions: tensions.length > 0 ? tensions : null,
-    anti_goals: antiGoals.length > 0 ? antiGoals : null,
+    anti_goals: boundaries.length > 0 ? boundaries : null,
     failure_modes: null,
     identity_statements: null,
     created_at: (frontmatter.last_updated as string) ?? new Date().toISOString(),
@@ -88,9 +87,10 @@ export default async function LifeMapPage() {
   // Known domain filenames from constant map
   const knownDomainFilenames = Object.values(DOMAIN_FILE_MAP)
 
-  // Read overview + all known domains + baseline ratings in parallel
-  const [overview, baselineRatings, ...domainFileResults] = await Promise.allSettled([
+  // Read overview + life plan + all known domains + baseline ratings in parallel
+  const [overview, lifePlan, baselineRatings, ...domainFileResults] = await Promise.allSettled([
     ufs.readOverview(),
+    ufs.readLifePlan(),
     getBaselineRatings(supabase, user.id),
     ...knownDomainFilenames.map(async (filename) => {
       const file = await ufs.readDomain(filename)
@@ -102,14 +102,15 @@ export default async function LifeMapPage() {
 
   // Unwrap settled results
   const overviewData = overview.status === 'fulfilled' ? overview.value : null
-  const baselineRatingsData = baselineRatings.status === 'fulfilled' ? baselineRatings.value : []
+  const lifePlanData = lifePlan.status === 'fulfilled' ? lifePlan.value : null
+  const baselineRatingsData = (baselineRatings.status === 'fulfilled' ? baselineRatings.value : null) ?? []
 
   const domains: LifeMapDomain[] = domainFileResults
     .filter((r): r is PromiseFulfilledResult<LifeMapDomain | null> => r.status === 'fulfilled')
     .map((r) => r.value)
     .filter((d): d is LifeMapDomain => d !== null)
 
-  if (!overviewData && domains.length === 0) {
+  if (!overviewData && domains.length === 0 && !lifePlanData) {
     return (
       <div className="px-md pt-2xl max-w-lg mx-auto">
         <h1 className="text-xl font-bold tracking-tight mb-2">Your Life Map</h1>
@@ -144,15 +145,33 @@ export default async function LifeMapPage() {
         updated_at: new Date().toISOString(),
       } satisfies LifeMap
 
+  // Extract life plan data for "What I'm Doing" tab
+  const commitments = lifePlanData ? extractCommitments(lifePlanData.content) : []
+  const quarterTheme = lifePlanData
+    ? (extractMarkdownSection(lifePlanData.content, 'Quarter Theme')?.split('\n')[0]?.trim() ?? null)
+    : null
+  const thingsToProtect = lifePlanData
+    ? extractBulletList(lifePlanData.content, 'Things to Protect')
+    : []
+  const lifePlanBoundaries = lifePlanData
+    ? extractBulletList(lifePlanData.content, 'Boundaries')
+    : []
+
   const lastUpdated = overviewData?.frontmatter.last_updated as string | undefined
 
   return (
     <div className="px-md pt-lg pb-lg max-w-lg mx-auto space-y-lg">
       <h1 className="text-xl font-bold tracking-tight">Your Life Map</h1>
 
-      <SynthesisSection lifeMap={lifeMap} />
-
-      <DomainGrid domains={domains} baselineRatings={baselineRatingsData} />
+      <LifeMapTabs
+        lifeMap={lifeMap}
+        domains={domains}
+        baselineRatings={baselineRatingsData}
+        quarterTheme={quarterTheme}
+        commitments={commitments}
+        thingsToProtect={thingsToProtect}
+        lifePlanBoundaries={lifePlanBoundaries}
+      />
 
       {lastUpdated && (
         <p className="text-[11px] text-text-secondary text-center">

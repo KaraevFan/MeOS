@@ -2,6 +2,9 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ChatView } from '@/components/chat/chat-view'
 import { detectSessionState } from '@/lib/supabase/session-state'
+import { UserFileSystem } from '@/lib/markdown/user-file-system'
+import { extractCommitments } from '@/lib/markdown/extract'
+import type { Commitment } from '@/lib/markdown/extract'
 import type { SessionType } from '@/types/chat'
 
 export default async function ChatPage({
@@ -30,12 +33,27 @@ export default async function ChatPage({
     sessionType = 'weekly_checkin'
   }
 
+  // Read commitments for weekly check-in pinned context card
+  let commitments: Commitment[] = []
+  if (sessionType === 'weekly_checkin') {
+    try {
+      const ufs = new UserFileSystem(supabase, user.id)
+      const lifePlan = await ufs.readLifePlan()
+      if (lifePlan) {
+        commitments = extractCommitments(lifePlan.content)
+      }
+    } catch {
+      // Graceful fallback — no pinned card
+    }
+  }
+
   return (
     <div className="fixed inset-0 bottom-16 pb-[env(safe-area-inset-bottom)]">
       <ChatView
         userId={user.id}
         sessionType={sessionType}
         initialSessionState={sessionState}
+        initialCommitments={commitments}
       />
     </div>
   )

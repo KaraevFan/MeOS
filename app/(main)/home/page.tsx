@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getHomeData } from '@/lib/supabase/home-data'
-import { CompoundingEngineCard } from '@/components/ui/compounding-engine-card'
+import { NorthStarCard } from '@/components/ui/north-star-card'
+import { CommitmentCard } from '@/components/home/commitment-card'
 import { PreOnboardingHero, TalkToSageOrb } from '@/components/home/pre-onboarding-hero'
 
 export default async function HomePage() {
@@ -30,14 +31,17 @@ export default async function HomePage() {
     )
   }
 
+  const activeCommitments = homeData.commitments.filter((c) => c.status !== 'complete')
+  const hasCommitments = activeCommitments.length > 0
+
   return (
-    <div className="px-md pt-2xl max-w-lg mx-auto">
+    <div className="px-md pt-2xl pb-lg max-w-lg mx-auto">
       {/* 1. Greeting */}
       <h1 className="text-2xl font-bold tracking-tight mb-1">
         {homeData.greeting}{displayName ? `, ${displayName}` : ''}
       </h1>
 
-      {/* 2. Sage dynamic line */}
+      {/* 2. Sage contextual line */}
       {homeData.sageLine && (
         <div className="mt-lg flex items-start gap-2.5">
           <div className="w-6 h-6 rounded-full bg-accent-sage/20 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -53,12 +57,40 @@ export default async function HomePage() {
       )}
 
       <div className="mt-lg space-y-lg">
-        {/* 3. Compounding Engine card */}
-        {homeData.compoundingEngine && (
-          <CompoundingEngineCard engine={homeData.compoundingEngine} />
+        {/* 3. North star card */}
+        {homeData.northStarFull && (
+          <NorthStarCard northStarFull={homeData.northStarFull} northStarLabel={homeData.northStar ?? undefined} />
         )}
 
-        {/* 4. Check-in card */}
+        {/* 4. Active commitments (or priorities fallback) */}
+        {hasCommitments ? (
+          <div>
+            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">
+              Active commitments
+            </p>
+            <div className="space-y-sm">
+              {activeCommitments.slice(0, 2).map((commitment, i) => (
+                <CommitmentCard key={i} commitment={commitment} />
+              ))}
+            </div>
+          </div>
+        ) : homeData.quarterlyPriorities.length > 0 ? (
+          <div>
+            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">
+              This quarter&apos;s focus
+            </p>
+            <ul className="space-y-2">
+              {homeData.quarterlyPriorities.map((priority, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-text">
+                  <span className="text-primary font-bold mt-px">{i + 1}.</span>
+                  <span>{stripLeadingNumber(priority)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {/* 5. Check-in prompt */}
         {homeData.nextCheckinDate && (
           <div className="bg-bg-card rounded-lg shadow-sm p-4 border border-border">
             <div className="flex items-center justify-between">
@@ -83,24 +115,24 @@ export default async function HomePage() {
           </div>
         )}
 
-        {/* 5. Current priorities */}
-        {homeData.quarterlyPriorities.length > 0 && (
-          <div>
-            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">
-              Current priorities
+        {/* 6. Boundaries — only when data exists */}
+        {homeData.boundaries.length > 0 && (
+          <div className="opacity-75">
+            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1.5">
+              Boundaries
             </p>
-            <ul className="space-y-2">
-              {homeData.quarterlyPriorities.map((priority, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-text">
-                  <span className="text-primary font-bold mt-px">{i + 1}.</span>
-                  <span>{stripLeadingNumber(priority)}</span>
+            <ul className="text-sm text-text-secondary space-y-1">
+              {homeData.boundaries.map((boundary, i) => (
+                <li key={i} className="flex items-start gap-1.5">
+                  <span className="mt-0.5">&times;</span>
+                  <span>{boundary}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
 
-        {/* 6. Talk to Sage — interactive orb replaces button */}
+        {/* 7. Talk to Sage */}
         <TalkToSageOrb />
       </div>
     </div>
