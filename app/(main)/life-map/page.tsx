@@ -7,13 +7,14 @@ import { FILE_TO_DOMAIN_MAP, DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { extractMarkdownSection, extractBulletList, extractCommitments } from '@/lib/markdown/extract'
 import { LifeMapTabs } from '@/components/life-map/life-map-tabs'
 import type { LifeMap, LifeMapDomain } from '@/types/database'
+import type { OverviewFileFrontmatter, DomainFileFrontmatter } from '@/types/markdown-files'
 
 /**
  * Convert overview markdown content into a LifeMap shape for the SynthesisSection component.
  */
 function overviewToLifeMap(
   content: string,
-  frontmatter: Record<string, unknown>,
+  frontmatter: OverviewFileFrontmatter,
   userId: string
 ): LifeMap {
   const narrative = extractMarkdownSection(content, 'Narrative Summary')
@@ -40,8 +41,8 @@ function overviewToLifeMap(
     anti_goals: boundaries.length > 0 ? boundaries : null,
     failure_modes: null,
     identity_statements: null,
-    created_at: (frontmatter.last_updated as string) ?? new Date().toISOString(),
-    updated_at: (frontmatter.last_updated as string) ?? new Date().toISOString(),
+    created_at: frontmatter.last_updated ?? new Date().toISOString(),
+    updated_at: frontmatter.last_updated ?? new Date().toISOString(),
   }
 }
 
@@ -50,7 +51,7 @@ function overviewToLifeMap(
  */
 function domainFileToDomain(
   content: string,
-  frontmatter: Record<string, unknown>,
+  frontmatter: DomainFileFrontmatter,
   domainName: string
 ): LifeMapDomain {
   const currentState = extractMarkdownSection(content, 'Current State')
@@ -69,8 +70,8 @@ function domainFileToDomain(
     desires: null,
     tensions: keyTension ? [keyTension] : null,
     stated_intentions: statedIntention ? [statedIntention] : null,
-    status: (frontmatter.status as LifeMapDomain['status']) ?? null,
-    updated_at: (frontmatter.last_updated as string) ?? new Date().toISOString(),
+    status: frontmatter.status ?? null,
+    updated_at: frontmatter.last_updated ?? new Date().toISOString(),
   }
 }
 
@@ -157,7 +158,7 @@ export default async function LifeMapPage() {
     ? extractBulletList(lifePlanData.content, 'Boundaries')
     : []
 
-  const lastUpdated = overviewData?.frontmatter.last_updated as string | undefined
+  const lastUpdated = overviewData?.frontmatter.last_updated
 
   return (
     <div className="px-md pt-lg pb-lg max-w-lg mx-auto space-y-lg">

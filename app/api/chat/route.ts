@@ -36,16 +36,43 @@ export async function POST(request: Request) {
     })
   }
 
-  const { sessionType, messages, pulseCheckContext } = body
+  const { sessionId, sessionType, messages, pulseCheckContext } = body
+
+  // Validate session ownership
+  const { data: sessionCheck } = await supabase
+    .from('sessions')
+    .select('id')
+    .eq('id', sessionId)
+    .eq('user_id', user.id)
+    .single()
+
+  if (!sessionCheck) {
+    return new Response(JSON.stringify({ error: 'Session not found' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // Validate session type
+  const VALID_SESSION_TYPES: ReadonlySet<string> = new Set(['life_mapping', 'weekly_checkin'])
+  if (!VALID_SESSION_TYPES.has(sessionType)) {
+    return new Response(JSON.stringify({ error: 'Invalid session type' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 
   // Build system prompt with context
   let systemPrompt: string
   try {
     systemPrompt = await buildConversationContext(sessionType, user.id)
 
-    // Inject pulse check context if provided
-    if (pulseCheckContext) {
-      systemPrompt += `\n\n${pulseCheckContext}`
+    // Inject pulse check context if provided (length-limited to prevent prompt injection abuse)
+    // TODO: Reconstruct pulse context server-side from DB instead of accepting client text
+    if (pulseCheckContext && typeof pulseCheckContext === 'string') {
+      const MAX_PULSE_CONTEXT_LENGTH = 1000
+      const sanitized = pulseCheckContext.slice(0, MAX_PULSE_CONTEXT_LENGTH)
+      systemPrompt += `\n\n${sanitized}`
     }
   } catch {
     return new Response(JSON.stringify({ error: 'Failed to build conversation context' }), {

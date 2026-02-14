@@ -3,13 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import type { Commitment, CommitmentStatus, NextStepStatus } from '@/lib/markdown/extract'
-
-const STATUS_DISPLAY: Record<CommitmentStatus, { label: string; className: string }> = {
-  not_started: { label: 'Getting started', className: 'text-text-secondary' },
-  in_progress: { label: 'Making progress', className: 'text-primary' },
-  complete: { label: 'Done', className: 'text-accent-sage' },
-}
+import { COMMITMENT_STATUS_DISPLAY } from '@/lib/markdown/extract'
+import type { Commitment, NextStepStatus } from '@/lib/markdown/extract'
 
 const STEP_DOT_COLOR: Record<NextStepStatus, string> = {
   upcoming: 'bg-text-secondary/30',
@@ -63,8 +58,8 @@ export function LifePlanView({ quarterTheme, commitments, thingsToProtect, bound
             Active commitments
           </p>
           <div className="space-y-sm">
-            {commitments.map((commitment, i) => (
-              <CommitmentDetailCard key={i} commitment={commitment} />
+            {commitments.map((commitment) => (
+              <CommitmentDetailCard key={commitment.label} commitment={commitment} />
             ))}
           </div>
         </div>
@@ -109,7 +104,7 @@ export function LifePlanView({ quarterTheme, commitments, thingsToProtect, bound
 
 function CommitmentDetailCard({ commitment }: { commitment: Commitment }) {
   const [expanded, setExpanded] = useState(false)
-  const statusDisplay = STATUS_DISPLAY[commitment.status]
+  const statusDisplay = COMMITMENT_STATUS_DISPLAY[commitment.status]
   const hasDetails = commitment.whyItMatters || commitment.nextSteps.length > 0
 
   return (

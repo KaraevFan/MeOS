@@ -118,14 +118,24 @@ export async function getHomeData(
   let boundaries: string[] = []
   let quarterTheme: string | null = null
   let daysSinceMapping: number | null = null
+  let daysSinceCheckin: number | null = null
 
   if (onboardingCompleted) {
     const ufs = new UserFileSystem(supabase, userId)
 
-    // Read overview + life plan in parallel
-    const [overview, lifePlan] = await Promise.allSettled([
+    // Read overview + life plan + last check-in all in parallel
+    const [overview, lifePlan, lastCheckinResult] = await Promise.allSettled([
       ufs.readOverview(),
       ufs.readLifePlan(),
+      supabase
+        .from('sessions')
+        .select('completed_at')
+        .eq('user_id', userId)
+        .eq('session_type', 'weekly_checkin')
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ])
 
     // Extract from overview
@@ -161,23 +171,13 @@ export async function getHomeData(
         quarterTheme = themeSection.split('\n')[0]?.trim() || null
       }
     }
-  }
 
-  // Calculate days since last check-in
-  let daysSinceCheckin: number | null = null
-  if (onboardingCompleted) {
-    const { data: lastCheckin } = await supabase
-      .from('sessions')
-      .select('completed_at')
-      .eq('user_id', userId)
-      .eq('session_type', 'weekly_checkin')
-      .eq('status', 'completed')
-      .order('completed_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (lastCheckin?.completed_at) {
-      daysSinceCheckin = Math.floor((Date.now() - new Date(lastCheckin.completed_at).getTime()) / (1000 * 60 * 60 * 24))
+    // Extract days since last check-in from parallel result
+    if (lastCheckinResult.status === 'fulfilled') {
+      const lastCheckin = lastCheckinResult.value.data
+      if (lastCheckin?.completed_at) {
+        daysSinceCheckin = Math.floor((Date.now() - new Date(lastCheckin.completed_at).getTime()) / (1000 * 60 * 60 * 24))
+      }
     }
   }
 

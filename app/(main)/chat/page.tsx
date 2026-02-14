@@ -22,7 +22,12 @@ export default async function ChatPage({
   const params = await searchParams
   const requestedType = params.type === 'weekly_checkin' ? 'weekly_checkin' : undefined
 
-  // Detect session state server-side
+  // Start life plan read early if we already know it's a check-in from URL param
+  const lifePlanPromise = requestedType === 'weekly_checkin'
+    ? new UserFileSystem(supabase, user.id).readLifePlan().catch(() => null)
+    : null
+
+  // Detect session state in parallel with the life plan read above
   const sessionState = await detectSessionState(supabase, user.id)
 
   // Determine session type based on state + URL params
@@ -37,8 +42,9 @@ export default async function ChatPage({
   let commitments: Commitment[] = []
   if (sessionType === 'weekly_checkin') {
     try {
-      const ufs = new UserFileSystem(supabase, user.id)
-      const lifePlan = await ufs.readLifePlan()
+      const lifePlan = lifePlanPromise
+        ? await lifePlanPromise
+        : await new UserFileSystem(supabase, user.id).readLifePlan()
       if (lifePlan) {
         commitments = extractCommitments(lifePlan.content)
       }

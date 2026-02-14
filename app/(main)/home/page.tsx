@@ -59,7 +59,7 @@ export default async function HomePage() {
       <div className="mt-lg space-y-lg">
         {/* 3. North star card */}
         {homeData.northStarFull && (
-          <NorthStarCard northStarFull={homeData.northStarFull} northStarLabel={homeData.northStar ?? undefined} />
+          <NorthStarCard northStarFull={homeData.northStarFull} />
         )}
 
         {/* 4. Active commitments (or priorities fallback) */}
@@ -69,8 +69,8 @@ export default async function HomePage() {
               Active commitments
             </p>
             <div className="space-y-sm">
-              {activeCommitments.slice(0, 2).map((commitment, i) => (
-                <CommitmentCard key={i} commitment={commitment} />
+              {activeCommitments.slice(0, 2).map((commitment) => (
+                <CommitmentCard key={commitment.label} commitment={commitment} />
               ))}
             </div>
           </div>

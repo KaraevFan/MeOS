@@ -1,17 +1,12 @@
-import type { Commitment, CommitmentStatus } from '@/lib/markdown/extract'
-
-const STATUS_DISPLAY: Record<CommitmentStatus, { label: string; className: string }> = {
-  not_started: { label: 'Getting started', className: 'text-text-secondary' },
-  in_progress: { label: 'Making progress', className: 'text-primary' },
-  complete: { label: 'Done', className: 'text-accent-sage' },
-}
+import { COMMITMENT_STATUS_DISPLAY } from '@/lib/markdown/extract'
+import type { Commitment } from '@/lib/markdown/extract'
 
 interface CommitmentCardProps {
   commitment: Commitment
 }
 
 export function CommitmentCard({ commitment }: CommitmentCardProps) {
-  const statusDisplay = STATUS_DISPLAY[commitment.status]
+  const statusDisplay = COMMITMENT_STATUS_DISPLAY[commitment.status]
   // Show first 2 non-done next steps (or the most recent done ones if all are done)
   const visibleSteps = commitment.nextSteps
     .filter((s) => s.status !== 'done')

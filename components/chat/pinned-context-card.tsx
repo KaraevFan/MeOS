@@ -43,10 +43,10 @@ export function PinnedContextCard({ commitments }: PinnedContextCardProps) {
 
         {!collapsed && (
           <div className="mt-1.5 space-y-1.5">
-            {activeCommitments.map((commitment, i) => {
+            {activeCommitments.map((commitment) => {
               const activeStep = commitment.nextSteps.find((s) => s.status === 'active')
               return (
-                <div key={i} className="flex items-start gap-2">
+                <div key={commitment.label} className="flex items-start gap-2">
                   <span className={cn(
                     'mt-1 block w-1.5 h-1.5 rounded-full flex-shrink-0',
                     commitment.status === 'in_progress' ? 'bg-primary' : 'bg-text-secondary/30'

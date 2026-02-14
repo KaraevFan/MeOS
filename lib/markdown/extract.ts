@@ -38,6 +38,12 @@ export function extractBulletList(content: string, heading: string): string[] {
 export type CommitmentStatus = 'not_started' | 'in_progress' | 'complete'
 export type NextStepStatus = 'upcoming' | 'active' | 'done'
 
+export const COMMITMENT_STATUS_DISPLAY: Record<CommitmentStatus, { label: string; className: string }> = {
+  not_started: { label: 'Getting started', className: 'text-text-secondary' },
+  in_progress: { label: 'Making progress', className: 'text-primary' },
+  complete: { label: 'Done', className: 'text-accent-sage' },
+}
+
 export interface NextStep {
   label: string
   status: NextStepStatus
@@ -62,8 +68,15 @@ export interface Commitment {
  *       - [x] Done step *(done)*
  */
 export function extractCommitments(content: string): Commitment[] {
-  // 1. Extract the full "Active Commitments" section (h2 level)
-  const section = extractMarkdownSection(content, 'Active Commitments')
+  // 1. Extract the full "Active Commitments" section at h2 level.
+  //    We can't use extractMarkdownSection here because it stops at h3 headings,
+  //    but we need h3 sub-headings (individual commitments) to stay inside the section.
+  const sectionMatch = content.match(/^##\s+Active Commitments\s*$/m)
+  if (!sectionMatch || sectionMatch.index === undefined) return []
+
+  const afterHeading = content.slice(sectionMatch.index + sectionMatch[0].length)
+  const nextH1OrH2 = afterHeading.search(/^#{1,2}\s/m)
+  const section = (nextH1OrH2 === -1 ? afterHeading : afterHeading.slice(0, nextH1OrH2)).trim()
   if (!section) return []
 
   // 2. Split on h3 headings to find individual commitments

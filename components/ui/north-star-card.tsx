@@ -1,8 +1,6 @@
 interface NorthStarCardProps {
   /** Full north star paragraph including "because" clause */
   northStarFull: string
-  /** Short label (bold text only) for compact display, if needed */
-  northStarLabel?: string
 }
 
 export function NorthStarCard({ northStarFull }: NorthStarCardProps) {
