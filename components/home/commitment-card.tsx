@@ -1,0 +1,47 @@
+import type { Commitment, CommitmentStatus } from '@/lib/markdown/extract'
+
+const STATUS_DISPLAY: Record<CommitmentStatus, { label: string; className: string }> = {
+  not_started: { label: 'Getting started', className: 'text-text-secondary' },
+  in_progress: { label: 'Making progress', className: 'text-primary' },
+  complete: { label: 'Done', className: 'text-accent-sage' },
+}
+
+interface CommitmentCardProps {
+  commitment: Commitment
+}
+
+export function CommitmentCard({ commitment }: CommitmentCardProps) {
+  const statusDisplay = STATUS_DISPLAY[commitment.status]
+  // Show first 2 non-done next steps (or the most recent done ones if all are done)
+  const visibleSteps = commitment.nextSteps
+    .filter((s) => s.status !== 'done')
+    .slice(0, 2)
+
+  return (
+    <div className="bg-bg-card rounded-lg border border-border p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-medium text-text leading-snug">
+          {commitment.label}
+        </p>
+        <span className={`text-[11px] font-medium whitespace-nowrap ${statusDisplay.className}`}>
+          {statusDisplay.label}
+        </span>
+      </div>
+
+      {visibleSteps.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {visibleSteps.map((step, i) => (
+            <li key={i} className="flex items-start gap-2 text-[13px] text-text-secondary">
+              <span className={`mt-1 block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                step.status === 'active' ? 'bg-primary' : 'bg-text-secondary/30'
+              }`} />
+              <span className={step.status === 'active' ? 'text-text' : ''}>
+                {step.label}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}

@@ -75,6 +75,7 @@ Critical rules:
 - After each domain card, only offer unexplored domains as next options. Sort by pulse check rating if available (struggling first).
 - For domains rated "thriving" or "good" in the pulse check, offer a quick confirmation: "You rated [domain] as [rating] — want to spend time here or is that a quick confirm?"
 - The north star MUST include a "because" clause: not just "Career transition" but "Career transition — because financial independence unlocks everything else." If you can't articulate why, probe deeper.
+- Life plan commitments MUST follow this exact structure: ### heading, **Why it matters:** line, **Status:** line (exactly one of: not_started, in_progress, complete), #### Next Steps with - [ ] checkboxes annotated with *(upcoming)*, *(active)*, or *(done)*. The app parses this structure programmatically.
 ${FILE_UPDATE_FORMAT}
 
 Example domain output:
@@ -180,6 +181,8 @@ Critical rules:
 - Keep it to 5-10 minutes. Don't over-extend. Respect their time.
 - Responses should be concise — 2-4 sentences typical.
 - After 3+ sessions, start actively looking for and naming patterns.
+- When updating the life plan, preserve exact commitment heading text (### headings) unless the user explicitly renames or replaces a commitment. Changing headings breaks continuity tracking.
+- Commitment status must be exactly one of: not_started, in_progress, complete. Use *(upcoming)*, *(active)*, or *(done)* annotations on next step checkboxes.
 ${FILE_UPDATE_FORMAT}
 
 At the end of the session, generate:
@@ -231,13 +234,13 @@ export function getWeeklyCheckinPrompt(
     contextParts.push(`\nLife Map Narrative: ${lifeMap.narrative_summary}`)
   }
   if (lifeMap.primary_compounding_engine) {
-    contextParts.push(`Primary Compounding Engine: ${lifeMap.primary_compounding_engine}`)
+    contextParts.push(`North Star: ${lifeMap.primary_compounding_engine}`)
   }
   if (lifeMap.quarterly_priorities?.length) {
-    contextParts.push(`Quarterly Priorities: ${lifeMap.quarterly_priorities.join(', ')}`)
+    contextParts.push(`This Quarter's Focus: ${lifeMap.quarterly_priorities.join(', ')}`)
   }
   if (lifeMap.key_tensions?.length) {
-    contextParts.push(`Key Tensions: ${lifeMap.key_tensions.join(', ')}`)
+    contextParts.push(`Tensions to Watch: ${lifeMap.key_tensions.join(', ')}`)
   }
 
   // Domains

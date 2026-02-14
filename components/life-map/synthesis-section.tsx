@@ -22,11 +22,11 @@ export function SynthesisSection({ lifeMap }: SynthesisSectionProps) {
         </div>
       )}
 
-      {/* Primary Compounding Engine */}
+      {/* Your North Star */}
       {lifeMap.primary_compounding_engine && (
         <div className="mb-4 bg-primary/10 rounded-md px-3 py-2">
           <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-0.5">
-            Primary compounding engine
+            Your north star
           </p>
           <p className="text-sm text-text font-bold">
             {lifeMap.primary_compounding_engine}
@@ -34,11 +34,11 @@ export function SynthesisSection({ lifeMap }: SynthesisSectionProps) {
         </div>
       )}
 
-      {/* Quarterly Priorities */}
+      {/* This quarter's focus */}
       {lifeMap.quarterly_priorities && lifeMap.quarterly_priorities.length > 0 && (
         <div className="mb-4">
           <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1.5">
-            Quarterly priorities
+            This quarter&apos;s focus
           </p>
           <ol className="text-sm text-text space-y-1">
             {lifeMap.quarterly_priorities.map((p, i) => (
@@ -51,11 +51,11 @@ export function SynthesisSection({ lifeMap }: SynthesisSectionProps) {
         </div>
       )}
 
-      {/* Key Tensions */}
+      {/* Tensions to watch */}
       {lifeMap.key_tensions && lifeMap.key_tensions.length > 0 && (
         <div className="mb-4">
           <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1.5">
-            Key tensions
+            Tensions to watch
           </p>
           <ul className="text-sm text-text space-y-1">
             {lifeMap.key_tensions.map((t, i) => (
@@ -68,11 +68,11 @@ export function SynthesisSection({ lifeMap }: SynthesisSectionProps) {
         </div>
       )}
 
-      {/* Anti-goals */}
+      {/* Boundaries */}
       {lifeMap.anti_goals && lifeMap.anti_goals.length > 0 && (
         <div>
           <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1.5">
-            Anti-goals
+            Boundaries
           </p>
           <ul className="text-sm text-text space-y-1">
             {lifeMap.anti_goals.map((g, i) => (
