@@ -69,11 +69,11 @@ export class UserFileSystem {
       .download(fullPath)
 
     if (error) {
-      // File not found is expected — return null gracefully
-      if (error.message?.includes('not found') || error.message?.includes('Object not found')) {
-        return null
+      // Most read errors are "file doesn't exist yet" — expected and non-fatal.
+      // Only log at debug level to avoid noisy dev console errors.
+      if (process.env.NODE_ENV === 'development') {
+        console.debug(`[UserFileSystem] Read error for ${path} (likely missing file)`)
       }
-      console.error(`[UserFileSystem] Read error for ${path}:`, error.message)
       return null
     }
 
