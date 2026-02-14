@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { UserFileSystem } from '@/lib/markdown/user-file-system'
 
 export interface HomeData {
   greeting: string
@@ -66,6 +67,34 @@ function getSageLine(context: {
   return "I'm here whenever you want to talk."
 }
 
+/**
+ * Extract a markdown section's content by heading text.
+ * Returns the content between the matched heading and the next heading of equal or higher level.
+ */
+function extractMarkdownSection(content: string, heading: string): string | null {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const headingRegex = new RegExp(`^#{1,3}\\s+${escaped}`, 'm')
+  const match = content.match(headingRegex)
+  if (!match || match.index === undefined) return null
+
+  const afterHeading = content.slice(match.index + match[0].length)
+  const nextHeading = afterHeading.search(/^#{1,3}\s/m)
+  const sectionContent = nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading)
+  return sectionContent.trim()
+}
+
+/**
+ * Extract a bullet list from a markdown section.
+ */
+function extractBulletList(content: string, heading: string): string[] {
+  const section = extractMarkdownSection(content, heading)
+  if (!section) return []
+  return section
+    .split('\n')
+    .filter((line) => line.startsWith('- '))
+    .map((line) => line.replace(/^-\s+/, '').trim())
+}
+
 export async function getHomeData(
   supabase: SupabaseClient,
   userId: string
@@ -92,25 +121,32 @@ export async function getHomeData(
     checkinOverdue = new Date(user.next_checkin_at) <= new Date()
   }
 
-  // Get quarterly priorities + compounding engine from current life map
+  // Get quarterly priorities + compounding engine from markdown files
   let quarterlyPriorities: string[] = []
   let compoundingEngine: string | null = null
   let daysSinceMapping: number | null = null
 
   if (onboardingCompleted) {
-    const { data: lifeMap } = await supabase
-      .from('life_maps')
-      .select('quarterly_priorities, primary_compounding_engine, updated_at')
-      .eq('user_id', userId)
-      .eq('is_current', true)
-      .single()
+    const ufs = new UserFileSystem(supabase, userId)
+    const overview = await ufs.readOverview().catch(() => null)
 
-    quarterlyPriorities = (lifeMap?.quarterly_priorities || []).slice(0, 3)
-    compoundingEngine = lifeMap?.primary_compounding_engine || null
+    if (overview) {
+      // Extract priorities from "This Quarter's Focus" section
+      quarterlyPriorities = extractBulletList(overview.content, "This Quarter's Focus").slice(0, 3)
 
-    if (lifeMap?.updated_at) {
-      const mapDate = new Date(lifeMap.updated_at)
-      daysSinceMapping = Math.floor((Date.now() - mapDate.getTime()) / (1000 * 60 * 60 * 24))
+      // Extract compounding engine / north star from "Your North Star" section
+      const northStar = extractMarkdownSection(overview.content, 'Your North Star')
+      if (northStar) {
+        // Extract bold text: **Career transition** — because...
+        const boldMatch = northStar.match(/\*\*(.+?)\*\*/)
+        compoundingEngine = boldMatch ? boldMatch[1] : northStar.split('\n')[0] || null
+      }
+
+      // Days since mapping from frontmatter last_updated
+      if (overview.frontmatter.last_updated) {
+        const mapDate = new Date(overview.frontmatter.last_updated)
+        daysSinceMapping = Math.floor((Date.now() - mapDate.getTime()) / (1000 * 60 * 60 * 24))
+      }
     }
   }
 
