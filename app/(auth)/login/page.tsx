@@ -51,13 +51,13 @@ export default function LoginPage() {
     <div className="w-full max-w-sm flex flex-col items-center text-center">
       {/* Breathing orb */}
       <div className="mb-14">
-        <BreathingOrb variant="hero" />
+        <BreathingOrb />
       </div>
 
       {/* Title */}
       <div
         className="animate-fade-in-up"
-        style={{ animation: 'fade-in-up 0.8s ease-out 0.3s both' }}
+        style={{ animation: 'fade-in-up 0.6s ease-out 0.15s both' }}
       >
         <h1 className="text-2xl font-bold tracking-tight">
           MeOS
@@ -67,7 +67,7 @@ export default function LoginPage() {
       {/* Subtitle */}
       <div
         className="animate-fade-in-up"
-        style={{ animation: 'fade-in-up 0.8s ease-out 0.5s both' }}
+        style={{ animation: 'fade-in-up 0.6s ease-out 0.25s both' }}
       >
         <p className="mt-3 text-lg text-text-secondary">
           Your AI life partner
@@ -77,7 +77,7 @@ export default function LoginPage() {
       {/* Auth section */}
       <div
         className="mt-12 w-full animate-fade-in-up"
-        style={{ animation: 'fade-in-up 0.8s ease-out 0.7s both' }}
+        style={{ animation: 'fade-in-up 0.6s ease-out 0.35s both' }}
       >
         {emailSent ? (
           <div className="bg-bg-sage rounded-md p-lg">
@@ -165,7 +165,7 @@ export default function LoginPage() {
       {/* Terms & privacy */}
       <div
         className="mt-16 animate-fade-in-up"
-        style={{ animation: 'fade-in-up 0.8s ease-out 0.9s both' }}
+        style={{ animation: 'fade-in-up 0.6s ease-out 0.45s both' }}
       >
         <p className="text-sm text-text-secondary max-w-xs mx-auto leading-relaxed">
           By continuing, you agree to our{' '}
