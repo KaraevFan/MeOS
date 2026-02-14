@@ -9,10 +9,10 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: '#D4A574',
-        'primary-hover': '#C4956A',
-        'primary-glow': 'rgba(212, 165, 116, 0.3)',
-        bg: '#FAF7F2',
+        primary: '#D97706',
+        'primary-hover': '#B45309',
+        'primary-glow': 'rgba(245, 158, 11, 0.3)',
+        bg: '#FDFCF8',
         'bg-sage': '#F5F0E8',
         'bg-card': '#FFFFFF',
         text: '#3D3832',
@@ -43,7 +43,7 @@ const config: Config = {
       boxShadow: {
         sm: '0 1px 3px rgba(61, 56, 50, 0.06)',
         md: '0 4px 12px rgba(61, 56, 50, 0.08)',
-        glow: '0 0 20px rgba(212, 165, 116, 0.25)',
+        glow: '0 0 20px rgba(245, 158, 11, 0.25)',
       },
       fontFamily: {
         satoshi: ['Satoshi', 'DM Sans', 'sans-serif'],

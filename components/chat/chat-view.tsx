@@ -12,6 +12,9 @@ import { ErrorMessage } from './error-message'
 import { PulseCheckCard } from './pulse-check-card'
 import { getOrCreateLifeMap, upsertDomain, updateLifeMapSynthesis } from '@/lib/supabase/life-map'
 import { completeSession, updateDomainsExplored, updateSessionSummary } from '@/lib/supabase/sessions'
+import { UserFileSystem } from '@/lib/markdown/user-file-system'
+import { handleAllFileUpdates } from '@/lib/markdown/file-write-handler'
+import type { FileUpdateData } from '@/types/chat'
 import { savePulseCheckRatings, pulseRatingToDomainStatus } from '@/lib/supabase/pulse-check'
 import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
@@ -378,7 +381,8 @@ Do NOT list all 8 domains back. Keep it conversational.`
       }
 
       // Stream complete — finalize the message
-      const hasBlock = accumulated.includes('[DOMAIN_SUMMARY]') ||
+      const hasBlock = accumulated.includes('[FILE_UPDATE') ||
+        accumulated.includes('[DOMAIN_SUMMARY]') ||
         accumulated.includes('[LIFE_MAP_SYNTHESIS]') ||
         accumulated.includes('[SESSION_SUMMARY]')
 
@@ -488,6 +492,68 @@ Do NOT list all 8 domains back. Keep it conversational.`
             await completeSession(supabase, sessionId)
           } catch {
             console.error('Failed to persist session summary')
+          }
+        }
+
+        // Handle [FILE_UPDATE] blocks — write markdown files to Storage
+        const fileUpdateBlocks = parsed.segments.filter(
+          (s): s is Extract<typeof s, { type: 'block'; blockType: 'file_update' }> =>
+            s.type === 'block' && s.blockType === 'file_update'
+        )
+
+        if (fileUpdateBlocks.length > 0) {
+          const ufs = new UserFileSystem(supabase, userId)
+          const updates: FileUpdateData[] = fileUpdateBlocks.map((b) => b.data)
+
+          // Fire writes asynchronously — don't block the UI
+          handleAllFileUpdates(ufs, updates, sessionType).then((results) => {
+            for (const r of results) {
+              if (!r.success) {
+                console.error(`[ChatView] File write failed: ${r.path} — ${r.error}`)
+              }
+            }
+          }).catch((err) => {
+            console.error('[ChatView] File write handler error:', err)
+          })
+
+          // Track explored domains from domain-type file updates
+          const newDomains = new Set(domainsExplored)
+          let domainChanged = false
+          for (const block of fileUpdateBlocks) {
+            if (block.data.fileType === 'domain' && block.data.name) {
+              newDomains.add(block.data.name as DomainName)
+              domainChanged = true
+            }
+          }
+          if (domainChanged) {
+            setDomainsExplored(newDomains)
+            updateDomainsExplored(supabase, sessionId, [...newDomains]).catch(() => {
+              console.error('Failed to update domains explored')
+            })
+          }
+
+          // Handle session lifecycle for synthesis/check-in file updates
+          const hasOverview = updates.some((u) => u.fileType === 'overview')
+          const hasCheckIn = updates.some((u) => u.fileType === 'check-in')
+
+          if (hasOverview) {
+            completeSession(supabase, sessionId).catch(() => {
+              console.error('Failed to complete session')
+            })
+            Promise.resolve(
+              supabase
+                .from('users')
+                .update({ onboarding_completed: true })
+                .eq('id', userId)
+            ).catch(() => console.error('Failed to mark onboarding complete'))
+
+            if (isPushSupported() && Notification.permission === 'default') {
+              setShowPushPrompt(true)
+            }
+          } else if (hasCheckIn) {
+            completeSession(supabase, sessionId).catch(() => {
+              console.error('Failed to complete session')
+            })
           }
         }
       }

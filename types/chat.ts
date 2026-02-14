@@ -53,16 +53,30 @@ export interface SessionSummary {
   patternsObserved: string
 }
 
+/** Semantic identifier from [FILE_UPDATE] blocks. System resolves to file path. */
+export interface FileUpdateData {
+  /** File type: "domain", "overview", "life-plan", "check-in", "sage-context", "sage-patterns" */
+  fileType: string
+  /** Semantic name, e.g., "Career / Work" for domains, or absent for singleton files */
+  name?: string
+  /** Resolved file path (populated by resolver, not parser) */
+  resolvedPath?: string
+  /** Markdown body content (no frontmatter) */
+  content: string
+}
+
 export type StructuredBlock =
   | { type: 'domain_summary'; data: DomainSummary }
   | { type: 'life_map_synthesis'; data: LifeMapSynthesis }
   | { type: 'session_summary'; data: SessionSummary }
+  | { type: 'file_update'; data: FileUpdateData }
 
 export type ParsedSegment =
   | { type: 'text'; content: string }
   | { type: 'block'; blockType: 'domain_summary'; data: DomainSummary }
   | { type: 'block'; blockType: 'life_map_synthesis'; data: LifeMapSynthesis }
   | { type: 'block'; blockType: 'session_summary'; data: SessionSummary }
+  | { type: 'block'; blockType: 'file_update'; data: FileUpdateData }
 
 export interface ParsedMessage {
   segments: ParsedSegment[]

@@ -5,7 +5,7 @@ description: Use when building any MeOS frontend component, page, or layout. Enf
 
 # MeOS Design System Skill
 
-Read `UX_design.md` for full design philosophy and screen specs before building any UI.
+Read `Docs/UX_design.md` for full design philosophy and screen specs before building any UI.
 
 ## Aesthetic Identity: Warm Journal Meets Calm Conversation
 
@@ -15,10 +15,10 @@ MeOS feels like a beautifully designed personal journal crossed with talking to 
 
 ```
 /* Palette */
---color-primary: #D4A574;        /* Warm amber/gold — voice button, key CTAs */
---color-primary-hover: #C4956A;
---color-primary-glow: rgba(212, 165, 116, 0.3);  /* Voice button pulse */
---color-bg: #FAF7F2;             /* Warm cream — NOT pure white */
+--color-primary: #D97706;        /* Bright amber — voice button, key CTAs, orb */
+--color-primary-hover: #B45309;
+--color-primary-glow: rgba(245, 158, 11, 0.3);  /* Voice button pulse, orb glow */
+--color-bg: #FDFCF8;             /* Warm cream — NOT pure white */
 --color-bg-sage: #F5F0E8;        /* Sage message background */
 --color-bg-card: #FFFFFF;         /* Cards get true white for lift */
 --color-text: #3D3832;           /* Dark warm gray — NOT pure black */
@@ -51,7 +51,7 @@ MeOS feels like a beautifully designed personal journal crossed with talking to 
 /* Shadows — warm tinted, never cool gray */
 --shadow-sm: 0 1px 3px rgba(61, 56, 50, 0.06);
 --shadow-md: 0 4px 12px rgba(61, 56, 50, 0.08);
---shadow-glow: 0 0 20px rgba(212, 165, 116, 0.25);  /* Voice button active */
+--shadow-glow: 0 0 20px rgba(245, 158, 11, 0.25);  /* Voice button active, orb glow */
 ```
 
 ## Typography

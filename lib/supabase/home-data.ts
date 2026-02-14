@@ -1,4 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { UserFileSystem } from '@/lib/markdown/user-file-system'
+import { extractMarkdownSection, extractBulletList } from '@/lib/markdown/extract'
 
 export interface HomeData {
   greeting: string
@@ -92,25 +94,32 @@ export async function getHomeData(
     checkinOverdue = new Date(user.next_checkin_at) <= new Date()
   }
 
-  // Get quarterly priorities + compounding engine from current life map
+  // Get quarterly priorities + compounding engine from markdown files
   let quarterlyPriorities: string[] = []
   let compoundingEngine: string | null = null
   let daysSinceMapping: number | null = null
 
   if (onboardingCompleted) {
-    const { data: lifeMap } = await supabase
-      .from('life_maps')
-      .select('quarterly_priorities, primary_compounding_engine, updated_at')
-      .eq('user_id', userId)
-      .eq('is_current', true)
-      .single()
+    const ufs = new UserFileSystem(supabase, userId)
+    const overview = await ufs.readOverview().catch(() => null)
 
-    quarterlyPriorities = (lifeMap?.quarterly_priorities || []).slice(0, 3)
-    compoundingEngine = lifeMap?.primary_compounding_engine || null
+    if (overview) {
+      // Extract priorities from "This Quarter's Focus" section
+      quarterlyPriorities = extractBulletList(overview.content, "This Quarter's Focus").slice(0, 3)
 
-    if (lifeMap?.updated_at) {
-      const mapDate = new Date(lifeMap.updated_at)
-      daysSinceMapping = Math.floor((Date.now() - mapDate.getTime()) / (1000 * 60 * 60 * 24))
+      // Extract compounding engine / north star from "Your North Star" section
+      const northStar = extractMarkdownSection(overview.content, 'Your North Star')
+      if (northStar) {
+        // Extract bold text: **Career transition** — because...
+        const boldMatch = northStar.match(/\*\*(.+?)\*\*/)
+        compoundingEngine = boldMatch ? boldMatch[1] : northStar.split('\n')[0] || null
+      }
+
+      // Days since mapping from frontmatter last_updated
+      if (overview.frontmatter.last_updated) {
+        const mapDate = new Date(overview.frontmatter.last_updated)
+        daysSinceMapping = Math.floor((Date.now() - mapDate.getTime()) / (1000 * 60 * 60 * 24))
+      }
     }
   }
 
