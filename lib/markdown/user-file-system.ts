@@ -248,7 +248,10 @@ export class UserFileSystem {
    */
   async listCheckIns(limit?: number): Promise<string[]> {
     const files = await this.listFiles('check-ins/')
-    const sorted = files.sort().reverse()
+    // listFiles returns full paths like 'check-ins/2026-02-14-weekly.md'
+    // Strip the prefix so results can be passed directly to readCheckIn()
+    const filenames = files.map((f) => f.replace('check-ins/', ''))
+    const sorted = filenames.sort().reverse()
     return limit ? sorted.slice(0, limit) : sorted
   }
 
