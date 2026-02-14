@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils'
 import { COMMITMENT_STATUS_DISPLAY } from '@/lib/markdown/extract'
 import type { Commitment } from '@/lib/markdown/extract'
 
@@ -18,7 +19,7 @@ export function CommitmentCard({ commitment }: CommitmentCardProps) {
         <p className="text-sm font-medium text-text leading-snug">
           {commitment.label}
         </p>
-        <span className={`text-[11px] font-medium whitespace-nowrap ${statusDisplay.className}`}>
+        <span className={cn('text-[11px] font-medium whitespace-nowrap', statusDisplay.className)}>
           {statusDisplay.label}
         </span>
       </div>
@@ -27,9 +28,10 @@ export function CommitmentCard({ commitment }: CommitmentCardProps) {
         <ul className="mt-2 space-y-1">
           {visibleSteps.map((step, i) => (
             <li key={i} className="flex items-start gap-2 text-[13px] text-text-secondary">
-              <span className={`mt-1 block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+              <span className={cn(
+                'mt-1 block w-1.5 h-1.5 rounded-full flex-shrink-0',
                 step.status === 'active' ? 'bg-primary' : 'bg-text-secondary/30'
-              }`} />
+              )} />
               <span className={step.status === 'active' ? 'text-text' : ''}>
                 {step.label}
               </span>

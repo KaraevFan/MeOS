@@ -9,24 +9,25 @@ import type { LifeMap, LifeMapDomain } from '@/types/database'
 import type { PulseCheckRating } from '@/types/pulse-check'
 import type { Commitment } from '@/lib/markdown/extract'
 
+export interface LifePlanData {
+  quarterTheme: string | null
+  commitments: Commitment[]
+  thingsToProtect: string[]
+  boundaries: string[]
+}
+
 interface LifeMapTabsProps {
   lifeMap: LifeMap
   domains: LifeMapDomain[]
   baselineRatings: PulseCheckRating[]
-  quarterTheme: string | null
-  commitments: Commitment[]
-  thingsToProtect: string[]
-  lifePlanBoundaries: string[]
+  lifePlanData: LifePlanData
 }
 
 export function LifeMapTabs({
   lifeMap,
   domains,
   baselineRatings,
-  quarterTheme,
-  commitments,
-  thingsToProtect,
-  lifePlanBoundaries,
+  lifePlanData,
 }: LifeMapTabsProps) {
   const [activeTab, setActiveTab] = useState<Tab>('where-i-am')
 
@@ -41,10 +42,10 @@ export function LifeMapTabs({
         </div>
       ) : (
         <LifePlanView
-          quarterTheme={quarterTheme}
-          commitments={commitments}
-          thingsToProtect={thingsToProtect}
-          boundaries={lifePlanBoundaries}
+          quarterTheme={lifePlanData.quarterTheme}
+          commitments={lifePlanData.commitments}
+          thingsToProtect={lifePlanData.thingsToProtect}
+          boundaries={lifePlanData.boundaries}
         />
       )}
     </>

@@ -85,15 +85,23 @@ export default async function LifeMapPage() {
 
   const ufs = new UserFileSystem(supabase, user.id)
 
-  // Known domain filenames from constant map
-  const knownDomainFilenames = Object.values(DOMAIN_FILE_MAP)
+  // Query file_index to find which domain files actually exist, avoiding blind reads
+  const { data: existingDomainFiles } = await supabase
+    .from('file_index')
+    .select('file_path')
+    .eq('user_id', user.id)
+    .eq('file_type', 'domain')
 
-  // Read overview + life plan + all known domains + baseline ratings in parallel
+  const existingDomainFilenames = existingDomainFiles
+    ? existingDomainFiles.map((d) => d.file_path.replace('life-map/', '').replace('.md', ''))
+    : Object.values(DOMAIN_FILE_MAP) // Fallback to reading all if file_index unavailable
+
+  // Read overview + life plan + existing domains + baseline ratings in parallel
   const [overview, lifePlan, baselineRatings, ...domainFileResults] = await Promise.allSettled([
     ufs.readOverview(),
     ufs.readLifePlan(),
     getBaselineRatings(supabase, user.id),
-    ...knownDomainFilenames.map(async (filename) => {
+    ...existingDomainFilenames.map(async (filename) => {
       const file = await ufs.readDomain(filename)
       if (!file) return null
       const domainName = FILE_TO_DOMAIN_MAP[filename] ?? filename
@@ -168,10 +176,7 @@ export default async function LifeMapPage() {
         lifeMap={lifeMap}
         domains={domains}
         baselineRatings={baselineRatingsData}
-        quarterTheme={quarterTheme}
-        commitments={commitments}
-        thingsToProtect={thingsToProtect}
-        lifePlanBoundaries={lifePlanBoundaries}
+        lifePlanData={{ quarterTheme, commitments, thingsToProtect, boundaries: lifePlanBoundaries }}
       />
 
       {lastUpdated && (

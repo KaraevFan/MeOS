@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { ChevronIcon } from '@/components/ui/chevron-icon'
 import type { Commitment } from '@/lib/markdown/extract'
 
 interface PinnedContextCardProps {
@@ -25,20 +26,7 @@ export function PinnedContextCard({ commitments }: PinnedContextCardProps) {
           <p className="text-[11px] font-medium text-text-secondary uppercase tracking-wide">
             Current commitments
           </p>
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className={cn(
-              'text-text-secondary transition-transform',
-              collapsed && 'rotate-180'
-            )}
-          >
-            <path d="M6 9l6 6 6-6" />
-          </svg>
+          <ChevronIcon rotated={collapsed} />
         </div>
 
         {!collapsed && (

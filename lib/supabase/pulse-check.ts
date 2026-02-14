@@ -52,22 +52,30 @@ export async function getBaselineRatings(
   supabase: SupabaseClient,
   userId: string
 ): Promise<PulseCheckRating[] | null> {
-  // Find the most recent baseline session
-  const { data, error } = await supabase
+  // Find the most recent baseline session_id
+  const { data: latest, error: latestError } = await supabase
     .from('pulse_check_ratings')
-    .select('*')
+    .select('session_id')
     .eq('user_id', userId)
     .eq('is_baseline', true)
     .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (latestError) throw latestError
+  if (!latest) return null
+
+  // Fetch only that session's ratings
+  const { data, error } = await supabase
+    .from('pulse_check_ratings')
+    .select('*')
+    .eq('session_id', latest.session_id)
+    .eq('is_baseline', true)
 
   if (error) throw error
   if (!data || data.length === 0) return null
 
-  // Group by session_id, take the most recent session's ratings
-  const latestSessionId = data[0].session_id
-  const baselineRows = data.filter((r) => r.session_id === latestSessionId)
-
-  return baselineRows.map((row) => ({
+  return data.map((row) => ({
     domain: row.domain_name as string,
     domainKey: domainToKey(row.domain_name as string),
     rating: row.rating as PulseRating,

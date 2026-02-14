@@ -63,6 +63,7 @@ function getSageLine(context: {
     if (northStar) {
       return `Day ${daysSinceMapping} of focusing on ${northStar}. How's momentum?`
     }
+    return `Day ${daysSinceMapping} since your life map. How are things landing?`
   }
 
   // Week 2

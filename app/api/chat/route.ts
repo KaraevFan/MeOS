@@ -7,6 +7,28 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
+// Simple in-memory rate limiter: max requests per user per window
+const RATE_LIMIT_WINDOW_MS = 60_000
+const RATE_LIMIT_MAX_REQUESTS = 20
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now()
+  const entry = rateLimitMap.get(userId)
+
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
+    return true
+  }
+
+  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return false
+  }
+
+  entry.count++
+  return true
+}
+
 export async function POST(request: Request) {
   // Validate auth
   const supabase = await createClient()
@@ -15,6 +37,14 @@ export async function POST(request: Request) {
   if (!user) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // Rate limit
+  if (!checkRateLimit(user.id)) {
+    return new Response(JSON.stringify({ error: 'Too many requests' }), {
+      status: 429,
       headers: { 'Content-Type': 'application/json' },
     })
   }

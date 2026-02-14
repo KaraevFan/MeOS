@@ -68,6 +68,12 @@ export interface Commitment {
  *       - [x] Done step *(done)*
  */
 export function extractCommitments(content: string): Commitment[] {
+  // Guard against pathologically large input
+  const MAX_CONTENT_LENGTH = 50_000
+  if (content.length > MAX_CONTENT_LENGTH) {
+    content = content.slice(0, MAX_CONTENT_LENGTH)
+  }
+
   // 1. Extract the full "Active Commitments" section at h2 level.
   //    We can't use extractMarkdownSection here because it stops at h3 headings,
   //    but we need h3 sub-headings (individual commitments) to stay inside the section.

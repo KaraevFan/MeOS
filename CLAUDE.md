@@ -120,6 +120,20 @@ The parser (`lib/ai/parser.ts`) handles both new `[FILE_UPDATE]` blocks and lega
 
 **Sage writes markdown body only — the system generates YAML frontmatter automatically.**
 
+### Vocabulary Mapping (Data Layer → UI)
+
+The `LifeMap` TypeScript type uses legacy field names from the original relational schema. The UI displays coaching vocabulary instead. Mapping happens at the presentation layer — do NOT rename the type fields.
+
+| Type field | UI label | Where mapped |
+|---|---|---|
+| `primary_compounding_engine` | "Your north star" | `life-map/page.tsx`, `home/page.tsx` |
+| `anti_goals` | "Boundaries" | `life-map/page.tsx`, `home/page.tsx` |
+| `key_tensions` | "Tensions to watch" | `life-map/page.tsx` |
+
+### Commitment Heading Stability
+
+Commitment `###` headings in `life-plan/current.md` serve as **identity keys across sessions**. The prompt in `getWeeklyCheckinBasePrompt()` instructs Sage to never rename them. Changing a commitment heading breaks continuity tracking between check-ins. The `extractCommitments()` parser and React key props both rely on heading text stability.
+
 ### Session-Scoped Write Permissions
 
 To prevent prompt injection, each session type has a whitelist of paths it can write to:
