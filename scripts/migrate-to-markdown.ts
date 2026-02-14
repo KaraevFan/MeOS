@@ -617,8 +617,7 @@ async function main() {
   // Pre-migration verification queries
   console.log('--- Pre-migration verification ---')
 
-  const { data: unmappedColumns } = await supabase.rpc('', {}).catch(() => ({ data: null }))
-  // Run raw queries for unmapped data check
+  // Run queries to check for unmapped data
   const { data: desiresCheck } = await supabase
     .from('life_map_domains')
     .select('desires')

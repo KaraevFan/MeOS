@@ -309,6 +309,170 @@ Domain: Broken block no closing tag`
     expect(result.segments).toHaveLength(1)
     expect(result.segments[0]).toEqual({ type: 'text', content: 'Just a regular message with no blocks at all.' })
   })
+
+  // --- FILE_UPDATE block tests ---
+
+  it('parses a FILE_UPDATE block with type and name', () => {
+    const content = `Here's your career update:
+
+[FILE_UPDATE type="domain" name="Career / Work"]
+# Career
+
+## Current State
+Senior PM at a startup, feeling stuck.
+
+## What's Working
+- Good at the craft
+- Team respects you
+
+## Key Tension
+Security vs. entrepreneurial ambition.
+[/FILE_UPDATE]
+
+What else?`
+
+    const result = parseMessage(content)
+    expect(result.segments).toHaveLength(3)
+    expect(result.segments[0]).toEqual({ type: 'text', content: "Here's your career update:" })
+    expect(result.segments[2]).toEqual({ type: 'text', content: 'What else?' })
+
+    const block = result.segments[1]
+    expect(block.type).toBe('block')
+    if (block.type === 'block') {
+      expect(block.blockType).toBe('file_update')
+      if (block.blockType === 'file_update') {
+        expect(block.data.fileType).toBe('domain')
+        expect(block.data.name).toBe('Career / Work')
+        expect(block.data.content).toContain('# Career')
+        expect(block.data.content).toContain('Senior PM at a startup')
+      }
+    }
+  })
+
+  it('parses a FILE_UPDATE block without name (singleton file)', () => {
+    const content = `[FILE_UPDATE type="overview"]
+# Life Map Overview
+
+## Narrative Summary
+Solo founder exploring MeOS while working full-time.
+
+## Your North Star
+**Career transition** -- because financial independence unlocks everything else.
+[/FILE_UPDATE]`
+
+    const result = parseMessage(content)
+    expect(result.segments).toHaveLength(1)
+
+    const block = result.segments[0]
+    expect(block.type).toBe('block')
+    if (block.type === 'block' && block.blockType === 'file_update') {
+      expect(block.data.fileType).toBe('overview')
+      expect(block.data.name).toBeUndefined()
+      expect(block.data.content).toContain('Life Map Overview')
+    }
+  })
+
+  it('parses multiple FILE_UPDATE blocks in one message', () => {
+    const content = `[FILE_UPDATE type="domain" name="Career / Work"]
+# Career
+## Current State
+Doing well.
+[/FILE_UPDATE]
+
+[FILE_UPDATE type="domain" name="Health / Body"]
+# Health
+## Current State
+Need more sleep.
+[/FILE_UPDATE]
+
+[FILE_UPDATE type="overview"]
+# Life Map Overview
+## Narrative Summary
+Updated after check-in.
+[/FILE_UPDATE]`
+
+    const result = parseMessage(content)
+    const blocks = result.segments.filter((s) => s.type === 'block')
+    expect(blocks).toHaveLength(3)
+
+    if (blocks[0].type === 'block' && blocks[0].blockType === 'file_update') {
+      expect(blocks[0].data.fileType).toBe('domain')
+      expect(blocks[0].data.name).toBe('Career / Work')
+    }
+    if (blocks[1].type === 'block' && blocks[1].blockType === 'file_update') {
+      expect(blocks[1].data.fileType).toBe('domain')
+      expect(blocks[1].data.name).toBe('Health / Body')
+    }
+    if (blocks[2].type === 'block' && blocks[2].blockType === 'file_update') {
+      expect(blocks[2].data.fileType).toBe('overview')
+      expect(blocks[2].data.name).toBeUndefined()
+    }
+  })
+
+  it('handles malformed FILE_UPDATE with no closing tag', () => {
+    const content = `Here's a partial block:
+
+[FILE_UPDATE type="domain" name="Career / Work"]
+# Career
+Incomplete block`
+
+    const result = parseMessage(content)
+    expect(result.segments).toHaveLength(1)
+    expect(result.segments[0].type).toBe('text')
+  })
+
+  it('handles mixed FILE_UPDATE and legacy blocks', () => {
+    const content = `[FILE_UPDATE type="domain" name="Career / Work"]
+# Career
+## Current State
+Updated via new format.
+[/FILE_UPDATE]
+
+[DOMAIN_SUMMARY]
+Domain: Health / Body
+Current state: Fine
+What's working: Exercise
+What's not working: Sleep
+Key tension: Time
+Stated intention: Sleep earlier
+Status: stable
+[/DOMAIN_SUMMARY]`
+
+    const result = parseMessage(content)
+    const blocks = result.segments.filter((s) => s.type === 'block')
+    expect(blocks).toHaveLength(2)
+    if (blocks[0].type === 'block') expect(blocks[0].blockType).toBe('file_update')
+    if (blocks[1].type === 'block') expect(blocks[1].blockType).toBe('domain_summary')
+  })
+
+  it('parses FILE_UPDATE with life-plan type', () => {
+    const content = `[FILE_UPDATE type="life-plan"]
+# Life Plan -- Q1 2026
+
+## Quarter Theme
+Building the bridge.
+
+## Active Commitments
+
+### Have the conversation with my manager
+**Why it matters:** Directly addresses career plateau.
+**Status:** in_progress
+
+#### Next Steps
+- [x] Draft talking points
+- [ ] Schedule the 1:1
+[/FILE_UPDATE]`
+
+    const result = parseMessage(content)
+    expect(result.segments).toHaveLength(1)
+
+    const block = result.segments[0]
+    if (block.type === 'block' && block.blockType === 'file_update') {
+      expect(block.data.fileType).toBe('life-plan')
+      expect(block.data.content).toContain('Quarter Theme')
+      expect(block.data.content).toContain('Active Commitments')
+    }
+  })
 })
 
 describe('parseStreamingChunk', () => {
@@ -346,5 +510,34 @@ Next?`
     expect(result.pendingBlock).toBe(false)
     expect(result.completedBlock).not.toBeNull()
     expect(result.completedBlock?.type).toBe('domain_summary')
+  })
+
+  it('detects pending FILE_UPDATE block during streaming', () => {
+    const result = parseStreamingChunk('Here we go:\n\n[FILE_UPDATE type="domain" name="Career / Work"]\n# Career')
+    expect(result.displayText).toBe('Here we go:')
+    expect(result.pendingBlock).toBe(true)
+    expect(result.completedBlock).toBeNull()
+  })
+
+  it('returns completed FILE_UPDATE block when closing tag detected', () => {
+    const accumulated = `Summary:
+
+[FILE_UPDATE type="domain" name="Health / Body"]
+# Health
+## Current State
+Good overall.
+[/FILE_UPDATE]
+
+Next?`
+
+    const result = parseStreamingChunk(accumulated)
+    expect(result.displayText).toBe('Summary:')
+    expect(result.pendingBlock).toBe(false)
+    expect(result.completedBlock).not.toBeNull()
+    expect(result.completedBlock?.type).toBe('file_update')
+    if (result.completedBlock?.type === 'file_update') {
+      expect(result.completedBlock.data.fileType).toBe('domain')
+      expect(result.completedBlock.data.name).toBe('Health / Body')
+    }
   })
 })

@@ -5,15 +5,49 @@ import type {
   DomainSummary,
   LifeMapSynthesis,
   SessionSummary,
+  FileUpdateData,
   DomainStatus,
   DomainName,
 } from '@/types/chat'
 
-const BLOCK_TAGS = [
+// ============================================
+// Legacy block tags (kept for backward compat rendering)
+// ============================================
+
+const LEGACY_BLOCK_TAGS = [
   { open: '[DOMAIN_SUMMARY]', close: '[/DOMAIN_SUMMARY]', type: 'domain_summary' as const },
   { open: '[LIFE_MAP_SYNTHESIS]', close: '[/LIFE_MAP_SYNTHESIS]', type: 'life_map_synthesis' as const },
   { open: '[SESSION_SUMMARY]', close: '[/SESSION_SUMMARY]', type: 'session_summary' as const },
 ]
+
+// ============================================
+// FILE_UPDATE block parsing
+// ============================================
+
+/**
+ * Regex to match [FILE_UPDATE type="..." name="..."] opening tags.
+ * type is required, name is optional (absent for singleton files like overview, life-plan).
+ */
+const FILE_UPDATE_OPEN_REGEX = /\[FILE_UPDATE\s+type="([^"]+)"(?:\s+name="([^"]*)")?\s*\]/
+const FILE_UPDATE_CLOSE = '[/FILE_UPDATE]'
+
+function parseFileUpdateBlock(openTag: string, body: string): FileUpdateData | null {
+  const match = openTag.match(FILE_UPDATE_OPEN_REGEX)
+  if (!match) return null
+
+  const fileType = match[1]
+  const name = match[2] || undefined
+
+  return {
+    fileType,
+    name,
+    content: body.trim(),
+  }
+}
+
+// ============================================
+// Legacy block parsing (unchanged)
+// ============================================
 
 const VALID_STATUSES: DomainStatus[] = ['thriving', 'stable', 'needs_attention', 'in_crisis']
 
@@ -83,7 +117,7 @@ function parseSessionSummaryData(fields: Record<string, string>): SessionSummary
   }
 }
 
-function parseBlockContent(type: 'domain_summary' | 'life_map_synthesis' | 'session_summary', content: string): StructuredBlock {
+function parseLegacyBlockContent(type: 'domain_summary' | 'life_map_synthesis' | 'session_summary', content: string): StructuredBlock {
   const fields = parseKeyValueLines(content)
 
   switch (type) {
@@ -96,28 +130,49 @@ function parseBlockContent(type: 'domain_summary' | 'life_map_synthesis' | 'sess
   }
 }
 
+// ============================================
+// Main parser
+// ============================================
+
 /**
  * Parse a complete message into an array of segments (text and structured blocks).
- * Handles 1, 2, 3+ blocks per message. Malformed blocks (no closing tag) fall back to text.
+ * Handles both new [FILE_UPDATE] blocks and legacy [DOMAIN_SUMMARY] etc. blocks.
+ * Malformed blocks (no closing tag) fall back to text.
  */
 export function parseMessage(content: string): ParsedMessage {
   const segments: ParsedSegment[] = []
   let remaining = content
 
   while (remaining.length > 0) {
-    // Find the earliest opening tag in remaining text
+    // Find the earliest opening tag: check FILE_UPDATE first, then legacy
     let earliestOpen = -1
-    let matchedTag: (typeof BLOCK_TAGS)[number] | null = null
+    let matchType: 'file_update' | 'legacy' = 'legacy'
+    let matchedLegacyTag: (typeof LEGACY_BLOCK_TAGS)[number] | null = null
+    let fileUpdateOpenMatch: RegExpExecArray | null = null
 
-    for (const tag of BLOCK_TAGS) {
-      const idx = remaining.indexOf(tag.open)
-      if (idx !== -1 && (earliestOpen === -1 || idx < earliestOpen)) {
-        earliestOpen = idx
-        matchedTag = tag
+    // Check for [FILE_UPDATE ...] opening tag
+    const fuMatch = FILE_UPDATE_OPEN_REGEX.exec(remaining)
+    if (fuMatch && fuMatch.index !== undefined) {
+      const fuIdx = remaining.indexOf(fuMatch[0])
+      if (fuIdx !== -1) {
+        earliestOpen = fuIdx
+        matchType = 'file_update'
+        fileUpdateOpenMatch = fuMatch
       }
     }
 
-    if (earliestOpen === -1 || !matchedTag) {
+    // Check legacy tags
+    for (const tag of LEGACY_BLOCK_TAGS) {
+      const idx = remaining.indexOf(tag.open)
+      if (idx !== -1 && (earliestOpen === -1 || idx < earliestOpen)) {
+        earliestOpen = idx
+        matchType = 'legacy'
+        matchedLegacyTag = tag
+        fileUpdateOpenMatch = null
+      }
+    }
+
+    if (earliestOpen === -1) {
       // No more blocks — rest is text
       const text = remaining.trim()
       if (text) {
@@ -126,33 +181,69 @@ export function parseMessage(content: string): ParsedMessage {
       break
     }
 
-    // Check for closing tag
-    const closeIndex = remaining.indexOf(matchedTag.close, earliestOpen + matchedTag.open.length)
-    if (closeIndex === -1) {
-      // Malformed — no closing tag, treat rest as text
+    if (matchType === 'file_update' && fileUpdateOpenMatch) {
+      // Parse FILE_UPDATE block
+      const openTagFull = fileUpdateOpenMatch[0]
+      const closeIndex = remaining.indexOf(FILE_UPDATE_CLOSE, earliestOpen + openTagFull.length)
+
+      if (closeIndex === -1) {
+        // Malformed — no closing tag, treat rest as text
+        const text = remaining.trim()
+        if (text) {
+          segments.push({ type: 'text', content: text })
+        }
+        break
+      }
+
+      // Add text before the block
+      const textBefore = remaining.slice(0, earliestOpen).trim()
+      if (textBefore) {
+        segments.push({ type: 'text', content: textBefore })
+      }
+
+      // Parse the block
+      const blockBody = remaining.slice(earliestOpen + openTagFull.length, closeIndex)
+      const fileUpdate = parseFileUpdateBlock(openTagFull, blockBody)
+
+      if (fileUpdate) {
+        segments.push({ type: 'block', blockType: 'file_update', data: fileUpdate })
+      } else {
+        // Failed to parse — treat as text
+        segments.push({ type: 'text', content: remaining.slice(earliestOpen, closeIndex + FILE_UPDATE_CLOSE.length) })
+      }
+
+      remaining = remaining.slice(closeIndex + FILE_UPDATE_CLOSE.length)
+    } else if (matchType === 'legacy' && matchedLegacyTag) {
+      // Parse legacy block
+      const closeIndex = remaining.indexOf(matchedLegacyTag.close, earliestOpen + matchedLegacyTag.open.length)
+      if (closeIndex === -1) {
+        const text = remaining.trim()
+        if (text) {
+          segments.push({ type: 'text', content: text })
+        }
+        break
+      }
+
+      const textBefore = remaining.slice(0, earliestOpen).trim()
+      if (textBefore) {
+        segments.push({ type: 'text', content: textBefore })
+      }
+
+      const blockContent = remaining.slice(earliestOpen + matchedLegacyTag.open.length, closeIndex)
+      const block = parseLegacyBlockContent(matchedLegacyTag.type, blockContent)
+      segments.push({ type: 'block', blockType: block.type, data: block.data } as ParsedSegment)
+
+      remaining = remaining.slice(closeIndex + matchedLegacyTag.close.length)
+    } else {
+      // No match found, treat everything as text
       const text = remaining.trim()
       if (text) {
         segments.push({ type: 'text', content: text })
       }
       break
     }
-
-    // Add text before the block
-    const textBefore = remaining.slice(0, earliestOpen).trim()
-    if (textBefore) {
-      segments.push({ type: 'text', content: textBefore })
-    }
-
-    // Parse the block
-    const blockContent = remaining.slice(earliestOpen + matchedTag.open.length, closeIndex)
-    const block = parseBlockContent(matchedTag.type, blockContent)
-    segments.push({ type: 'block', blockType: block.type, data: block.data } as ParsedSegment)
-
-    // Advance past this block
-    remaining = remaining.slice(closeIndex + matchedTag.close.length)
   }
 
-  // If no segments found, return the content as text
   if (segments.length === 0) {
     return { segments: [{ type: 'text', content }] }
   }
@@ -160,18 +251,49 @@ export function parseMessage(content: string): ParsedMessage {
   return { segments }
 }
 
+// ============================================
+// Streaming parser
+// ============================================
+
 export function parseStreamingChunk(accumulated: string): {
   displayText: string
   pendingBlock: boolean
   completedBlock: StructuredBlock | null
 } {
-  for (const tag of BLOCK_TAGS) {
+  // Check for FILE_UPDATE blocks first
+  const fuMatch = FILE_UPDATE_OPEN_REGEX.exec(accumulated)
+  if (fuMatch) {
+    const openIdx = accumulated.indexOf(fuMatch[0])
+    const closeIdx = accumulated.indexOf(FILE_UPDATE_CLOSE, openIdx)
+
+    if (closeIdx === -1) {
+      return {
+        displayText: accumulated.slice(0, openIdx).trim(),
+        pendingBlock: true,
+        completedBlock: null,
+      }
+    }
+
+    const textBefore = accumulated.slice(0, openIdx).trim()
+    const blockBody = accumulated.slice(openIdx + fuMatch[0].length, closeIdx)
+    const fileUpdate = parseFileUpdateBlock(fuMatch[0], blockBody)
+
+    if (fileUpdate) {
+      return {
+        displayText: textBefore,
+        pendingBlock: false,
+        completedBlock: { type: 'file_update', data: fileUpdate },
+      }
+    }
+  }
+
+  // Check legacy tags
+  for (const tag of LEGACY_BLOCK_TAGS) {
     const openIndex = accumulated.indexOf(tag.open)
     if (openIndex === -1) continue
 
     const closeIndex = accumulated.indexOf(tag.close, openIndex)
     if (closeIndex === -1) {
-      // Opening tag found but no closing tag yet — block is pending
       return {
         displayText: accumulated.slice(0, openIndex).trim(),
         pendingBlock: true,
@@ -179,10 +301,9 @@ export function parseStreamingChunk(accumulated: string): {
       }
     }
 
-    // Both tags found — block is complete
     const textBefore = accumulated.slice(0, openIndex).trim()
     const blockContent = accumulated.slice(openIndex + tag.open.length, closeIndex)
-    const block = parseBlockContent(tag.type, blockContent)
+    const block = parseLegacyBlockContent(tag.type, blockContent)
 
     return {
       displayText: textBefore,
@@ -191,7 +312,6 @@ export function parseStreamingChunk(accumulated: string): {
     }
   }
 
-  // No opening tag found
   return {
     displayText: accumulated,
     pendingBlock: false,
