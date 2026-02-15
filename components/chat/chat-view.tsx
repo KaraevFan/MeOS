@@ -185,6 +185,22 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               setDomainsExplored(new Set(activeSession.domains_explored as DomainName[]))
             }
           }
+
+          // Show pulse check if new user hasn't completed it yet
+          // (handles page refresh, HMR, and StrictMode double-mount)
+          const isNewUser = initialSessionState?.state === 'new_user'
+          const hasNoUserMessages = !existingMessages?.some((m) => m.role === 'user')
+          if (isNewUser && sessionType === 'life_mapping' && hasNoUserMessages) {
+            const { data: ratings } = await supabase
+              .from('pulse_check_ratings')
+              .select('id')
+              .eq('session_id', activeSession.id)
+              .limit(1)
+
+            if (!ratings || ratings.length === 0) {
+              setShowPulseCheck(true)
+            }
+          }
         } else {
           // Create new session
           const { data: newSession } = await supabase
