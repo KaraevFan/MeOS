@@ -96,7 +96,12 @@ export class UserFileSystem {
     // Strip any YAML delimiters from content body (security: prevent frontmatter injection)
     const sanitizedContent = content.replace(/^---\s*$/gm, '– – –')
 
-    const fileContent = matter.stringify(sanitizedContent, frontmatter)
+    // Strip undefined values — js-yaml 4.x throws on undefined
+    const cleanedFrontmatter = Object.fromEntries(
+      Object.entries(frontmatter).filter(([, v]) => v !== undefined)
+    )
+
+    const fileContent = matter.stringify(sanitizedContent, cleanedFrontmatter)
     const fullPath = `${this.basePath}/${path}`
     const blob = new Blob([fileContent], { type: 'text/markdown' })
 
