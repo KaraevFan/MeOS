@@ -2,11 +2,14 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 
+const MAX_RECORDING_SECONDS = 120
+
 export function useVoiceRecorder() {
   const [isRecording, setIsRecording] = useState(false)
   const [duration, setDuration] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [isSupported, setIsSupported] = useState(true)
+  const [mimeType, setMimeType] = useState<string>('audio/webm')
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -56,13 +59,27 @@ export function useVoiceRecorder() {
       }
 
       mediaRecorderRef.current = recorder
+      setMimeType(recorder.mimeType || 'audio/webm')
       recorder.start()
       setIsRecording(true)
       setDuration(0)
 
-      // Start duration timer
+      // Start duration timer with auto-stop at max
       timerRef.current = setInterval(() => {
-        setDuration((prev) => prev + 1)
+        setDuration((prev) => {
+          if (prev + 1 >= MAX_RECORDING_SECONDS) {
+            // Auto-stop at limit
+            if (mediaRecorderRef.current?.state === 'recording') {
+              mediaRecorderRef.current.stop()
+              setIsRecording(false)
+              if (timerRef.current) {
+                clearInterval(timerRef.current)
+                timerRef.current = null
+              }
+            }
+          }
+          return prev + 1
+        })
       }, 1000)
     } catch (err) {
       if (err instanceof DOMException && err.name === 'NotAllowedError') {
@@ -109,6 +126,7 @@ export function useVoiceRecorder() {
     duration,
     error,
     isSupported,
+    mimeType,
     startRecording,
     stopRecording,
   }

@@ -18,9 +18,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No audio file provided' }, { status: 400 })
     }
 
+    // Determine file extension from the uploaded file name or MIME type
+    const fileName = audioFile instanceof File ? audioFile.name : 'recording.webm'
+    const ext = fileName.split('.').pop() || 'webm'
+    const whisperFileName = `recording.${ext}`
+
     // Forward to OpenAI Whisper API
     const whisperFormData = new FormData()
-    whisperFormData.append('file', audioFile, 'recording.webm')
+    whisperFormData.append('file', audioFile, whisperFileName)
     whisperFormData.append('model', 'whisper-1')
 
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -33,14 +38,17 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('Whisper API error:', errorText)
+      console.error(`Whisper API error (${response.status}):`, errorText)
       return NextResponse.json(
-        { error: 'Transcription failed' },
-        { status: 500 }
+        { error: `Transcription failed (${response.status})` },
+        { status: response.status >= 400 && response.status < 500 ? 400 : 500 }
       )
     }
 
     const result = await response.json()
+    if (!result.text || !result.text.trim()) {
+      return NextResponse.json({ text: '', empty: true })
+    }
     return NextResponse.json({ text: result.text })
   } catch (error) {
     console.error('Transcription error:', error)

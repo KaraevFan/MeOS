@@ -16,13 +16,16 @@ type VoiceState = 'idle' | 'recording' | 'processing'
 export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputProps) {
   const [text, setText] = useState('')
   const [voiceState, setVoiceState] = useState<VoiceState>('idle')
+  const [transcriptionError, setTranscriptionError] = useState<string | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const {
     isRecording,
     duration,
     error: voiceError,
     isSupported: voiceSupported,
+    mimeType,
     startRecording,
     stopRecording,
   } = useVoiceRecorder()
@@ -48,8 +51,17 @@ export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputP
     }
   }
 
+  function showTranscriptionError(msg: string) {
+    setTranscriptionError(msg)
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+    errorTimerRef.current = setTimeout(() => setTranscriptionError(null), 5000)
+  }
+
   async function handleVoiceTap() {
-    if (disabled) return
+    if (disabled && voiceState === 'idle') return
+
+    // Clear any existing error on tap
+    setTranscriptionError(null)
 
     if (voiceState === 'idle') {
       setVoiceState('recording')
@@ -59,9 +71,12 @@ export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputP
       try {
         const blob = await stopRecording()
 
+        // Use actual MIME type for correct file extension
+        const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('webm') ? 'webm' : 'webm'
+
         // Send to transcription API
         const formData = new FormData()
-        formData.append('audio', blob, 'recording.webm')
+        formData.append('audio', blob, `recording.${ext}`)
 
         const response = await fetch('/api/transcribe', {
           method: 'POST',
@@ -69,17 +84,18 @@ export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputP
         })
 
         if (!response.ok) {
-          throw new Error('Transcription failed')
+          const errorData = await response.json().catch(() => null)
+          throw new Error(errorData?.error || 'Transcription failed')
         }
 
         const result = await response.json()
-        if (result.text) {
-          // Auto-send voice transcription
+        if (result.text && result.text.trim()) {
           onSend(result.text)
+        } else {
+          showTranscriptionError('No speech detected. Try speaking louder.')
         }
       } catch {
-        // Fall back to showing error
-        setText('')
+        showTranscriptionError("Couldn't transcribe audio. Tap to try again.")
       } finally {
         setVoiceState('idle')
       }
@@ -219,9 +235,9 @@ export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputP
         </div>
       </div>
 
-      {/* Voice error */}
-      {voiceError && (
-        <p className="text-accent-terra text-xs mt-2 text-center">{voiceError}</p>
+      {/* Voice / transcription errors */}
+      {(voiceError || transcriptionError) && (
+        <p className="text-accent-terra text-xs mt-2 text-center">{voiceError || transcriptionError}</p>
       )}
 
       {/* Processing label */}
