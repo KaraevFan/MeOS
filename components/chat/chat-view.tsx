@@ -28,6 +28,7 @@ interface ChatViewProps {
   sessionType?: SessionType
   initialSessionState?: SessionStateResult
   initialCommitments?: Commitment[]
+  exploreDomain?: string
 }
 
 function StateQuickReplies({
@@ -115,7 +116,7 @@ function getSageOpening(state: string, userName?: string): string {
   }
 }
 
-export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments }: ChatViewProps) {
+export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -312,6 +313,16 @@ Do NOT list all 8 domains back. Keep it conversational.`
       setPulseCheckSubmitting(false)
     }
   }
+
+  // Handle ?explore=<domain> from life map CTA
+  const exploreHandled = useRef(false)
+  useEffect(() => {
+    if (exploreDomain && sessionId && !isLoading && !exploreHandled.current) {
+      exploreHandled.current = true
+      sendMessage(`Let's explore ${exploreDomain}`)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exploreDomain, sessionId, isLoading])
 
   async function triggerSageResponse(pulseContext: string) {
     if (!sessionId || isStreaming) return

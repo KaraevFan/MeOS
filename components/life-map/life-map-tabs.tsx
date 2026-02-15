@@ -31,6 +31,18 @@ export function LifeMapTabs({
 }: LifeMapTabsProps) {
   const [activeTab, setActiveTab] = useState<Tab>('where-i-am')
 
+  const hasLifePlan = (lifePlanData.commitments.length > 0) || lifePlanData.quarterTheme != null
+
+  // If no life plan data, render "Where I Am" content directly without tabs
+  if (!hasLifePlan) {
+    return (
+      <div className="space-y-lg">
+        <SynthesisSection lifeMap={lifeMap} />
+        <DomainGrid domains={domains} baselineRatings={baselineRatings} />
+      </div>
+    )
+  }
+
   return (
     <>
       <SegmentedControl activeTab={activeTab} onTabChange={setActiveTab} />

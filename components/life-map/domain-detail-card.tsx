@@ -62,8 +62,32 @@ interface DomainDetailCardProps {
 export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps) {
   const [expanded, setExpanded] = useState(false)
 
-  const statusColor = STATUS_COLORS[domain.status || 'stable'] || 'bg-status-stable'
-  const statusLabel = STATUS_LABELS[domain.status || 'stable'] || 'Stable'
+  // Domain is "explored" if Sage has written content (current_state exists)
+  const isExplored = Boolean(domain.current_state)
+
+  // For explored domains, show Sage-assigned status. For unexplored, show pulse-derived status.
+  const effectiveStatus = isExplored
+    ? (domain.status || 'stable')
+    : pulseRating
+      ? (() => {
+          // Map pulse rating to domain status for display
+          const ratingToStatus: Record<string, string> = {
+            thriving: 'thriving',
+            good: 'stable',
+            okay: 'stable',
+            struggling: 'needs_attention',
+            in_crisis: 'in_crisis',
+          }
+          return ratingToStatus[pulseRating.rating] || 'stable'
+        })()
+      : (domain.status || 'stable')
+
+  const statusColor = STATUS_COLORS[effectiveStatus] || 'bg-status-stable'
+  const statusLabel = isExplored
+    ? (STATUS_LABELS[effectiveStatus] || 'Stable')
+    : pulseRating
+      ? (PULSE_RATING_LABELS[pulseRating.rating] || 'Stable')
+      : (STATUS_LABELS[effectiveStatus] || 'Stable')
 
   return (
     <button
@@ -190,14 +214,7 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
             </div>
           )}
 
-          {pulseRating && (
-            <div className="flex items-center gap-1.5">
-              <div className={cn('w-1.5 h-1.5 rounded-full', PULSE_RATING_COLORS[pulseRating.rating] || 'bg-border')} />
-              <p className="text-[11px] text-text-secondary">
-                Initial pulse: {PULSE_RATING_LABELS[pulseRating.rating] || pulseRating.rating}
-              </p>
-            </div>
-          )}
+          {/* Only show initial pulse for unexplored domains — explored domains use Sage-assigned status */}
 
           <p className="text-[11px] text-text-secondary">
             Last updated {new Date(domain.updated_at).toLocaleDateString('en-US', {

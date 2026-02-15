@@ -10,7 +10,7 @@ import type { SessionType } from '@/types/chat'
 export default async function ChatPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string }>
+  searchParams: Promise<{ type?: string; explore?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -60,6 +60,7 @@ export default async function ChatPage({
         sessionType={sessionType}
         initialSessionState={sessionState}
         initialCommitments={commitments}
+        exploreDomain={params.explore}
       />
     </div>
   )
