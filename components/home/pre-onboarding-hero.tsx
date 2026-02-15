@@ -10,7 +10,7 @@ interface PreOnboardingHeroProps {
 
 export function PreOnboardingHero({ greeting, displayName }: PreOnboardingHeroProps) {
   const router = useRouter()
-  const navigate = () => router.push('/chat')
+  const navigate = () => router.push('/onboarding')
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh]">

@@ -96,10 +96,14 @@ const SAGE_OPENING_NEW_USER = `Hey — I'm Sage. I'm going to help you build a m
 
 Before we talk, I want to get a quick pulse. Rate each of these areas — don't overthink it, just your gut right now.`
 
-function getSageOpening(state: string, userName?: string): string {
+function getSageOpening(state: string, userName?: string, hasOnboardingPulse?: boolean): string {
   const name = userName ? ` ${userName.charAt(0).toUpperCase() + userName.slice(1)}` : ''
   switch (state) {
     case 'new_user':
+      // If user already completed onboarding (pulse check done there), don't ask for pulse
+      if (hasOnboardingPulse) {
+        return `Hey${name ? ',' + name : ''} — thanks for sharing that snapshot. I can already see some interesting patterns. Let me take a closer look...`
+      }
       return SAGE_OPENING_NEW_USER
     case 'mapping_in_progress':
       return `Welcome back${name ? ',' + name : ''}. Want to keep going with your life map?`
@@ -203,6 +207,35 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             }
           }
         } else {
+          // Check if user just completed onboarding (has pulse data already)
+          const { data: existingPulseSession } = await supabase
+            .from('pulse_check_ratings')
+            .select('session_id')
+            .eq('user_id', userId)
+            .eq('is_baseline', true)
+            .limit(1)
+            .maybeSingle()
+
+          // Check for session with onboarding intent
+          let onboardingIntent: string | null = null
+          if (existingPulseSession) {
+            const { data: intentSession } = await supabase
+              .from('sessions')
+              .select('id, metadata')
+              .eq('user_id', userId)
+              .eq('session_type', 'life_mapping')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+
+            if (intentSession?.metadata && typeof intentSession.metadata === 'object') {
+              const meta = intentSession.metadata as Record<string, unknown>
+              onboardingIntent = (meta.onboarding_intent as string) || null
+            }
+          }
+
+          const hasOnboardingPulse = Boolean(existingPulseSession)
+
           // Create new session
           const { data: newSession } = await supabase
             .from('sessions')
@@ -218,10 +251,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             setSessionId(newSession.id)
 
             const state = initialSessionState?.state || 'new_user'
-            const needsPulseCheck = state === 'new_user' && sessionType === 'life_mapping'
+            const needsPulseCheck = state === 'new_user' && sessionType === 'life_mapping' && !hasOnboardingPulse
 
             // Add Sage's opening message
-            const openingMessage = getSageOpening(state, initialSessionState?.userName)
+            const openingMessage = getSageOpening(state, initialSessionState?.userName, hasOnboardingPulse)
 
             const { data: savedMsg } = await supabase
               .from('messages')
@@ -245,9 +278,45 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               }])
             }
 
-            // Show pulse check for new users
+            // Show pulse check for new users (only if no onboarding pulse data)
             if (needsPulseCheck) {
               setShowPulseCheck(true)
+            }
+
+            // Auto-trigger Sage with pulse context for post-onboarding users
+            if (hasOnboardingPulse && state === 'new_user') {
+              // Fetch the actual ratings
+              const { data: pulseData } = await supabase
+                .from('pulse_check_ratings')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('is_baseline', true)
+                .order('created_at', { ascending: true })
+
+              if (pulseData && pulseData.length > 0) {
+                const ratingsText = pulseData
+                  .map((r) => `- ${r.domain_name}: ${r.rating} (${r.rating_numeric}/5)`)
+                  .join('\n')
+
+                const intentContext = onboardingIntent
+                  ? `\nThe user selected "${onboardingIntent}" as their reason for coming to MeOS. Reference this in your opening.`
+                  : ''
+
+                const pulseContext = `The user just completed their onboarding pulse check. Here are their self-ratings:
+${ratingsText}
+${intentContext}
+Your job now:
+1. Briefly reflect back the overall pattern you see (1-2 sentences). Note any contrasts.
+2. Propose starting with the domain that seems most pressing (lowest rated), but give the user choice.
+3. Ask a specific opening question — NOT "tell me about X" but something like "You rated X as 'struggling' — what's the main source of tension there?"
+
+Do NOT list all 8 domains back. Keep it conversational.`
+
+                // Use setTimeout to let state settle before triggering
+                setTimeout(() => {
+                  triggerSageResponse(pulseContext)
+                }, 100)
+              }
             }
           }
         }
