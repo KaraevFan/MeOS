@@ -39,7 +39,7 @@ Migrate MeOS from relational-only data storage to a markdown-native architecture
 This covers the full Phase 1 + Phase 2 scope: storage infrastructure, file format schemas, `UserFileSystem` service, data migration, Sage context injection rewrite, parser update, and file-first for new features (life plan, check-in summaries).
 
 **Brainstorm:** `Docs/brainstorms/2026-02-14-markdown-data-architecture-brainstorm.md`
-**Design docs:** `Docs/generated/feedback/20260214_Data_architecture_as_markdown_proposal.md`, `Docs/plans/2026-02-14-narrative-home-approachability-design.md`
+**Design docs:** `Docs/feedback/20260214_Data_architecture_as_markdown_proposal.md`, `Docs/plans/2026-02-14-narrative-home-approachability-design.md`
 
 ---
 
@@ -1050,7 +1050,7 @@ After implementation, update:
 ### Internal
 
 - Brainstorm: `Docs/brainstorms/2026-02-14-markdown-data-architecture-brainstorm.md`
-- Data architecture proposal: `Docs/generated/feedback/20260214_Data_architecture_as_markdown_proposal.md`
+- Data architecture proposal: `Docs/feedback/20260214_Data_architecture_as_markdown_proposal.md`
 - Narrative home design: `Docs/plans/2026-02-14-narrative-home-approachability-design.md`
 - Current parser: `lib/ai/parser.ts`
 - Current context assembly: `lib/ai/context.ts`

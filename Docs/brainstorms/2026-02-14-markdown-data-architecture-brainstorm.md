@@ -3,8 +3,8 @@
 **Date:** 2026-02-14
 **Status:** Brainstorm complete, ready for planning
 **Input docs:**
-- `Docs/generated/feedback/20260214_Data_architecture_as_markdown_proposal.md` (Path C architecture)
-- `Docs/generated/feedback/20260214_Life_plan_UI_Narrative_Home` (life plan + narrative home design)
+- `Docs/feedback/20260214_Data_architecture_as_markdown_proposal.md` (Path C architecture)
+- `Docs/feedback/20260214_Life_plan_UI_Narrative_Home` (life plan + narrative home design)
 - `Docs/plans/2026-02-14-narrative-home-approachability-design.md` (approved design direction)
 
 ---

@@ -2,7 +2,7 @@
 title: "Post-Playtest Fixes (R1)"
 type: feat
 date: 2026-02-13
-source: Docs/generated/feedback/20260213_R1.md
+source: Docs/feedback/20260213_R1.md
 ---
 
 # Post-Playtest Fixes — Round 1
@@ -11,7 +11,7 @@ source: Docs/generated/feedback/20260213_R1.md
 
 First end-to-end playtest of MeOS MVP revealed 7 issues across trust (P0), experience quality (P1), and polish (P2). This plan implements all fixes in priority order, grouping related changes to minimize context-switching.
 
-**Source spec:** `Docs/generated/feedback/20260213_R1.md`
+**Source spec:** `Docs/feedback/20260213_R1.md`
 
 ## Key Architecture Decisions
 
@@ -897,7 +897,7 @@ erDiagram
 
 ## References
 
-- **Feedback spec:** `Docs/generated/feedback/20260213_R1.md`
+- **Feedback spec:** `Docs/feedback/20260213_R1.md`
 - **Product spec:** `Docs/MVP_PRD.md`
 - **UX design:** `Docs/UX_design.md`
 - **Design system:** `.claude/skills/meos-design/SKILL.md`

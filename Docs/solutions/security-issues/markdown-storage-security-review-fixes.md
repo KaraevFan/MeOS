@@ -304,5 +304,5 @@ const knownDomainFilenames = Object.values(DOMAIN_FILE_MAP)
 
 - **Implementation plan**: `Docs/plans/2026-02-14-feat-markdown-data-architecture-plan.md`
 - **Brainstorm**: `Docs/brainstorms/2026-02-14-markdown-data-architecture-brainstorm.md`
-- **Design proposal**: `Docs/generated/feedback/20260214_Data_architecture_as_markdown_proposal.md`
+- **Design proposal**: `Docs/feedback/20260214_Data_architecture_as_markdown_proposal.md`
 - **PR**: https://github.com/KaraevFan/MeOS/pull/2
