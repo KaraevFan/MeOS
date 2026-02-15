@@ -19,13 +19,6 @@ const STATUS_LABELS: Record<string, string> = {
   in_crisis: 'In crisis',
 }
 
-const PULSE_RATING_COLORS: Record<string, string> = {
-  thriving: 'bg-status-thriving',
-  good: 'bg-status-stable',
-  okay: 'bg-status-stable',
-  struggling: 'bg-status-attention',
-  in_crisis: 'bg-status-crisis',
-}
 
 const PULSE_RATING_LABELS: Record<string, string> = {
   thriving: 'Thriving',
