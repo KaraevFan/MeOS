@@ -3,6 +3,8 @@
 import { cn } from '@/lib/utils'
 import { DomainCard } from './domain-card'
 import { SynthesisCard } from './synthesis-card'
+import { MarkdownDomainCard } from './markdown-domain-card'
+import { MarkdownSynthesisCard } from './markdown-synthesis-card'
 import type { ChatMessage, ParsedMessage, ParsedSegment, DomainName } from '@/types/chat'
 
 interface MessageBubbleProps {
@@ -56,6 +58,25 @@ function SegmentRenderer({
         <SynthesisCard synthesis={segment.data} isInline />
       </div>
     )
+  }
+
+  if (segment.blockType === 'file_update') {
+    if (segment.data.fileType === 'domain') {
+      return (
+        <div className="w-full max-w-[95%]">
+          <MarkdownDomainCard data={segment.data} />
+        </div>
+      )
+    }
+    if (segment.data.fileType === 'overview') {
+      return (
+        <div className="w-full max-w-[95%]">
+          <MarkdownSynthesisCard data={segment.data} />
+        </div>
+      )
+    }
+    // Other file_update types (life-plan, check-in, sage-context, sage-patterns) are silently consumed
+    return null
   }
 
   // session_summary blocks are not displayed — backend processing only

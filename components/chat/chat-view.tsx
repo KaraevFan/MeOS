@@ -304,12 +304,106 @@ Your job now:
 
 Do NOT list all 8 domains back. Keep it conversational.`
 
-      // Send an invisible trigger message to get Sage's response
-      sendMessage('I completed the pulse check.', false, pulseContext)
+      // Trigger Sage's response without showing a user message
+      triggerSageResponse(pulseContext)
     } catch {
       setPulseCheckError("Couldn't save your ratings. Tap to try again.")
     } finally {
       setPulseCheckSubmitting(false)
+    }
+  }
+
+  async function triggerSageResponse(pulseContext: string) {
+    if (!sessionId || isStreaming) return
+
+    setIsStreaming(true)
+    setStreamingText('')
+    setError(null)
+
+    // Build message array from existing messages (no user trigger message)
+    const apiMessages = messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }))
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          sessionType,
+          messages: apiMessages,
+          pulseCheckContext: pulseContext,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('No response stream')
+
+      const decoder = new TextDecoder()
+      let accumulated = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const data = line.slice(6)
+          if (data === '[DONE]') continue
+
+          try {
+            const parsed = JSON.parse(data)
+            if (parsed.error) throw new Error(parsed.error)
+            if (parsed.text) {
+              accumulated += parsed.text
+              setStreamingText(accumulated)
+            }
+          } catch (e) {
+            if (e instanceof SyntaxError) continue
+            throw e
+          }
+        }
+      }
+
+      // Finalize the assistant message
+      const hasBlock = accumulated.includes('[FILE_UPDATE') ||
+        accumulated.includes('[DOMAIN_SUMMARY]') ||
+        accumulated.includes('[LIFE_MAP_SYNTHESIS]') ||
+        accumulated.includes('[SESSION_SUMMARY]')
+
+      const assistantMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        sessionId,
+        role: 'assistant',
+        content: accumulated,
+        hasStructuredBlock: hasBlock,
+        createdAt: new Date().toISOString(),
+      }
+
+      setMessages((prev) => [...prev, assistantMessage])
+      setStreamingText('')
+
+      // Save assistant message to DB
+      await supabase.from('messages').insert({
+        session_id: sessionId,
+        role: 'assistant',
+        content: accumulated,
+        has_structured_block: hasBlock,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong'
+      setError(message)
+    } finally {
+      setIsStreaming(false)
     }
   }
 
@@ -620,7 +714,10 @@ Do NOT list all 8 domains back. Keep it conversational.`
           const parsed = parseMessage(message.content)
           const isLastMessage = index === messages.length - 1
           const hasDomainCard = parsed.segments.some(
-            (s) => s.type === 'block' && s.blockType === 'domain_summary'
+            (s) => s.type === 'block' && (
+              s.blockType === 'domain_summary' ||
+              (s.blockType === 'file_update' && s.data?.fileType === 'domain')
+            )
           )
           const showDomainQuickReplies = isLastMessage && hasDomainCard && sessionType === 'life_mapping' && !isStreaming
 

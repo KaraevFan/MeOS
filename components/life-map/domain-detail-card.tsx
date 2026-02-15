@@ -35,6 +35,25 @@ const PULSE_RATING_LABELS: Record<string, string> = {
   in_crisis: 'In crisis',
 }
 
+/** Clean markdown artifacts from text: strip list prefixes, render bold/italic */
+function cleanMarkdownText(text: string): string {
+  return text
+    .replace(/^s\s*-\s*/, '')
+    .replace(/^-\s*/, '')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .trim()
+}
+
+function MarkdownText({ text, className }: { text: string; className?: string }) {
+  return (
+    <span
+      className={className}
+      dangerouslySetInnerHTML={{ __html: cleanMarkdownText(text) }}
+    />
+  )
+}
+
 interface DomainDetailCardProps {
   domain: LifeMapDomain
   pulseRating?: PulseCheckRating
@@ -65,7 +84,7 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
           )}
           {domain.stated_intentions && domain.stated_intentions.length > 0 && (
             <p className="text-xs text-primary font-medium mt-0.5 line-clamp-1 ml-4">
-              {domain.stated_intentions[0]}
+              <MarkdownText text={domain.stated_intentions[0]} />
             </p>
           )}
         </div>
@@ -96,7 +115,7 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
               <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-0.5">
                 Current state
               </p>
-              <p className="text-sm text-text">{domain.current_state}</p>
+              <p className="text-sm text-text"><MarkdownText text={domain.current_state} /></p>
             </div>
           )}
 
@@ -109,7 +128,7 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
                 {domain.whats_working.map((item, i) => (
                   <li key={i} className="flex items-start gap-1.5">
                     <span className="text-status-thriving mt-0.5">+</span>
-                    <span>{item}</span>
+                    <MarkdownText text={item} />
                   </li>
                 ))}
               </ul>
@@ -125,7 +144,7 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
                 {domain.whats_not_working.map((item, i) => (
                   <li key={i} className="flex items-start gap-1.5">
                     <span className="text-accent-terra mt-0.5">-</span>
-                    <span>{item}</span>
+                    <MarkdownText text={item} />
                   </li>
                 ))}
               </ul>
@@ -139,7 +158,7 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
               </p>
               <ul className="text-sm text-text space-y-0.5">
                 {domain.desires.map((item, i) => (
-                  <li key={i}>{item}</li>
+                  <li key={i}><MarkdownText text={item} /></li>
                 ))}
               </ul>
             </div>
@@ -152,7 +171,7 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
               </p>
               <ul className="text-sm text-text italic space-y-0.5">
                 {domain.tensions.map((item, i) => (
-                  <li key={i}>{item}</li>
+                  <li key={i}><MarkdownText text={item} /></li>
                 ))}
               </ul>
             </div>
@@ -165,7 +184,7 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
               </p>
               <ul className="text-sm text-text font-medium space-y-0.5">
                 {domain.stated_intentions.map((item, i) => (
-                  <li key={i}>{item}</li>
+                  <li key={i}><MarkdownText text={item} /></li>
                 ))}
               </ul>
             </div>
