@@ -4,7 +4,11 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 
 const MAX_RECORDING_SECONDS = 120
 
-export function useVoiceRecorder() {
+interface UseVoiceRecorderOptions {
+  onAutoStop?: (blob: Blob) => void
+}
+
+export function useVoiceRecorder({ onAutoStop }: UseVoiceRecorderOptions = {}) {
   const [isRecording, setIsRecording] = useState(false)
   const [duration, setDuration] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -15,6 +19,9 @@ export function useVoiceRecorder() {
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const resolveRef = useRef<((blob: Blob) => void) | null>(null)
+  const onAutoStopRef = useRef(onAutoStop)
+
+  useEffect(() => { onAutoStopRef.current = onAutoStop }, [onAutoStop])
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !navigator.mediaDevices?.getUserMedia) {
@@ -55,6 +62,9 @@ export function useVoiceRecorder() {
         if (resolveRef.current) {
           resolveRef.current(blob)
           resolveRef.current = null
+        } else if (onAutoStopRef.current) {
+          // Auto-stop path: resolveRef was never set, deliver blob via callback
+          onAutoStopRef.current(blob)
         }
       }
 

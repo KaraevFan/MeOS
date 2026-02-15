@@ -8,6 +8,8 @@ interface SummaryScreenProps {
   ratings: Record<number, number>
   onStart: () => void
   onEditRatings: () => void
+  isSubmitting?: boolean
+  submitError?: string | null
 }
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const
@@ -17,6 +19,8 @@ export function SummaryScreen({
   ratings,
   onStart,
   onEditRatings,
+  isSubmitting,
+  submitError,
 }: SummaryScreenProps) {
   return (
     <div className="flex flex-col items-center min-h-[100dvh] px-6 pt-16 pb-12 relative z-10">
@@ -59,17 +63,29 @@ export function SummaryScreen({
         I can see some patterns already. Ready to explore?
       </motion.p>
 
+      {/* Error message */}
+      {submitError && (
+        <motion.p
+          className="text-accent-terra text-sm text-center mb-4 max-w-[320px]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          {submitError}
+        </motion.p>
+      )}
+
       {/* CTA Button */}
       <motion.button
         type="button"
-        className="w-full max-w-[320px] py-4 bg-primary text-white font-medium text-base rounded-full shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg active:bg-primary-hover transition-colors"
+        className="w-full max-w-[320px] py-4 bg-primary text-white font-medium text-base rounded-full shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg active:bg-primary-hover transition-colors disabled:opacity-50"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 1, duration: 0.5, ease }}
         whileTap={{ scale: 0.97 }}
         onClick={onStart}
+        disabled={isSubmitting}
       >
-        Start Conversation
+        {isSubmitting ? 'Setting up...' : submitError ? 'Try Again' : 'Start Conversation'}
       </motion.button>
 
       {/* Edit ratings link */}

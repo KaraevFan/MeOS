@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { useVoiceRecorder } from '@/lib/voice/recorder'
 
@@ -20,6 +20,9 @@ export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputP
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // handleAutoStop is defined below — forward-declare ref for the hook
+  const autoStopRef = useRef<((blob: Blob) => void) | undefined>(undefined)
+
   const {
     isRecording,
     duration,
@@ -28,7 +31,7 @@ export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputP
     mimeType,
     startRecording,
     stopRecording,
-  } = useVoiceRecorder()
+  } = useVoiceRecorder({ onAutoStop: (blob) => autoStopRef.current?.(blob) })
 
   useEffect(() => {
     if (prefill) {
@@ -57,6 +60,47 @@ export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputP
     errorTimerRef.current = setTimeout(() => setTranscriptionError(null), 5000)
   }
 
+  /** Transcribe a recorded audio blob and send the result */
+  async function transcribeAndSend(blob: Blob) {
+    setVoiceState('processing')
+    try {
+      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
+
+      const formData = new FormData()
+      formData.append('audio', blob, `recording.${ext}`)
+
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.error || 'Transcription failed')
+      }
+
+      const result = await response.json()
+      if (result.text && result.text.trim()) {
+        onSend(result.text)
+      } else {
+        showTranscriptionError('No speech detected. Try speaking louder.')
+      }
+    } catch {
+      showTranscriptionError("Couldn't transcribe audio. Tap to try again.")
+    } finally {
+      setVoiceState('idle')
+    }
+  }
+
+  /** Handle auto-stop at recording limit — transcribe the blob automatically */
+  const handleAutoStop = useCallback((blob: Blob) => {
+    transcribeAndSend(blob)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mimeType, onSend])
+
+  // Keep autoStopRef in sync so the hook's stable callback can reach the latest handler
+  useEffect(() => { autoStopRef.current = handleAutoStop }, [handleAutoStop])
+
   async function handleVoiceTap() {
     if (disabled && voiceState === 'idle') return
 
@@ -67,44 +111,20 @@ export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputP
       setVoiceState('recording')
       await startRecording()
     } else if (voiceState === 'recording' && isRecording) {
-      setVoiceState('processing')
       try {
         const blob = await stopRecording()
-
-        // Use actual MIME type for correct file extension
-        const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('webm') ? 'webm' : 'webm'
-
-        // Send to transcription API
-        const formData = new FormData()
-        formData.append('audio', blob, `recording.${ext}`)
-
-        const response = await fetch('/api/transcribe', {
-          method: 'POST',
-          body: formData,
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => null)
-          throw new Error(errorData?.error || 'Transcription failed')
-        }
-
-        const result = await response.json()
-        if (result.text && result.text.trim()) {
-          onSend(result.text)
-        } else {
-          showTranscriptionError('No speech detected. Try speaking louder.')
-        }
+        await transcribeAndSend(blob)
       } catch {
         showTranscriptionError("Couldn't transcribe audio. Tap to try again.")
-      } finally {
         setVoiceState('idle')
       }
     }
   }
 
-  // Reset voice state if recording stops externally
+  // Reset voice state if recording stops externally (but not during auto-stop processing)
   useEffect(() => {
     if (!isRecording && voiceState === 'recording') {
+      // Auto-stop will transition to 'processing' via handleAutoStop — only reset if still 'recording'
       setVoiceState('idle')
     }
   }, [isRecording, voiceState])

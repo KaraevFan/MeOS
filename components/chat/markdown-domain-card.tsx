@@ -81,9 +81,19 @@ function parseSections(markdown: string): { status?: string; sections: ParsedSec
   return { status, sections }
 }
 
-/** Render inline markdown (bold, italic) */
-function renderInlineMarkdown(text: string): string {
+/** Escape HTML entities to prevent XSS */
+function escapeHtml(text: string): string {
   return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+/** Render inline markdown (bold, italic) with HTML escaping */
+function renderInlineMarkdown(text: string): string {
+  return escapeHtml(text)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
 }

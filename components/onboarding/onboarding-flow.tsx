@@ -52,6 +52,7 @@ export function OnboardingFlow() {
   const [showSageMessage, setShowSageMessage] = useState(true)
   const [direction, setDirection] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const goForward = useCallback((nextStep: Step) => {
     setDirection(1)
@@ -106,6 +107,7 @@ export function OnboardingFlow() {
   async function handleStartConversation() {
     if (isSubmitting) return
     setIsSubmitting(true)
+    setSubmitError(null)
 
     try {
       // Get current user
@@ -136,19 +138,21 @@ export function OnboardingFlow() {
       // Save pulse check ratings
       await savePulseCheckRatings(supabase, session.id, user.id, pulseRatings, true)
 
-      // Seed life_map_domains with initial status
+      // Seed life_map_domains with initial status (parallel writes)
       const lifeMap = await getOrCreateLifeMap(supabase, user.id)
-      for (const rating of pulseRatings) {
-        await upsertDomain(supabase, lifeMap.id, {
-          domain: rating.domain as DomainName,
-          currentState: '',
-          whatsWorking: [],
-          whatsNotWorking: [],
-          keyTension: '',
-          statedIntention: '',
-          status: pulseRatingToDomainStatus(rating.rating),
-        })
-      }
+      await Promise.allSettled(
+        pulseRatings.map((rating) =>
+          upsertDomain(supabase, lifeMap.id, {
+            domain: rating.domain as DomainName,
+            currentState: '',
+            whatsWorking: [],
+            whatsNotWorking: [],
+            keyTension: '',
+            statedIntention: '',
+            status: pulseRatingToDomainStatus(rating.rating),
+          })
+        )
+      )
 
       // Mark onboarding complete
       await supabase
@@ -168,6 +172,7 @@ export function OnboardingFlow() {
       router.push('/chat')
     } catch (err) {
       console.error('Onboarding completion failed:', err)
+      setSubmitError('Something went wrong. Please try again.')
       setIsSubmitting(false)
     }
   }
@@ -216,6 +221,8 @@ export function OnboardingFlow() {
                 ratings={ratings}
                 onStart={handleStartConversation}
                 onEditRatings={handleEditRatings}
+                isSubmitting={isSubmitting}
+                submitError={submitError}
               />
             )}
           </motion.div>

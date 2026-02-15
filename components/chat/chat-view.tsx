@@ -19,6 +19,7 @@ import { savePulseCheckRatings, pulseRatingToDomainStatus } from '@/lib/supabase
 import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
 import { PinnedContextCard } from './pinned-context-card'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
+import { PULSE_DOMAINS } from '@/types/pulse-check'
 import type { PulseCheckRating } from '@/types/pulse-check'
 import type { SessionState, SessionStateResult } from '@/lib/supabase/session-state'
 import type { Commitment } from '@/lib/markdown/extract'
@@ -137,6 +138,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [pulseCheckRatings, setPulseCheckRatings] = useState<PulseCheckRating[] | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef<ChatMessage[]>([])
+  const sessionIdRef = useRef<string | null>(null)
   const supabase = createClient()
 
   // Scroll to bottom
@@ -149,6 +152,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   useEffect(() => {
     scrollToBottom()
   }, [messages, streamingText, scrollToBottom])
+
+  // Keep refs in sync with state for use in closures
+  useEffect(() => { messagesRef.current = messages }, [messages])
+  useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
 
   // Initialize session
   useEffect(() => {
@@ -341,19 +348,21 @@ Do NOT list all 8 domains back. Keep it conversational.`
       // Save ratings to DB
       await savePulseCheckRatings(supabase, sessionId, userId, ratings, true)
 
-      // Seed life_map_domains with initial status
+      // Seed life_map_domains with initial status (parallel writes)
       const lifeMap = await getOrCreateLifeMap(supabase, userId)
-      for (const rating of ratings) {
-        await upsertDomain(supabase, lifeMap.id, {
-          domain: rating.domain as DomainName,
-          currentState: '',
-          whatsWorking: [],
-          whatsNotWorking: [],
-          keyTension: '',
-          statedIntention: '',
-          status: pulseRatingToDomainStatus(rating.rating),
-        })
-      }
+      await Promise.allSettled(
+        ratings.map((rating) =>
+          upsertDomain(supabase, lifeMap.id, {
+            domain: rating.domain as DomainName,
+            currentState: '',
+            whatsWorking: [],
+            whatsNotWorking: [],
+            keyTension: '',
+            statedIntention: '',
+            status: pulseRatingToDomainStatus(rating.rating),
+          })
+        )
+      )
 
       // Store ratings in state for later use
       setPulseCheckRatings(ratings)
@@ -385,100 +394,110 @@ Do NOT list all 8 domains back. Keep it conversational.`
 
   // Handle ?explore=<domain> from life map CTA
   const exploreHandled = useRef(false)
+  const validDomainLabels: string[] = PULSE_DOMAINS.map((d) => d.label)
   useEffect(() => {
     if (exploreDomain && sessionId && !isLoading && !exploreHandled.current) {
-      exploreHandled.current = true
-      sendMessage(`Let's explore ${exploreDomain}`)
+      if (validDomainLabels.includes(exploreDomain)) {
+        exploreHandled.current = true
+        sendMessage(`Let's explore ${exploreDomain}`)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exploreDomain, sessionId, isLoading])
 
+  /** Shared SSE streaming, message finalization, and DB persistence */
+  async function streamAndFinalize(
+    requestBody: Record<string, unknown>,
+    forSessionId: string
+  ): Promise<string> {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    })
+
+    if (!response.ok) throw new Error(`API error: ${response.status}`)
+
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('No response stream')
+
+    const decoder = new TextDecoder()
+    let accumulated = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value, { stream: true })
+      const lines = chunk.split('\n')
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const data = line.slice(6)
+        if (data === '[DONE]') continue
+
+        try {
+          const parsed = JSON.parse(data)
+          if (parsed.error) throw new Error(parsed.error)
+          if (parsed.text) {
+            accumulated += parsed.text
+            setStreamingText(accumulated)
+          }
+        } catch (e) {
+          if (e instanceof SyntaxError) continue
+          throw e
+        }
+      }
+    }
+
+    const hasBlock = accumulated.includes('[FILE_UPDATE') ||
+      accumulated.includes('[DOMAIN_SUMMARY]') ||
+      accumulated.includes('[LIFE_MAP_SYNTHESIS]') ||
+      accumulated.includes('[SESSION_SUMMARY]')
+
+    const assistantMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      sessionId: forSessionId,
+      role: 'assistant',
+      content: accumulated,
+      hasStructuredBlock: hasBlock,
+      createdAt: new Date().toISOString(),
+    }
+
+    setMessages((prev) => [...prev, assistantMessage])
+    setStreamingText('')
+
+    await supabase.from('messages').insert({
+      session_id: forSessionId,
+      role: 'assistant',
+      content: accumulated,
+      has_structured_block: hasBlock,
+    })
+
+    return accumulated
+  }
+
   async function triggerSageResponse(pulseContext: string) {
-    if (!sessionId || isStreaming) return
+    // Use refs to avoid stale closure values (called from setTimeout/async contexts)
+    const currentSessionId = sessionIdRef.current
+    if (!currentSessionId || isStreaming) return
 
     setIsStreaming(true)
     setStreamingText('')
     setError(null)
 
-    // Build message array from existing messages (no user trigger message)
-    const apiMessages = messages.map((m) => ({
+    const apiMessages = messagesRef.current.map((m) => ({
       role: m.role,
       content: m.content,
     }))
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          sessionType,
-          messages: apiMessages,
-          pulseCheckContext: pulseContext,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
-      }
-
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error('No response stream')
-
-      const decoder = new TextDecoder()
-      let accumulated = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const data = line.slice(6)
-          if (data === '[DONE]') continue
-
-          try {
-            const parsed = JSON.parse(data)
-            if (parsed.error) throw new Error(parsed.error)
-            if (parsed.text) {
-              accumulated += parsed.text
-              setStreamingText(accumulated)
-            }
-          } catch (e) {
-            if (e instanceof SyntaxError) continue
-            throw e
-          }
-        }
-      }
-
-      // Finalize the assistant message
-      const hasBlock = accumulated.includes('[FILE_UPDATE') ||
-        accumulated.includes('[DOMAIN_SUMMARY]') ||
-        accumulated.includes('[LIFE_MAP_SYNTHESIS]') ||
-        accumulated.includes('[SESSION_SUMMARY]')
-
-      const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        sessionId,
-        role: 'assistant',
-        content: accumulated,
-        hasStructuredBlock: hasBlock,
-        createdAt: new Date().toISOString(),
-      }
-
-      setMessages((prev) => [...prev, assistantMessage])
-      setStreamingText('')
-
-      // Save assistant message to DB
-      await supabase.from('messages').insert({
-        session_id: sessionId,
-        role: 'assistant',
-        content: accumulated,
-        has_structured_block: hasBlock,
-      })
+      await streamAndFinalize({
+        sessionId: currentSessionId,
+        sessionType,
+        messages: apiMessages,
+        pulseCheckContext: pulseContext,
+      }, currentSessionId)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
       setError(message)
@@ -523,83 +542,19 @@ Do NOT list all 8 domains back. Keep it conversational.`
     }))
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          sessionType,
-          messages: apiMessages,
-          ...(extraSystemContext ? { pulseCheckContext: extraSystemContext } : {}),
-        }),
-      })
+      const accumulated = await streamAndFinalize({
+        sessionId,
+        sessionType,
+        messages: apiMessages,
+        ...(extraSystemContext ? { pulseCheckContext: extraSystemContext } : {}),
+      }, sessionId)
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
-      }
-
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error('No response stream')
-
-      const decoder = new TextDecoder()
-      let accumulated = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const data = line.slice(6)
-
-          if (data === '[DONE]') continue
-
-          try {
-            const parsed = JSON.parse(data)
-            if (parsed.error) {
-              throw new Error(parsed.error)
-            }
-            if (parsed.text) {
-              accumulated += parsed.text
-              setStreamingText(accumulated)
-            }
-          } catch (e) {
-            if (e instanceof SyntaxError) continue
-            throw e
-          }
-        }
-      }
-
-      // Stream complete — finalize the message
+      // Handle structured blocks — persist to life map and manage session lifecycle
       const hasBlock = accumulated.includes('[FILE_UPDATE') ||
         accumulated.includes('[DOMAIN_SUMMARY]') ||
         accumulated.includes('[LIFE_MAP_SYNTHESIS]') ||
         accumulated.includes('[SESSION_SUMMARY]')
 
-      const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        sessionId,
-        role: 'assistant',
-        content: accumulated,
-        hasStructuredBlock: hasBlock,
-        createdAt: new Date().toISOString(),
-      }
-
-      setMessages((prev) => [...prev, assistantMessage])
-      setStreamingText('')
-
-      // Save assistant message to DB
-      await supabase.from('messages').insert({
-        session_id: sessionId,
-        role: 'assistant',
-        content: accumulated,
-        has_structured_block: hasBlock,
-      })
-
-      // Handle structured blocks — persist to life map and manage session lifecycle
       if (hasBlock) {
         const parsed = parseMessage(accumulated)
 

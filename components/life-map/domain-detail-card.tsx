@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { LifeMapDomain } from '@/types/database'
+import { pulseRatingToDomainStatus } from '@/lib/supabase/pulse-check'
 import type { PulseCheckRating } from '@/types/pulse-check'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -28,9 +29,19 @@ const PULSE_RATING_LABELS: Record<string, string> = {
   in_crisis: 'In crisis',
 }
 
+/** Escape HTML entities to prevent XSS */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 /** Clean markdown artifacts from text: strip list prefixes, render bold/italic */
 function cleanMarkdownText(text: string): string {
-  return text
+  return escapeHtml(text)
     .replace(/^s\s*-\s*/, '')
     .replace(/^-\s*/, '')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -62,17 +73,7 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
   const effectiveStatus = isExplored
     ? (domain.status || 'stable')
     : pulseRating
-      ? (() => {
-          // Map pulse rating to domain status for display
-          const ratingToStatus: Record<string, string> = {
-            thriving: 'thriving',
-            good: 'stable',
-            okay: 'stable',
-            struggling: 'needs_attention',
-            in_crisis: 'in_crisis',
-          }
-          return ratingToStatus[pulseRating.rating] || 'stable'
-        })()
+      ? pulseRatingToDomainStatus(pulseRating.rating)
       : (domain.status || 'stable')
 
   const statusColor = STATUS_COLORS[effectiveStatus] || 'bg-status-stable'
