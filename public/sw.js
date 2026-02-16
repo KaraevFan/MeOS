@@ -63,7 +63,7 @@ self.addEventListener('push', (event) => {
     body: data.body || "Hey, it's been a week. Ready for a quick check-in with Sage?",
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    data: { url: data.url || '/chat?type=weekly_checkin' },
+    data: { url: data.url || '/home' },
   }
 
   event.waitUntil(self.registration.showNotification(title, options))
@@ -72,7 +72,7 @@ self.addEventListener('push', (event) => {
 // Notification click — open the app
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = event.notification.data?.url || '/chat?type=weekly_checkin'
+  const url = event.notification.data?.url || '/home'
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
