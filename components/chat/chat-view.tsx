@@ -32,6 +32,7 @@ interface ChatViewProps {
   initialSessionState?: SessionStateResult
   initialCommitments?: Commitment[]
   exploreDomain?: string
+  nudgeContext?: string
 }
 
 function StateQuickReplies({
@@ -123,7 +124,7 @@ function getSageOpening(state: string, userName?: string, hasOnboardingPulse?: b
   }
 }
 
-export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain }: ChatViewProps) {
+export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain, nudgeContext }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -302,8 +303,11 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
             // Auto-trigger Sage for ad-hoc sessions (context-aware opening from system prompt)
             if (sessionType === 'ad_hoc' && state === 'mapping_complete') {
+              const nudgeInstruction = nudgeContext
+                ? `The user is responding to this reflection prompt: "${nudgeContext}". Open by acknowledging it and asking how it's landing.`
+                : 'Generate your opening message. Look at the user\'s life context and open with something specific.'
               setTimeout(() => {
-                triggerSageResponse('Generate your opening message. Look at the user\'s life context and open with something specific.')
+                triggerSageResponse(nudgeInstruction)
               }, 100)
             }
 

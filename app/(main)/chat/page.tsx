@@ -58,6 +58,21 @@ export default async function ChatPage({
     }
   }
 
+  // Load reflection nudge context if navigating from home screen nudge
+  let nudgeContext: string | undefined
+  if (params.nudge && sessionType === 'ad_hoc') {
+    const { data: nudge } = await supabase
+      .from('reflection_prompts')
+      .select('prompt_text')
+      .eq('id', params.nudge)
+      .eq('user_id', user.id)
+      .single()
+
+    if (nudge) {
+      nudgeContext = nudge.prompt_text
+    }
+  }
+
   return (
     <div className="fixed inset-0 bottom-16 pb-[env(safe-area-inset-bottom)]">
       <ChatView
@@ -66,6 +81,7 @@ export default async function ChatPage({
         initialSessionState={sessionState}
         initialCommitments={commitments}
         exploreDomain={params.explore}
+        nudgeContext={nudgeContext}
       />
     </div>
   )
