@@ -35,8 +35,8 @@ export function QuickReplyButtons({ domainsExplored, onSelect, disabled, pulseCh
           onClick={() => onSelect(`Let's explore ${domain}`)}
           disabled={disabled}
           className={cn(
-            'flex-shrink-0 px-3 py-1.5 rounded-full text-sm',
-            'bg-bg border border-border text-text',
+            'flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium',
+            'bg-bg border border-text-secondary/15 text-text shadow-sm',
             'hover:bg-primary hover:text-white hover:border-primary',
             'active:scale-95 transition-all duration-150',
             'disabled:opacity-50 disabled:cursor-not-allowed'

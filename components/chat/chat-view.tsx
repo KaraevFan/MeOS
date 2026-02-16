@@ -52,7 +52,7 @@ function StateQuickReplies({
   disabled: boolean
   pulseCheckRatings?: PulseCheckRating[] | null
 }) {
-  const buttonClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm bg-bg border border-border text-text hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
+  const buttonClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium bg-bg border border-text-secondary/15 text-text shadow-sm hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
   const primaryClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm bg-primary/10 border border-primary/30 text-primary font-medium hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
 
   switch (state) {
@@ -63,7 +63,7 @@ function StateQuickReplies({
         domains = [...domains].sort((a, b) => (ratingMap.get(a) ?? 3) - (ratingMap.get(b) ?? 3))
       }
       return (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
           {domains.map((d) => (
             <button key={d} onClick={() => onSelect(`Let's explore ${d}`)} disabled={disabled} className={buttonClass}>{d}</button>
           ))}
@@ -74,7 +74,7 @@ function StateQuickReplies({
     }
     case 'mapping_complete':
       return (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
           <button onClick={() => onSelect("I'd like to start my check-in early.")} disabled={disabled} className={primaryClass}>Start check-in early</button>
           <button onClick={() => onSelect("Something's on my mind.")} disabled={disabled} className={buttonClass}>Something on my mind</button>
           <button onClick={() => onSelect("I'd like to update my life map.")} disabled={disabled} className={buttonClass}>Update my life map</button>
@@ -83,14 +83,14 @@ function StateQuickReplies({
     case 'checkin_due':
     case 'checkin_overdue':
       return (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
           <button onClick={() => onSelect("Let's do it.")} disabled={disabled} className={primaryClass}>Let&apos;s do it</button>
           <button onClick={() => onSelect("Not right now.")} disabled={disabled} className={buttonClass}>Not right now</button>
         </div>
       )
     case 'mid_conversation':
       return (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
           <button onClick={() => onSelect("Let's continue.")} disabled={disabled} className={primaryClass}>Continue</button>
           <button onClick={() => onSelect("Start fresh.")} disabled={disabled} className={buttonClass}>Start fresh</button>
         </div>
@@ -906,7 +906,8 @@ Do NOT list all 8 domains back. Keep it conversational.`
       )}
 
       {/* Messages area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="min-h-full flex flex-col justify-end space-y-4">
         <SessionHeader sessionType={sessionType} exploreDomain={exploreDomain} nudgeContext={nudgeContext} />
         {messages.map((message, index) => {
           const parsed = parseMessage(message.content)
@@ -932,7 +933,7 @@ Do NOT list all 8 domains back. Keep it conversational.`
                 onCorrectDomain={handleCorrectDomain}
               />
               {showDomainQuickReplies && (
-                <div className="mt-3">
+                <div className="mt-2">
                   <QuickReplyButtons
                     domainsExplored={domainsExplored}
                     onSelect={handleSend}
@@ -1045,6 +1046,7 @@ Do NOT list all 8 domains back. Keep it conversational.`
             </div>
           </div>
         )}
+        </div>
       </div>
 
       {/* Input area */}
