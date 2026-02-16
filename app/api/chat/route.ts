@@ -84,7 +84,7 @@ export async function POST(request: Request) {
   }
 
   // Validate session type
-  const VALID_SESSION_TYPES: ReadonlySet<string> = new Set(['life_mapping', 'weekly_checkin'])
+  const VALID_SESSION_TYPES: ReadonlySet<string> = new Set(['life_mapping', 'weekly_checkin', 'ad_hoc'])
   if (!VALID_SESSION_TYPES.has(sessionType)) {
     return new Response(JSON.stringify({ error: 'Invalid session type' }), {
       status: 400,

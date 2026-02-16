@@ -30,7 +30,7 @@ export function TalkToSageOrb() {
 
   return (
     <div className="flex flex-col items-center py-md">
-      <BreathingOrb onTap={() => router.push('/chat')} />
+      <BreathingOrb onTap={() => router.push('/chat?type=ad_hoc')} />
       <p className="mt-sm text-text-secondary/60 text-sm">
         Talk to Sage
       </p>

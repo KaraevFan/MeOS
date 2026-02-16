@@ -4,6 +4,12 @@ import { extractMarkdownSection, extractBulletList, extractCommitments } from '@
 import type { Commitment } from '@/lib/markdown/extract'
 import { getDisplayName } from '@/lib/utils'
 
+export interface ReflectionNudge {
+  id: string
+  text: string
+  contextHint: string | null
+}
+
 export interface HomeData {
   greeting: string
   firstName: string | null
@@ -18,6 +24,7 @@ export interface HomeData {
   boundaries: string[]
   quarterTheme: string | null
   daysSinceMapping: number | null
+  reflectionNudge: ReflectionNudge | null
 }
 
 function getTimeGreeting(): string {
@@ -198,6 +205,27 @@ export async function getHomeData(
       })
     : null
 
+  // Fetch latest unused reflection prompt for home screen nudge
+  let reflectionNudge: ReflectionNudge | null = null
+  if (onboardingCompleted) {
+    const { data: nudge } = await supabase
+      .from('reflection_prompts')
+      .select('id, prompt_text, context_hint')
+      .eq('user_id', userId)
+      .is('used_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (nudge) {
+      reflectionNudge = {
+        id: nudge.id,
+        text: nudge.prompt_text,
+        contextHint: nudge.context_hint,
+      }
+    }
+  }
+
   return {
     greeting: getTimeGreeting(),
     firstName,
@@ -212,5 +240,6 @@ export async function getHomeData(
     boundaries,
     quarterTheme,
     daysSinceMapping,
+    reflectionNudge,
   }
 }

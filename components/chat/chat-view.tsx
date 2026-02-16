@@ -18,6 +18,7 @@ import type { FileUpdateData } from '@/types/chat'
 import { savePulseCheckRatings, pulseRatingToDomainStatus } from '@/lib/supabase/pulse-check'
 import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
 import { PinnedContextCard } from './pinned-context-card'
+import { SessionCompleteCard } from './session-complete-card'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
 import { PULSE_DOMAINS } from '@/types/pulse-check'
 import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
@@ -31,6 +32,7 @@ interface ChatViewProps {
   initialSessionState?: SessionStateResult
   initialCommitments?: Commitment[]
   exploreDomain?: string
+  nudgeContext?: string
 }
 
 function StateQuickReplies({
@@ -122,7 +124,7 @@ function getSageOpening(state: string, userName?: string, hasOnboardingPulse?: b
   }
 }
 
-export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain }: ChatViewProps) {
+export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain, nudgeContext }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -137,6 +139,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [pulseCheckSubmitting, setPulseCheckSubmitting] = useState(false)
   const [pulseCheckError, setPulseCheckError] = useState<string | null>(null)
   const [pulseCheckRatings, setPulseCheckRatings] = useState<PulseCheckRating[] | null>(null)
+  const [sessionCompleted, setSessionCompleted] = useState(false)
+  const [nextCheckinDate, setNextCheckinDate] = useState<string | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<ChatMessage[]>([])
@@ -295,6 +299,16 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             // Show pulse check for new users (only if no onboarding pulse data)
             if (needsPulseCheck) {
               setShowPulseCheck(true)
+            }
+
+            // Auto-trigger Sage for ad-hoc sessions (context-aware opening from system prompt)
+            if (sessionType === 'ad_hoc' && state === 'mapping_complete') {
+              const nudgeInstruction = nudgeContext
+                ? `The user is responding to this reflection prompt: "${nudgeContext}". Open by acknowledging it and asking how it's landing.`
+                : 'Generate your opening message. Look at the user\'s life context and open with something specific.'
+              setTimeout(() => {
+                triggerSageResponse(nudgeInstruction)
+              }, 100)
             }
 
             // Auto-trigger Sage with pulse context for post-onboarding users
@@ -620,6 +634,11 @@ Do NOT list all 8 domains back. Keep it conversational.`
             await updateLifeMapSynthesis(supabase, lifeMap.id, synthesisBlock.data)
             await completeSession(supabase, sessionId)
 
+            const next = new Date()
+            next.setDate(next.getDate() + 7)
+            setNextCheckinDate(next.toISOString())
+            setSessionCompleted(true)
+
             // Mark onboarding complete
             await supabase
               .from('users')
@@ -664,6 +683,11 @@ Do NOT list all 8 domains back. Keep it conversational.`
               data.energyLevel
             )
             await completeSession(supabase, sessionId)
+
+            const next = new Date()
+            next.setDate(next.getDate() + 7)
+            setNextCheckinDate(next.toISOString())
+            setSessionCompleted(true)
           } catch {
             console.error('Failed to persist session summary')
           }
@@ -710,24 +734,36 @@ Do NOT list all 8 domains back. Keep it conversational.`
           const hasOverview = updates.some((u) => u.fileType === 'overview')
           const hasCheckIn = updates.some((u) => u.fileType === 'check-in')
 
-          if (hasOverview) {
-            completeSession(supabase, sessionId).catch(() => {
-              console.error('Failed to complete session')
-            })
-            Promise.resolve(
-              supabase
-                .from('users')
-                .update({ onboarding_completed: true })
-                .eq('id', userId)
-            ).catch(() => console.error('Failed to mark onboarding complete'))
+          if (hasOverview || hasCheckIn) {
+            completeSession(supabase, sessionId).then(() => {
+              const next = new Date()
+              next.setDate(next.getDate() + 7)
+              setNextCheckinDate(next.toISOString())
+              setSessionCompleted(true)
 
-            if (isPushSupported() && Notification.permission === 'default') {
-              setShowPushPrompt(true)
-            }
-          } else if (hasCheckIn) {
-            completeSession(supabase, sessionId).catch(() => {
+              // Fire-and-forget: generate re-engagement content while context is warm
+              const recent = messagesRef.current.slice(-8).map((m) => ({ role: m.role, content: m.content }))
+              fetch('/api/session/generate-reengagement', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, sessionType, recentMessages: recent }),
+              }).catch(() => console.error('Failed to generate re-engagement content'))
+            }).catch(() => {
               console.error('Failed to complete session')
             })
+
+            if (hasOverview) {
+              Promise.resolve(
+                supabase
+                  .from('users')
+                  .update({ onboarding_completed: true })
+                  .eq('id', userId)
+              ).catch(() => console.error('Failed to mark onboarding complete'))
+
+              if (isPushSupported() && Notification.permission === 'default') {
+                setShowPushPrompt(true)
+              }
+            }
           }
         }
       }
@@ -861,6 +897,16 @@ Do NOT list all 8 domains back. Keep it conversational.`
           />
         )}
 
+        {/* Session complete card */}
+        {sessionCompleted && !isStreaming && (
+          <div className="flex justify-start">
+            <SessionCompleteCard
+              sessionType={sessionType}
+              nextCheckinDate={nextCheckinDate}
+            />
+          </div>
+        )}
+
         {/* Push notification prompt */}
         {showPushPrompt && (
           <div className="flex justify-start">
@@ -891,12 +937,14 @@ Do NOT list all 8 domains back. Keep it conversational.`
       </div>
 
       {/* Input area */}
-      <ChatInput
-        onSend={handleSend}
-        disabled={isStreaming || showPulseCheck}
-        prefill={prefillText}
-        placeholder={showPulseCheck ? 'Rate your life areas above to begin.' : undefined}
-      />
+      {!sessionCompleted && (
+        <ChatInput
+          onSend={handleSend}
+          disabled={isStreaming || showPulseCheck}
+          prefill={prefillText}
+          placeholder={showPulseCheck ? 'Rate your life areas above to begin.' : undefined}
+        />
+      )}
     </div>
   )
 }

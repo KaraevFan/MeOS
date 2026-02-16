@@ -5,6 +5,7 @@ import { getHomeData } from '@/lib/supabase/home-data'
 import { NorthStarCard } from '@/components/ui/north-star-card'
 import { CommitmentCard } from '@/components/home/commitment-card'
 import { PreOnboardingHero, TalkToSageOrb } from '@/components/home/pre-onboarding-hero'
+import { ReflectionNudgeCard } from '@/components/home/reflection-nudge-card'
 
 export default async function HomePage() {
   const supabase = await createClient()
@@ -57,6 +58,11 @@ export default async function HomePage() {
       )}
 
       <div className="mt-lg space-y-lg">
+        {/* Reflection nudge — between sessions */}
+        {homeData.reflectionNudge && (
+          <ReflectionNudgeCard nudge={homeData.reflectionNudge} />
+        )}
+
         {/* 3. North star card */}
         {homeData.northStarFull && (
           <NorthStarCard northStarFull={homeData.northStarFull} />
