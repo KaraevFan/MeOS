@@ -1,0 +1,16 @@
+import { UserMenuSheet } from '@/components/ui/user-menu-sheet'
+
+interface AppHeaderProps {
+  email: string
+  displayName: string | null
+}
+
+export function AppHeader({ email, displayName }: AppHeaderProps) {
+  const initial = (displayName?.[0] || email[0] || '?').toUpperCase()
+
+  return (
+    <header className="h-12 flex items-center justify-end px-md max-w-lg mx-auto">
+      <UserMenuSheet email={email} initial={initial} />
+    </header>
+  )
+}
