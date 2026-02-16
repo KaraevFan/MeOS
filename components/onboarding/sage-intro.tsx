@@ -1,14 +1,40 @@
 'use client'
 
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 
 interface SageIntroProps {
-  onContinue: () => void
+  onContinue: (name: string) => void
+  initialName?: string
 }
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const
+const MAX_NAME_LENGTH = 50
+const MIN_NAME_LENGTH = 2
 
-export function SageIntro({ onContinue }: SageIntroProps) {
+function formatName(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+}
+
+export function SageIntro({ onContinue, initialName }: SageIntroProps) {
+  const [name, setName] = useState(initialName ?? '')
+
+  const trimmedName = name.trim()
+  const isValid = trimmedName.length >= MIN_NAME_LENGTH
+
+  function handleSubmit() {
+    if (!isValid) return
+    onContinue(formatName(trimmedName))
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && isValid) {
+      handleSubmit()
+    }
+  }
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] px-6 pb-12 relative z-10">
       {/* Sage avatar */}
@@ -50,13 +76,31 @@ export function SageIntro({ onContinue }: SageIntroProps) {
 
       {/* Subtext */}
       <motion.p
-        className="text-[17px] text-text-secondary text-center max-w-[300px] leading-relaxed"
+        className="text-[17px] text-text-secondary text-center max-w-[300px] leading-relaxed mb-10"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.55, delay: 0.45, ease }}
       >
         I&apos;m going to help you build a map of where you are in life right now.
       </motion.p>
+
+      {/* Name input — conversational style */}
+      <motion.div
+        className="w-full max-w-[280px]"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, delay: 0.6, ease }}
+      >
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value.slice(0, MAX_NAME_LENGTH))}
+          onKeyDown={handleKeyDown}
+          placeholder="What should I call you?"
+          autoComplete="given-name"
+          className="w-full text-center text-[20px] text-text bg-transparent border-b-2 border-border pb-2 placeholder:text-text-secondary/40 focus:outline-none focus:border-primary transition-colors"
+        />
+      </motion.div>
 
       {/* CTA — fixed to bottom */}
       <motion.div
@@ -66,9 +110,10 @@ export function SageIntro({ onContinue }: SageIntroProps) {
         transition={{ duration: 0.55, delay: 0.75, ease }}
       >
         <button
-          onClick={onContinue}
+          onClick={handleSubmit}
           type="button"
-          className="w-full max-w-[320px] mx-auto block py-4 bg-primary text-white font-medium text-base rounded-full shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg active:bg-primary-hover transition-colors"
+          disabled={!isValid}
+          className="w-full max-w-[320px] mx-auto block py-4 bg-primary text-white font-medium text-base rounded-full shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg active:bg-primary-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Let&apos;s go
         </button>

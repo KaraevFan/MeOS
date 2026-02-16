@@ -20,6 +20,7 @@ import { isPushSupported, requestPushPermission } from '@/lib/notifications/push
 import { PinnedContextCard } from './pinned-context-card'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
 import { PULSE_DOMAINS } from '@/types/pulse-check'
+import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
 import type { PulseCheckRating } from '@/types/pulse-check'
 import type { SessionState, SessionStateResult } from '@/lib/supabase/session-state'
 import type { Commitment } from '@/lib/markdown/extract'
@@ -223,8 +224,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             .limit(1)
             .maybeSingle()
 
-          // Check for session with onboarding intent
+          // Check for session with onboarding context (intent, name, quick replies)
           let onboardingIntent: string | null = null
+          let onboardingName: string | null = null
+          let onboardingQuickReplies: { exchange: number; selectedOption: string }[] = []
           if (existingPulseSession) {
             const { data: intentSession } = await supabase
               .from('sessions')
@@ -237,7 +240,11 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
             if (intentSession?.metadata && typeof intentSession.metadata === 'object') {
               const meta = intentSession.metadata as Record<string, unknown>
-              onboardingIntent = (meta.onboarding_intent as string) || null
+              onboardingIntent = typeof meta.onboarding_intent === 'string' ? meta.onboarding_intent : null
+              onboardingName = typeof meta.onboarding_name === 'string' ? meta.onboarding_name : null
+              if (Array.isArray(meta.onboarding_quick_replies)) {
+                onboardingQuickReplies = meta.onboarding_quick_replies as { exchange: number; selectedOption: string }[]
+              }
             }
           }
 
@@ -305,13 +312,32 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
                   .map((r) => `- ${r.domain_name}: ${r.rating} (${r.rating_numeric}/5)`)
                   .join('\n')
 
-                const intentContext = onboardingIntent
-                  ? `\nThe user selected "${onboardingIntent}" as their reason for coming to MeOS. Reference this in your opening.`
+                // Build onboarding context parts
+                const contextParts: string[] = []
+
+                if (onboardingName) {
+                  contextParts.push(`The user's name is ${onboardingName}. Greet them by name.`)
+                }
+
+                if (onboardingIntent) {
+                  const intentLabel = INTENT_CONTEXT_LABELS[onboardingIntent] || "they didn't specify"
+                  contextParts.push(`What brought them here: ${intentLabel}.`)
+                }
+
+                if (onboardingQuickReplies.length > 0) {
+                  const replyText = onboardingQuickReplies
+                    .map((r) => `"${r.selectedOption}"`)
+                    .join(', ')
+                  contextParts.push(`In our brief intro conversation, they said: ${replyText}.`)
+                }
+
+                const onboardingContext = contextParts.length > 0
+                  ? `\n\nONBOARDING CONTEXT:\n${contextParts.join('\n')}\nReference this context naturally — weave it in, don't robotically list things.`
                   : ''
 
                 const pulseContext = `The user just completed their onboarding pulse check. Here are their self-ratings:
 ${ratingsText}
-${intentContext}
+${onboardingContext}
 Your job now:
 1. Briefly reflect back the overall pattern you see (1-2 sentences). Note any contrasts.
 2. Propose starting with the domain that seems most pressing (lowest rated), but give the user choice.

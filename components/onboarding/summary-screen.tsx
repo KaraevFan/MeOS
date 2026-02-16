@@ -12,6 +12,32 @@ interface SummaryScreenProps {
   submitError?: string | null
 }
 
+function getRadarCommentary(ratings: Record<number, number>): string {
+  const values = Object.values(ratings)
+  if (values.length === 0) {
+    return "Ready to explore what's underneath?"
+  }
+
+  const mean = values.reduce((a, b) => a + b, 0) / values.length
+  const variance = values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length
+  const stddev = Math.sqrt(variance)
+
+  // High variance takes priority — it's the most interesting pattern
+  if (stddev > 1.0) {
+    return "Interesting — some areas are really strong while others are pulling for attention. Let's explore that."
+  }
+  // Ratings are 0-4 (index-based), so 3.5+ means mostly Good/Thriving
+  if (mean >= 3.5) {
+    return "You're doing well across the board — let's figure out where to focus your energy for the biggest impact."
+  }
+  // Mostly low
+  if (mean <= 1.5) {
+    return "It sounds like things have been tough lately. That's exactly why mapping it out helps — let's find where to start."
+  }
+  // Mid-range
+  return "Looks like things are generally okay but there might be room to dig deeper. Let's find out what's underneath."
+}
+
 const ease = [0.25, 0.46, 0.45, 0.94] as const
 
 export function SummaryScreen({
@@ -22,6 +48,8 @@ export function SummaryScreen({
   isSubmitting,
   submitError,
 }: SummaryScreenProps) {
+  const commentary = getRadarCommentary(ratings)
+
   return (
     <div className="flex flex-col items-center min-h-[100dvh] px-6 pt-16 pb-12 relative z-10">
       {/* Heading */}
@@ -53,14 +81,14 @@ export function SummaryScreen({
         <RadarChart domains={domains} ratings={ratings} maxRating={4} />
       </motion.div>
 
-      {/* Sage observation */}
+      {/* Sage observation — now dynamic */}
       <motion.p
         className="text-[15px] text-text-secondary italic text-center max-w-[280px] leading-relaxed mb-10"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.8, duration: 0.5 }}
       >
-        I can see some patterns already. Ready to explore?
+        {commentary}
       </motion.p>
 
       {/* Error message */}

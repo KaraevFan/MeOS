@@ -1,6 +1,7 @@
 export interface User {
   id: string
   email: string | null
+  display_name: string | null
   created_at: string
   onboarding_completed: boolean
   sage_persona_notes: string | null
@@ -47,6 +48,7 @@ export interface Session {
   commitments_made: string[] | null
   energy_level: number | null
   domains_explored: string[] | null
+  metadata: Record<string, unknown> | null
   created_at: string
   completed_at: string | null
   updated_at: string

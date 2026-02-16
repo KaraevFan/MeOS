@@ -1,47 +1,63 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
 interface IntentSelectionProps {
   onSelect: (intent: string) => void
+  initialIntent?: string | null
 }
 
 const INTENTS = [
-  { label: 'Feeling scattered — need more focus', value: 'scattered' },
-  { label: 'Going through a transition', value: 'transition' },
-  { label: 'Want more clarity on what matters', value: 'clarity' },
-  { label: 'Just curious', value: 'curious' },
+  { label: 'Things are good — I want to be more intentional', value: 'intentional' },
+  { label: "I'm starting something new", value: 'new_start' },
+  { label: "I'm feeling stuck or scattered", value: 'stuck' },
+  { label: "I'm going through a tough time", value: 'tough_time' },
+  { label: 'Just exploring', value: 'exploring' },
 ]
 
-// Simple inline SVG icons
-function ShuffleIcon({ className }: { className?: string }) {
+// Lucide-style inline SVG icons (no emojis per MeOS design system)
+function SproutIcon({ className }: { className?: string }) {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <polyline points="16 3 21 3 21 8" />
-      <line x1="4" y1="20" x2="21" y2="3" />
-      <polyline points="21 16 21 21 16 21" />
-      <line x1="15" y1="15" x2="21" y2="21" />
-      <line x1="4" y1="4" x2="9" y2="9" />
+      <path d="M7 20h10" />
+      <path d="M10 20c5.5-2.5.8-6.4 3-10" />
+      <path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z" />
+      <path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z" />
     </svg>
   )
 }
 
-function CompassIcon({ className }: { className?: string }) {
+function RocketIcon({ className }: { className?: string }) {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <circle cx="12" cy="12" r="10" />
-      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+      <path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
     </svg>
   )
 }
 
-function SearchIcon({ className }: { className?: string }) {
+function OrbitIcon({ className }: { className?: string }) {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      <circle cx="12" cy="12" r="3" />
+      <circle cx="19" cy="5" r="2" />
+      <circle cx="5" cy="19" r="2" />
+      <path d="M10.4 21.9a10 10 0 0 0 9.941-15.416" />
+      <path d="M13.5 2.1a10 10 0 0 0-9.841 15.416" />
+    </svg>
+  )
+}
+
+function WavesIcon({ className }: { className?: string }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1" />
+      <path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1" />
+      <path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1" />
     </svg>
   )
 }
@@ -55,16 +71,21 @@ function SparklesIcon({ className }: { className?: string }) {
   )
 }
 
-const ICONS = [ShuffleIcon, CompassIcon, SearchIcon, SparklesIcon]
+const ICONS = [SproutIcon, RocketIcon, OrbitIcon, WavesIcon, SparklesIcon]
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const
 
-export function IntentSelection({ onSelect }: IntentSelectionProps) {
-  const [selected, setSelected] = useState<string | null>(null)
+export function IntentSelection({ onSelect, initialIntent }: IntentSelectionProps) {
+  const [selected, setSelected] = useState<string | null>(initialIntent ?? null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  useEffect(() => {
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current) }
+  }, [])
 
   function handleSelect(value: string) {
     setSelected(value)
-    setTimeout(() => onSelect(value), 300)
+    timeoutRef.current = setTimeout(() => onSelect(value), 300)
   }
 
   return (
@@ -76,7 +97,7 @@ export function IntentSelection({ onSelect }: IntentSelectionProps) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease }}
       >
-        What brought you here today?
+        What&apos;s going on in your world right now?
       </motion.h1>
 
       {/* Subtext */}
@@ -86,7 +107,7 @@ export function IntentSelection({ onSelect }: IntentSelectionProps) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.15, ease }}
       >
-        No wrong answers — just helps me know where to start.
+        Pick whatever fits best — there&apos;s no wrong answer.
       </motion.p>
 
       {/* Intent pills */}
@@ -112,7 +133,7 @@ export function IntentSelection({ onSelect }: IntentSelectionProps) {
               whileTap={{ scale: 0.98 }}
             >
               <Icon className={cn('flex-shrink-0 w-5 h-5', isSelected ? 'text-primary' : 'text-text-secondary')} />
-              <span className={cn('text-[15px]', isSelected ? 'text-primary font-medium' : 'text-text')}>
+              <span className={cn('text-[15px] leading-snug', isSelected ? 'text-primary font-medium' : 'text-text')}>
                 {intent.label}
               </span>
             </motion.button>

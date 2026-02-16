@@ -5,9 +5,9 @@ import { RatingScale } from './rating-scale'
 
 interface DomainCardProps {
   domain: string
+  descriptor?: string
   rating: number | null
   onRate: (value: number) => void
-  isFirst: boolean
   showSageMessage: boolean
   currentIndex: number
   totalDomains: number
@@ -18,14 +18,16 @@ const ease = [0.25, 0.46, 0.45, 0.94] as const
 
 export function DomainCard({
   domain,
+  descriptor,
   rating,
   onRate,
-  isFirst,
   showSageMessage,
   currentIndex,
   totalDomains,
   onBack,
 }: DomainCardProps) {
+  const descriptorId = `domain-desc-${currentIndex}`
+
   return (
     <div className="flex flex-col min-h-[100dvh] relative z-10">
       {/* Top bar */}
@@ -59,7 +61,7 @@ export function DomainCard({
       <div className="flex-1 flex flex-col items-center justify-center px-6 pb-20">
         {/* Sage message (first domain only) */}
         <AnimatePresence>
-          {isFirst && showSageMessage && (
+          {currentIndex === 0 && showSageMessage && (
             <motion.p
               className="text-[17px] text-text-secondary/60 italic text-center mb-6 select-none"
               initial={{ opacity: 0, y: 8 }}
@@ -75,13 +77,27 @@ export function DomainCard({
 
         {/* Domain name */}
         <motion.h2
-          className="text-[36px] font-bold text-text text-center mb-14"
+          className="text-[36px] font-bold text-text text-center mb-2"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.1 }}
+          aria-describedby={descriptor ? descriptorId : undefined}
         >
           {domain}
         </motion.h2>
+
+        {/* Domain descriptor */}
+        {descriptor && (
+          <motion.p
+            id={descriptorId}
+            className="text-[14px] text-text-secondary italic text-center mb-12"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.15 }}
+          >
+            {descriptor}
+          </motion.p>
+        )}
 
         {/* Rating scale */}
         <motion.div

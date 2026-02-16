@@ -22,14 +22,14 @@ export const PULSE_RATING_MAP: Record<PulseRating, number> = {
 }
 
 export const PULSE_DOMAINS = [
-  { label: 'Career / Work', key: 'career_work' },
-  { label: 'Relationships', key: 'relationships' },
-  { label: 'Health / Body', key: 'health_body' },
-  { label: 'Finances', key: 'finances' },
-  { label: 'Learning / Growth', key: 'learning_growth' },
-  { label: 'Creative Pursuits', key: 'creative_pursuits' },
-  { label: 'Play / Fun / Adventure', key: 'play_fun_adventure' },
-  { label: 'Meaning / Purpose', key: 'meaning_purpose' },
+  { label: 'Career / Work', key: 'career_work', descriptor: 'your job, projects, professional life' },
+  { label: 'Relationships', key: 'relationships', descriptor: 'partner, family, friendships' },
+  { label: 'Health / Body', key: 'health_body', descriptor: 'physical health, energy, fitness' },
+  { label: 'Finances', key: 'finances', descriptor: 'money, security, financial goals' },
+  { label: 'Learning / Growth', key: 'learning_growth', descriptor: 'skills, education, personal development' },
+  { label: 'Creative Pursuits', key: 'creative_pursuits', descriptor: 'art, writing, creative expression' },
+  { label: 'Play / Fun / Adventure', key: 'play_fun_adventure', descriptor: 'hobbies, travel, enjoyment' },
+  { label: 'Meaning / Purpose', key: 'meaning_purpose', descriptor: 'values, spirituality, life direction' },
 ] as const
 
 export const PULSE_RATING_OPTIONS: { label: string; value: PulseRating; numeric: number }[] = [
