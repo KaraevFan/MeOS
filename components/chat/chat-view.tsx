@@ -730,35 +730,36 @@ Do NOT list all 8 domains back. Keep it conversational.`
           const hasOverview = updates.some((u) => u.fileType === 'overview')
           const hasCheckIn = updates.some((u) => u.fileType === 'check-in')
 
-          if (hasOverview) {
+          if (hasOverview || hasCheckIn) {
             completeSession(supabase, sessionId).then(() => {
-              // Compute next check-in date (7 days from now, matching completeSession logic)
               const next = new Date()
               next.setDate(next.getDate() + 7)
               setNextCheckinDate(next.toISOString())
               setSessionCompleted(true)
-            }).catch(() => {
-              console.error('Failed to complete session')
-            })
-            Promise.resolve(
-              supabase
-                .from('users')
-                .update({ onboarding_completed: true })
-                .eq('id', userId)
-            ).catch(() => console.error('Failed to mark onboarding complete'))
 
-            if (isPushSupported() && Notification.permission === 'default') {
-              setShowPushPrompt(true)
-            }
-          } else if (hasCheckIn) {
-            completeSession(supabase, sessionId).then(() => {
-              const next = new Date()
-              next.setDate(next.getDate() + 7)
-              setNextCheckinDate(next.toISOString())
-              setSessionCompleted(true)
+              // Fire-and-forget: generate re-engagement content while context is warm
+              const recent = messagesRef.current.slice(-8).map((m) => ({ role: m.role, content: m.content }))
+              fetch('/api/session/generate-reengagement', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, sessionType, recentMessages: recent }),
+              }).catch(() => console.error('Failed to generate re-engagement content'))
             }).catch(() => {
               console.error('Failed to complete session')
             })
+
+            if (hasOverview) {
+              Promise.resolve(
+                supabase
+                  .from('users')
+                  .update({ onboarding_completed: true })
+                  .eq('id', userId)
+              ).catch(() => console.error('Failed to mark onboarding complete'))
+
+              if (isPushSupported() && Notification.permission === 'default') {
+                setShowPushPrompt(true)
+              }
+            }
           }
         }
       }
