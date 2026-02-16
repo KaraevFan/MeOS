@@ -50,7 +50,7 @@ export default function LoginPage() {
   return (
     <div className="w-full max-w-sm flex flex-col items-center text-center">
       {/* Breathing orb */}
-      <div className="mb-14">
+      <div className="mb-10">
         <BreathingOrb />
       </div>
 
@@ -59,7 +59,7 @@ export default function LoginPage() {
         className="animate-fade-in-up"
         style={{ animation: 'fade-in-up 0.6s ease-out 0.15s both' }}
       >
-        <h1 className="text-2xl font-bold tracking-tight">
+        <h1 className="text-2xl font-bold tracking-tighter">
           MeOS
         </h1>
       </div>
@@ -69,14 +69,14 @@ export default function LoginPage() {
         className="animate-fade-in-up"
         style={{ animation: 'fade-in-up 0.6s ease-out 0.25s both' }}
       >
-        <p className="mt-3 text-lg text-text-secondary">
+        <p className="mt-2 text-lg text-text-secondary">
           Your AI life partner
         </p>
       </div>
 
       {/* Auth section */}
       <div
-        className="mt-12 w-full animate-fade-in-up"
+        className="mt-10 w-full animate-fade-in-up"
         style={{ animation: 'fade-in-up 0.6s ease-out 0.35s both' }}
       >
         {emailSent ? (
@@ -93,7 +93,7 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full h-12 bg-bg-card border border-border rounded-full font-medium text-text
                          hover:bg-bg-sage transition-colors disabled:opacity-50 flex items-center justify-center gap-2
-                         shadow-sm hover:shadow-md"
+                         shadow-sm hover:shadow-md active:scale-[0.98]"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path
@@ -142,7 +142,7 @@ export default function LoginPage() {
               <button
                 onClick={() => setShowEmailInput(true)}
                 className="w-full h-12 bg-bg border border-border rounded-full font-medium text-text-secondary
-                           hover:bg-bg-sage transition-colors"
+                           hover:bg-bg-sage transition-colors active:scale-[0.98]"
               >
                 Continue with Email
               </button>
@@ -151,11 +151,11 @@ export default function LoginPage() {
         )}
 
         {error && (
-          <p className="mt-md text-sm text-accent-terra">{error}</p>
+          <p className="mt-md text-sm text-accent-terra animate-fade-up">{error}</p>
         )}
 
         {loading && !error && (
-          <div className="mt-lg flex items-center justify-center gap-2">
+          <div className="mt-md flex items-center justify-center gap-2">
             <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             <span className="text-sm text-text-secondary">Redirecting...</span>
           </div>
@@ -164,7 +164,7 @@ export default function LoginPage() {
 
       {/* Terms & privacy */}
       <div
-        className="mt-16 animate-fade-in-up"
+        className="mt-12 animate-fade-in-up"
         style={{ animation: 'fade-in-up 0.6s ease-out 0.45s both' }}
       >
         <p className="text-sm text-text-secondary max-w-xs mx-auto leading-relaxed">
