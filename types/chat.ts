@@ -1,6 +1,6 @@
 export type MessageRole = 'user' | 'assistant'
 
-export type SessionType = 'life_mapping' | 'weekly_checkin'
+export type SessionType = 'life_mapping' | 'weekly_checkin' | 'ad_hoc'
 
 export type SessionStatus = 'active' | 'completed' | 'abandoned'
 

@@ -56,6 +56,9 @@ export const SESSION_WRITE_PERMISSIONS: Record<string, string[]> = {
     'life-map/',
     'sage/',
   ],
+  ad_hoc: [
+    'sage/',
+  ],
 }
 
 /** Maximum FILE_UPDATE blocks per message (rate limit) */
