@@ -45,6 +45,8 @@ People can *talk* about their lives far more easily than they can write, organiz
 
 Most productivity systems start *after* the hard work of self-understanding and skip straight to execution. MeOS starts at the beginning: **who are you, what do you actually want, and what's getting in the way?**
 
+There's a second insight that emerged from first testing: **people naturally operate on three layers — identity, planning, and execution.** The best personal systems (from executive coaching to structured quarterly planning) work across all three. Life Map captures identity (who am I, where am I). Life Plan captures planning (what am I committing to this quarter). Weekly check-ins capture execution (did I do what I said I'd do). Most tools only serve one layer. MeOS serves all three, connected through conversation.
+
 ---
 
 # Product Strategy: The Layer Cake
@@ -55,17 +57,24 @@ Each layer is a complete product that delivers value on its own, but also feeds 
 
 *"Tell me about your life."*
 
-A 20-40 minute guided voice conversation where the AI walks you through:
+A 20-30 minute guided voice conversation. Starts with a **Pulse Check** — a 30-second interactive rating of all 8 life domains (Thriving → In Crisis), inspired by the coaching "Wheel of Life" and Daylio's "tap, don't type" pattern. This gives Sage a bird's-eye view before diving deep, prevents blank-page paralysis, and ensures full-map coverage.
 
-- Where you are in life right now (work, relationships, health, finances, interests)
-- What's working and what's not
-- What you're curious about or drawn to
-- What you've been avoiding
-- What "a good year" would look like
+From the pulse check, Sage identifies where tension lives and leads the user through domain-by-domain exploration:
 
-**Output:** A structured life map — not a rigid plan, but a living document that captures your identity, priorities, active tensions, and stated intentions. The user sees it and thinks: *"Wow, this thing gets me."*
+- Current state, what's working, what's not
+- Desires and tensions the user hasn't articulated yet
+- Stated intentions — what the user wants to move on
 
-**This is the magic moment.** If we nail this, everything else follows. If we don't, nothing else matters.
+Each domain produces a **domain card** visible in real time, so the user sees their life map building as they talk.
+
+**Output: Two artifacts.**
+
+1. **Life Map** (the identity layer) — a structured snapshot of who you are across 8 domains: current state, tensions, stated intentions, and a cross-cutting synthesis with a primary compounding engine, top 3 priorities, key tensions, and anti-goals.
+2. **Life Plan** (the planning layer, stretch goal) — what you're doing about it. Quarter theme, 1-2 anchor projects with milestones and kill criteria, maintenance habits. Bridges the gap between "I see where I am" and "here's what I'm actually committing to."
+
+The distinction matters: Life Map = reflection. Life Plan = commitment. Most productivity tools skip the first and wonder why the second doesn't stick.
+
+**This is the magic moment.** The user sees it and thinks: *"Wow, this thing gets me."* If we nail this, everything else follows. If we don't, nothing else matters.
 
 ## Layer 1: Recurring Reflections (The Retention Engine)
 
@@ -100,18 +109,39 @@ Once the system knows your life map and has weekly check-in data, it starts ligh
 
 **Design principle:** These should feel like a thoughtful friend texting you, not an app sending notifications. Sparse, well-timed, personalized.
 
-## Layer 3+: Platform Expansion (The Long Game)
+## Layer 2.5: First POS Modules (The Daily Utility Layer)
 
-Once Layers 0-2 have product-market fit:
+*"Sage, help me plan my day."*
 
-- **Habit stacking** — design and adapt habit routines tied to goals
+**Critical insight (Feb 16, 2026):** The gap between check-ins isn't a retention problem to solve with hooks and notifications — it's a daily utility problem. Life mapping and reflections are intake and calibration mechanisms. They're how the system learns about you. But they're not the thing that makes someone open the app on a Tuesday afternoon. POS modules are.
+
+The Life Map becomes the kernel of a Personal Operating System. Every module reads from it and writes to it. This is what makes MeOS's modules better than standalone alternatives — they share a deep, structured understanding of who the user is.
+
+**First modules (Weeks 3-4 of Q1, validated by user testing):**
+
+- **Daily journal/reflections** — A 2-minute conversational reflection. Sage asks 1-2 questions, user responds via voice or text, the response passively updates the Life Map and feeds context into the next check-in. Extends the existing conversational UX at a different cadence.
+- **Quick notes / capture** — "Hey Sage, remind me..." or "Had a thought about X" — zero-friction input that feeds the Life Map. Entry point for a second brain that needs no upkeep.
+- **Day planner** — Sage pulls from calendar + Life Map priorities to help plan the day in natural language. Requires calendar integration. The visible "this is smarter than any other planner" moment.
+
+**Design principle: Sage IS the desktop.** Users don't open separate module UIs — they talk to Sage, and Sage surfaces the right context, tools, and structured cards. Each module is a prompt + a tool + a card type, not a separate screen. This is dramatically faster to build and stays true to "conversation is the product."
+
+**The test for every module:** Is this genuinely better than the standalone alternative *because* it shares the Life Map context? If not, don't build it.
+
+## Layer 3+: Platform Expansion (The Full POS)
+
+Once the first POS modules prove that shared Life Map context creates superior utility:
+
+- **Smart calendar** — proactively searches for events and proposes activities given life priorities
+- **Researcher** — keeps you updated on relevant news, does deep dives, feeds the second brain
+- **Project manager** — agent continuously running background tasks on your behalf
+- **Goal planner / action tracker** — kept up to date with life priorities automatically
+- **Endless plugins** — diet planner, financial planner, expense manager, etc.
 - **Content/learning integration** — pull in newsletters, podcasts, articles and connect to interest graph
-- **Project management** — decompose goals into projects with milestones
 - **Knowledge graph** — all conversations and inputs create a searchable map of your thinking
 - **Public projection** — optionally share your journey, learnings, or roadmap publicly
 - **Community features** — accountability partners, shared challenges, group reflections
 
-**None of this gets built until Layers 0-2 have retention.**
+**Build speed context:** With vibecoding, individual modules are 1-3 day builds. The constraint is design clarity and user validation, not engineering time. Full Layer 3 is realistic within 6 weeks of starting Layer 2.5.
 
 ---
 
@@ -124,11 +154,13 @@ Once Layers 0-2 have product-market fit:
 - **Therapy:** Remembers you, talks to you, but expensive and not action-oriented
 - **Executive coaching:** The closest analog — but costs $200-500/hr and doesn't scale
 - **Habit apps (Streaks, etc.):** Low friction, but no understanding of you, no conversation
-- **AI journals (Rosebud, etc.):** Somewhat conversational, but no life mapping, no accountability layer
+- **AI journals (Rosebud, etc.):** Conversational and personalized (Rosebud even uses intake questionnaires to tailor tone), but no life mapping, no structured model of the user, no accountability layer. Good at reflection, weak at direction.
+- **Mood trackers (Daylio, etc.):** Brilliant at low-friction daily check-ins ("tap, don't type"), but no intelligence — tracks patterns without understanding them or helping you act on them. MeOS borrows the interaction pattern (pulse check) but adds the AI sense-making layer.
+- **OpenClaw:** The closest thing to a personal AI operating system — 145K+ GitHub stars, multi-channel agent with persistent memory. But its identity layer ([`SOUL.md`](http://SOUL.md)) is a flat Markdown file with no structure, no guided intake, no temporal patterns. It's an execution layer without a brain. MeOS's structured Life Map is the upgrade OpenClaw users don't know they need yet. Strategic relationship: MeOS as identity layer, OpenClaw as execution layer, connected via MCP.
 
 **MeOS is uniquely: persistent understanding + conversational interface + action orientation + zero setup.**
 
-The real competitive threat is ChatGPT adding persistent memory + proactive check-ins natively. Speed matters. The depth of the life model (built through structured conversations, not casual chat) is the moat.
+The real competitive threats are (a) ChatGPT adding persistent memory + proactive check-ins natively, and (b) OpenClaw's ecosystem building its own structured identity system. Speed matters on both fronts. The depth of the life model (built through structured conversations, not casual chat) is the moat.
 
 ---
 
@@ -200,6 +232,7 @@ The free tier must be good enough to experience the magic moment. The paywall si
 
 **Platform piggybacking:**
 
+- **OpenClaw ecosystem (primary platform channel):** Build MeOS Life Map as an MCP server + lightweight OpenClaw skill. OpenClaw's 145K+ star community and 5,700+ skills ecosystem is the single best distribution channel for our exact target user. The play: OpenClaw users discover MeOS through the skill ("check my life map", "what are my priorities"), but the full life mapping experience happens in our app. Content angle: "I built the identity layer for OpenClaw — here's how my AI agent actually knows who I am." Note: this is distribution, not infrastructure. Our stack remains independent (Next.js + Supabase + Claude API).
 - Custom GPT in GPT Store (free distribution, zero infrastructure)
 - Claude Extension when available
 - WhatsApp bot for zero-friction entry
@@ -224,6 +257,9 @@ If we build this, we must not lose these properties:
 6. **AI that challenges, not just affirms** — a mirror, not a cheerleader
 7. **Artifacts that evolve, not dashboards that judge** — living documents, not scorecards
 8. **Fast loops back to reality** — insight must become action quickly
+9. **Three layers, one conversation** — identity (Life Map), planning (Life Plan), and execution (check-ins) are distinct but connected through the same conversational interface
+10. **The Life Map is the kernel, not the product** — every module reads from and writes to the Life Map. The depth of the kernel is what makes each module better than its standalone equivalent. Without the kernel, modules are just AI wrappers. With it, they're an integrated system that understands you.
+11. **Daily utility before retention hooks** — people don't come back because of notifications and streaks. They come back because the app helps them on a Tuesday afternoon. Build daily utility, not engagement tricks.
 
 ---
 
@@ -232,12 +268,12 @@ If we build this, we must not lose these properties:
 | Dimension | Answer |
 | --- | --- |
 | Vision | An AI life partner that helps people live intentionally |
-| Wedge | Life mapping → weekly reflections → daily nudging |
+| Wedge | Life mapping (kernel) → first POS modules for daily utility (journal, capture, day planner) → weekly reflections (calibration) → platform expansion |
 | Target user | Reflective strivers, 25-40, bounced off productivity tools |
 | Core insight | People talk about their lives easier than they organize them; AI bridges that gap |
 | Magic moment | First life mapping conversation — "this thing gets me" |
 | Retention loop | Weekly voice check-in that remembers everything and surfaces patterns |
 | Moat | Accumulated understanding deepens over time; can't be replicated by switching |
 | Business model | Freemium; free life mapping + limited check-ins; $15-20/mo for full access |
-| GTM | Content (founder story) + Custom GPT for validation + community seeding |
-| Long-term platform | Full Personal OS: habits, learning, knowledge graph, projects, public projection |
+| GTM | Content (founder story) + OpenClaw ecosystem as distribution channel (MCP server + skill) + community seeding |
+| Long-term platform | Full Personal OS: Life Map as kernel, Sage as unified interface, modules for every life domain (planner, researcher, project manager, knowledge graph, public projection). First modules ship Week 3-4 of Q1. |

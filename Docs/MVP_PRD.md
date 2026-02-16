@@ -17,6 +17,8 @@ This is the complete build specification for the MeOS MVP. It is designed to be 
 - Voice: Whisper API or Deepgram (speech-to-text)
 - Hosting: Vercel
 
+**Strategic context (updated Feb 16, 2026):** The product vision has sharpened from "life mapping + check-ins" to "Personal Operating System with the Life Map as kernel." Life mapping and reflections are how the system learns about you. POS modules (daily journal, day planner, quick capture, etc.) are what give the system daily utility. First POS modules target Weeks 3-4 alongside tool use. Sage is the unified interface — each module is a prompt + tools + card type, not a separate screen.
+
 ---
 
 # Product Principles
@@ -71,25 +73,39 @@ A guided conversation (20-30 min, adaptive) where Sage walks the user through ke
 
 ## The Arc
 
-### Phase 1: Opening (2-3 min)
+### Phase 1: Pulse Check Intake (1-2 min)
 
-**Goal:** Establish trust, set expectations, get the first real disclosure.
+**Goal:** Get a bird's-eye view of all 8 life domains before diving deep. Inspired by the "Wheel of Life" — the #1 coaching intake tool — where coaches ask clients to rate life areas on a satisfaction scale to identify where to focus. Combined with Daylio's "tap, don't type" pattern for low-friction input.
 
-Sage opens:
+Sage opens with a shorter greeting:
 
-> "Hey — I'm Sage. I'm here to help you get a clearer picture of where you are in life and where you want to go. There's no right way to do this. I'll ask you some questions, you talk through whatever comes up, and I'll help organize it as we go. You'll see your life map building in real time. We can go as deep or as light as you want — you're in control of the pace. Sound good?"
+> "Hey — I'm Sage. I'm going to help you build a map of where you are in life right now. Before we talk, I want to get a quick pulse. Rate each of these areas — don't overthink it, just your gut right now."
 > 
 
-Then a single open-ended warm-up:
+Immediately after the greeting, an **inline interactive Pulse Check component** appears (not a regular chat bubble — a new UI component type):
 
-> "So — before we get into specifics, how are you feeling about life right now? Just the honest, unfiltered version."
+- Full-width card, warm background, distinct from chat bubbles
+- All 8 domains listed vertically
+- Each domain has 5 tappable rating options: **Thriving** (green) / **Good** (teal) / **Okay** (yellow) / **Struggling** (orange) / **In Crisis** (red)
+- Minimum 4 of 8 domains rated to proceed. "Done" button at bottom.
+- Target: 30-60 seconds to complete
+
+Ratings are stored as the **baseline snapshot** — they persist in the Life Map and become the first data point in a longitudinal satisfaction trend.
+
+After submission, Sage delivers a **pattern read** — reflecting back the shape it sees:
+
+> "Okay — career and finances are where you're feeling the most pressure, while relationships and health seem relatively stable. Let's start where the tension is. Tell me what's going on with work right now."
 > 
 
-**What Sage does with the response:**
+This replaces the previous open-ended "how are you feeling about life?" opener, which created blank-page paralysis and caused users to go deep on one domain without covering the full map.
 
-- Mirrors back what it heard (briefly, not parrot-style)
-- Names any emotions or tensions it detects
-- Uses this to suggest which domain to start with: "It sounds like work is weighing on you most right now — want to start there?"
+### Phase 1b: Opening Warm-Up (1-2 min)
+
+**Goal:** Transition from the quantitative pulse check into the qualitative conversation.
+
+Sage uses the lowest-rated domain to ask a **specific, bounded question** — not "tell me about your career" but "You rated career as 'struggling' — what's the main source of tension there right now?"
+
+This gives Sage signal on where to go deep and gives the user a concrete, answerable prompt instead of a paralyzing open question.
 
 ### Phase 2: Domain Exploration (15-25 min, adaptive)
 
@@ -108,10 +124,12 @@ Then a single open-ended warm-up:
 
 **How it works:**
 
-- Sage suggests a starting domain based on the opening response, but user can pick
+- Sage suggests a starting domain based on the **pulse check ratings** (lowest-rated first), but user can pick
 - Each domain follows a mini-arc (below)
 - After each domain, the structured output for that domain appears on screen in real time
 - User chooses: explore another domain, or wrap up
+- Quick-reply buttons for remaining domains are **sorted by pulse check rating** (struggling → thriving) and **already-explored domains are removed**
+- For domains rated "thriving" or "good," Sage offers a **lightweight pass**: "You rated health as 'good' — want to spend time here or is that a quick confirm?" This lets stable domains be covered in 2-3 exchanges vs. 10.
 - Minimum 2-3 domains for a useful map; all 8 if the user wants
 
 **Mini-arc per domain (2-4 min each):**
@@ -179,10 +197,32 @@ A 1-2 paragraph narrative that captures the user's current life situation, the c
 - Anti-goals: what the user is explicitly NOT focusing on right now
 - Failure modes: patterns that tend to derail this person (populated over time)
 
+**Label note:** Use "Anti-Goals" instead of "Explicitly Not Doing Now" — concise, more energy, matches Sage's conversational voice. Priorities should NOT include numbering in the LLM output (the app handles display numbering).
+
 **Sage closes:**
 
 > "This is your life map as of today. It's not a contract — it's a snapshot. We'll check in weekly and it'll evolve as you do. How does this feel? Anything you'd change?"
 > 
+
+### Phase 4: Life Plan Transition (Optional, 3-5 min)
+
+**Goal:** Bridge from reflection ("who am I and where am I") to planning ("what am I doing about it").
+
+After the user confirms the synthesis, Sage asks:
+
+> "Now that we've mapped the terrain — what do you actually want to focus on? Let's pick 1-2 things for this quarter."
+> 
+
+This produces a **Life Plan** artifact with:
+
+- **Quarter theme** (one phrase, e.g., "Compounding over optionality")
+- **1-2 Anchor Projects** with: definition of done, milestones, risk/cut criteria
+- **Maintenance habits** (existing systems to keep running)
+- **Anti-goals** (explicitly not doing)
+
+The Life Plan sits *above* the Life Map — the Life Map captures who you are and where you are across domains; the Life Plan captures what you're doing about it. The Home screen pulls from both.
+
+**For MVP:** This is a stretch goal. Capture it as structured data if the user engages, but don't block the core flow on it. The synthesis card's priorities and compounding engine serve as a lightweight version.
 
 ---
 
@@ -316,6 +356,64 @@ related_domain: string (nullable)
 is_active: boolean
 ```
 
+## Pulse Check Ratings
+
+```jsx
+pulse_check_id: uuid (primary key)
+user_id: uuid (foreign key)
+session_id: uuid (foreign key → sessions)
+domain: string (one of 8 domains)
+rating: enum ('thriving', 'good', 'okay', 'struggling', 'in_crisis')
+rating_numeric: integer (5, 4, 3, 2, 1)
+is_baseline: boolean (true for first-ever check)
+created_at: timestamp
+```
+
+Baseline pulse check ratings persist in the Life Map view as the "initial reading" and become the first data point in a longitudinal satisfaction trend. Subsequent check-ins can optionally re-run the pulse check to track domain-level changes over time.
+
+## Life Plan (Stretch Goal)
+
+```jsx
+life_plan_id: uuid (primary key)
+user_id: uuid (foreign key)
+quarter_theme: text ("Compounding over optionality")
+maintenance_habits: text[]
+anti_goals: text[]
+created_at: timestamp
+updated_at: timestamp
+```
+
+## Anchor Projects (child of Life Plan)
+
+```jsx
+anchor_project_id: uuid (primary key)
+life_plan_id: uuid (foreign key)
+name: text
+definition_of_done: text
+why_it_matters: text
+milestones: jsonb (array of {label, target_date, status})
+risks: jsonb (array of {description, cut_criteria})
+status: enum ('active', 'paused', 'completed', 'abandoned')
+created_at: timestamp
+updated_at: timestamp
+```
+
+## Session State
+
+```jsx
+// Add to user profile or dedicated state table
+session_state: enum (
+  'new_user',              // Never started life mapping
+  'mapping_in_progress',   // Started but didn't finish all domains
+  'mapping_complete',      // Life mapping done, between check-ins
+  'checkin_due',           // Weekly check-in is due
+  'checkin_overdue',       // Past the scheduled check-in time
+  'mid_conversation'       // User closed app during active conversation
+)
+explored_domains: text[]   // Track which domains have been covered
+last_active_session_id: uuid (nullable)
+```
+
 ---
 
 # App Screens
@@ -332,18 +430,42 @@ is_active: boolean
 - Prominent voice input button (large, center-bottom, like a podcast record button)
 - Text input also available (smaller, below or beside voice button)
 - Sage's responses appear as text
-- During life mapping: domain cards appear inline in the conversation as they're generated
+- During life mapping: pulse check component appears inline, then domain cards appear as they're generated
 - User can tap a domain card to edit/correct it
+
+**Critical: State-Aware Chat Entry.** The chat view must check the user's `session_state` on mount and render the appropriate contextual opening:
+
+- **`new_user`:** Show pulse check intake flow (greeting + pulse check component)
+- **`mapping_in_progress`:** "Welcome back, [name]. Last time we mapped out [explored domains]. Want to keep going?" + quick-reply buttons for remaining domains + "Just want to talk" + "Wrap up with what we have"
+- **`mapping_complete`:** "Hey [name]. Your next check-in is in [X] days, but I'm here whenever. Anything on your mind?" + quick-replies for "Start check-in early" / "Something's on my mind" / "Update my life map"
+- **`checkin_due` / `checkin_overdue`:** "Hey [name] — it's check-in time. Ready to look at how this week went?" + "Let's do it" / "Not right now"
+- **`mid_conversation`:** Load previous conversation messages, append: "Hey — we were in the middle of things. Want to pick up where we left off, or start fresh?" + "Continue" / "Start fresh"
+
+The system prompt must always include: current life map data, pulse check ratings, session history summary, and active patterns. Full context carryover between sessions is non-negotiable — Sage must never appear to have amnesia.
 
 ## 3. Life Map View
 
-- Accessible from a tab or button at any time
-- Shows the full structured life map organized by domain
-- Each domain expandable/collapsible
-- Cross-cutting insights (narrative summary, priorities, tensions, anti-goals) at the top
+Accessible from a tab or button at any time. Two sections:
+
+**Section 1: "Where I Am" (Domain Map)**
+
+- Full structured life map organized by domain
+- Each domain card shows: **pulse check rating indicator** (color dot from baseline + current), current state summary, stated intention
+- Each domain expandable/collapsible for full detail (what's working, what's not, desires, tensions)
+- Cross-cutting insights at the top: narrative summary, compounding engine, priorities, tensions, anti-goals
 - Visual status indicators per domain (thriving / stable / needs attention / in crisis)
 - Last updated timestamp
 - Changelog accessible ("what changed since last check-in")
+
+**Section 2: "What I'm Doing" (Life Plan) — Stretch Goal**
+
+- Quarter theme displayed as a heading
+- 1-2 Anchor Projects with milestones as a simple timeline or checklist
+- Maintenance habits list
+- Anti-goals
+- Risk/cut criteria visible per project
+
+For MVP: Section 1 is the priority. Section 2 can be a simple card below Section 1 showing the synthesis priorities and compounding engine. Full Life Plan view is a post-MVP enhancement.
 
 ## 4. History View
 
@@ -353,11 +475,15 @@ is_active: boolean
 
 ## 5. Home Screen
 
-- Shows: days until next check-in (with button to start early)
-- Current top 3 priorities
-- Any active nudges or pattern alerts
-- Quick-start button for ad hoc conversation with Sage
-- Streak / consistency indicator (gentle, not guilt-inducing)
+Layout (top to bottom):
+
+1. **Greeting:** "Good morning, [name]" (time-based)
+2. **Sage dynamic line:** A contextual one-liner from Sage referencing the life map. Template-based for MVP (not LLM-generated — faster, cheaper, more predictable). Examples: "Day 2 of the MVP sprint. Building momentum?" / "You said 4-6 weeks for the startup bet. The clock started 3 days ago." / "Check-in's tomorrow. Take a minute to notice how the week felt." Must feel specific to the user, not generic. Life map data makes this possible.
+3. **Compounding Engine card:** The "Primary Compounding Engine" from the synthesis, displayed as a highlighted card. This is the user's north star — visible every time they open the app.
+4. **Next check-in timer** + "Start early" button
+5. **Current priorities** (top 3)
+6. **"Talk to Sage" button** (quick-start for ad hoc conversation)
+7. **Streak / consistency** (gentle, not guilt-inducing)
 
 ---
 
@@ -368,9 +494,11 @@ is_active: boolean
 For each conversation, Sage's context window is populated with:
 
 1. **The current life map** (structured data, injected as system context)
-2. **Summaries of the last 3-5 sessions** (AI-generated, not full transcripts — manages token costs)
-3. **Active patterns** (recurring themes the system has detected)
-4. **The user's last stated commitment** ("one thing I want to be true by next check-in")
+2. **Pulse check ratings** (baseline + most recent, with domain-level trend direction)
+3. **Summaries of the last 3-5 sessions** (AI-generated, not full transcripts — manages token costs)
+4. **Active patterns** (recurring themes the system has detected)
+5. **The user's last stated commitment** ("one thing I want to be true by next check-in")
+6. **Session state** (new_user, mapping_in_progress, mapping_complete, checkin_due, etc.) — determines Sage's opening behavior
 
 **Full transcripts are stored** in the database for user review but are NOT injected into every conversation (too expensive, too noisy). Instead, the AI generates a structured summary after each session, and those summaries are the memory substrate.
 
@@ -410,7 +538,7 @@ The system runs a post-processing step:
 
 This is the core system prompt for the life mapping conversation. It should be refined through testing.
 
-```
+```jsx
 You are Sage, an AI life partner built into MeOS. You are conducting a life mapping session with a new user.
 
 Your personality:
@@ -437,10 +565,11 @@ Life domains to explore:
 8. Meaning / Purpose
 
 Session structure:
-1. OPENING: Welcome the user, set expectations (they're in control of pace, no right way to do this), then ask an open warm-up question: "How are you feeling about life right now? Just the honest, unfiltered version."
-2. DOMAIN EXPLORATION: Based on the opening response, suggest a starting domain. For each domain, explore: current state, what's working, what's not, desires, tensions, and stated intentions. Adapt — don't ask all questions mechanically. If the user gives a rich response, skip ahead. Follow emotional energy.
-3. AFTER EACH DOMAIN: Generate a structured domain summary (current state, what's working, what's not working, key tension, stated intention). Then ask: "Want to explore another area, or is this a good place to pause for now?"
-4. SYNTHESIS: Once the user has explored 2+ domains and wants to wrap up, generate: (a) a narrative summary of their overall life situation, (b) their primary compounding engine, (c) top 3 quarterly priorities, (d) key tensions to watch, (e) anti-goals / explicit "not now" items.
+1. PULSE CHECK INTAKE: The user has already completed an interactive pulse check rating all 8 domains before you speak. Their ratings are injected below as structured context. Use these ratings to guide the conversation — start with the lowest-rated domain and ask a specific, bounded question about it (not "tell me about your career" but "You rated career as 'struggling' — what's the main source of tension there right now?"). Reflect back the overall shape first: "Okay — [low domains] are where you're feeling pressure, while [high domains] seem more stable. Let's start where the tension is."
+2. DOMAIN EXPLORATION: Based on pulse check ratings, explore domains starting with the lowest-rated. For each domain, explore: current state, what's working, what's not, desires, tensions, and stated intentions. Adapt — don't ask all questions mechanically. If the user gives a rich response, skip ahead. Follow emotional energy. For domains rated 'thriving' or 'good,' offer a lightweight pass: "You rated [domain] as [rating] — want to spend time here or is that a quick confirm?"
+3. AFTER EACH DOMAIN: Generate a structured domain summary. CRITICAL: Emit each [DOMAIN_SUMMARY] block as its own message. NEVER combine two domain summaries in a single response — the parser breaks. Then ask: "Want to explore another area, or is this a good place to pause for now?" Only offer unexplored domains. Sort remaining by pulse check rating (struggling first).
+4. SYNTHESIS: Once the user has explored 2+ domains and wants to wrap up, generate: (a) a narrative summary, (b) primary compounding engine, (c) top 3 quarterly priorities — do NOT include numbering like '1)' '2)' as the app handles display, (d) key tensions to watch, (e) Anti-Goals (use this label, not 'Explicitly Not Doing Now').
+5. LIFE PLAN (optional): After synthesis, if user seems engaged, ask: "Now that we've mapped the terrain — what do you actually want to focus on this quarter? Let's pick 1-2 things." If they engage, help define anchor projects with milestones. If done, don't push.
 
 Critical rules:
 - Never be performatively positive. Don't rewrite hard truths into silver linings.
@@ -517,137 +646,478 @@ Patterns observed: {any recurring themes across sessions}
 
 ---
 
-# Build Sequence (Sprint 1: Days 1-5)
+# Build Status & Current State
 
-## Day 1-2: Scaffold + Core Plumbing
+**Sprint 1 is complete.** The full MVP codebase exists and is deployed. See the separate Technical Design Document (DESIGN_[DOC.md](http://DOC.md)) for the complete implementation reference.
 
-- Initialize Next.js project with Tailwind
-- Supabase setup: project, auth (Google OAuth + magic link), database tables per data model above
-- Basic app shell: navigation between Home, Conversation, Life Map, History
-- Claude API integration: basic chat endpoint that sends messages and receives responses
-- Voice recording in browser (MediaRecorder API) + Whisper API integration for transcription
+**What's built:**
 
-## Day 3-4: Core Experiences
+- Full PWA with auth (Google OAuth + magic link), bottom tab navigation
+- Life mapping conversation with domain cards + synthesis rendering inline
+- Weekly check-in conversation with life map + session history context injection
+- Voice input (MediaRecorder → Whisper transcription → chat)
+- Life Map view with synthesis + expandable domain grid
+- History view with session list + summaries
+- Home screen with check-in scheduling + priorities
+- Push notification scaffolding (subscription works, VAPID delivery pending)
+- Database: 7 tables with RLS (users, life_maps, life_map_domains, sessions, messages, patterns, push_subscriptions)
+- Streaming via SSE from Claude API
+- Structured output parser for [DOMAIN_SUMMARY] and [LIFE_MAP_SYNTHESIS] blocks
 
-- **Life Mapping conversation flow:**
-    - System prompt injected for Sage (life mapping version)
-    - Conversation UI with voice button + text input
-    - Domain summary cards rendered inline when Sage generates [DOMAIN_SUMMARY] blocks
-    - Domain cards tappable to edit
-    - Synthesis output rendered at end of session when Sage generates [LIFE_MAP_SYNTHESIS]
-    - All outputs saved to Supabase (life map, domains, session transcript, summary)
-- **Weekly Check-In flow:**
-    - System prompt injected for Sage (check-in version) with life map + session history as context
-    - Same conversation UI
-    - Post-session: AI generates summary, updates life map, checks for patterns
-    - Save everything to Supabase
+**What's NOT built yet (Sprint 1 known limitations):**
 
-## Day 5: Polish + Deploy
+- Pattern detection not automated (table exists, not populated)
+- No session abandonment handling (24h stale sessions)
+- Push notifications scaffolded but not delivering (no VAPID keys)
+- No domain card re-processing on edit
+- No TTS
+- Placeholder app icons
 
-- Home screen: next check-in date, current priorities, quick-start button
-- Life Map view: structured display of all domains + cross-cutting insights
-- History view: list of past sessions with summaries
-- Push notification scheduling for weekly check-in reminders (service worker)
-- Deploy to Vercel
-- Basic error handling and loading states
-- Mobile responsive polish
+**Next phase: Audit, test with real users, then add agentic capabilities.** See Q1 Build Plan for the full weekly breakdown.
 
-## Explicitly Out of Scope for Sprint 1
+---
 
-- Daily nudging / ambient layer
+# Playtest Findings (Feb 13, 2026 — Founder Self-Test)
+
+First real end-to-end test of the MVP. Conversation quality and domain card generation were strong. Four critical UX gaps identified:
+
+## P0 Issues
+
+1. **Opening flow too open-ended.** "How are you feeling about life?" caused blank-page paralysis. User went deep on one domain (career) without covering the map. **Fix:** Pulse Check Intake flow (see Phase 1 above).
+2. **Chat amnesia on return.** Closing and reopening the app reset the conversation. No state awareness — Sage didn't know if user was mid-mapping, done, or returning for a check-in. **Fix:** Session state machine + state-aware chat entry (see Conversation View spec above).
+3. **Domain card parser bug.** When the LLM emitted two [DOMAIN_SUMMARY] blocks in one message, only the first was captured. **Fix:** Either use global regex in parser, or instruct LLM to emit each summary as a separate message (system prompt updated above to enforce this).
+
+## P1 Issues
+
+1. **Home screen lifeless.** Generic greeting with no connection to the user's life map data. Felt like a dead dashboard. **Fix:** Dynamic Sage line + Compounding Engine card (see Home Screen spec above).
+
+## P2 Polish
+
+- Priority numbering: LLM includes "1) 2) 3)" — app should handle display numbering
+- "EXPLICITLY NOT DOING NOW" label → renamed to "Anti-Goals"
+- Synthesis card too long in chat — consider collapsible with "Read more"
+
+---
+
+# Agentic Evolution: Phase 1 — Tool Use in Conversations
+
+*Target: Weeks 4-5 of Q1 (March 2026)*
+
+The conversation is still the primary interface, but Sage gains "hands" — the ability to take actions during chat via Claude tool use (function calling).
+
+## Tools for Phase 1
+
+### 1. Web Search
+
+When a user mentions wanting to try something (yoga, a course, a career change), Sage can search and surface relevant options inline.
+
+```
+Tool: search_web
+Parameters: { query: string, num_results?: number }
+Returns: { results: [{ title, url, snippet }] }
+Trigger: Sage determines user would benefit from concrete options
+Approval: Not required (read-only, informational)
+```
+
+### 2. Create Reminder
+
+When Sage and user agree on an intention, Sage can offer to set a reminder.
+
+```
+Tool: create_reminder
+Parameters: { title: string, description: string, remind_at: datetime, domain: string, related_intention_id?: uuid }
+Returns: { reminder_id: uuid, scheduled_for: datetime }
+Trigger: User states a concrete commitment with a time component
+Approval: REQUIRED — Sage proposes, user confirms
+```
+
+### 3. Check Calendar
+
+Sage can reference the user's calendar availability when discussing commitments.
+
+```
+Tool: check_calendar
+Parameters: { date_range_start: date, date_range_end: date }
+Returns: { free_slots: [{ start, end }], busy_count: number }
+Trigger: User discusses scheduling something
+Approval: Not required (read-only)
+Prerequisite: Google Calendar OAuth (read-only scope)
+```
+
+### 4. Create Intention
+
+Formalizes a stated intention from conversation into a structured, trackable record.
+
+```
+Tool: create_intention
+Parameters: { domain: string, description: string, action_type: enum, frequency?: string, constraints?: json }
+Returns: { intention_id: uuid }
+Trigger: User and Sage agree on a clear commitment
+Approval: REQUIRED — Sage summarizes intent, user confirms
+```
+
+## Approval UX Pattern
+
+The trust ladder governs how Sage requests permission to act:
+
+**Level 0 — SUGGEST ONLY (Day 1, default):**
+
+Sage surfaces information (search results, calendar status) but takes no action. User acts on their own.
+
+**Level 1 — SUGGEST + PREPARE (Week 2-3):**
+
+Sage proposes a specific action with an inline approval card:
+
+> Sage: "I found a yoga class tonight at 6:15 and your calendar is free. Want me to set a reminder?"
+> 
+
+> [Approve] [Not now] [Edit]
+> 
+
+User approves/rejects. Action only executes on explicit approval.
+
+**Level 2+ deferred to Phase 2.**
+
+### Approval Card (new inline component)
+
+Visually distinct from domain cards and chat bubbles. Contains:
+
+- Action description (what Sage wants to do)
+- Context (why — references Life Map intention)
+- [Approve] [Reject] [Edit] buttons
+- Status indicator (pending / approved / rejected)
+
+### New Structured Output Block
+
+```
+[APPROVAL_REQUEST]
+Action: create_reminder
+Description: Set reminder for Tuesday 6:15 PM yoga class
+Context: Aligns with your Health intention to exercise 3x/week
+Parameters: { title: "Yoga class", remind_at: "2026-03-10T18:15:00", domain: "health" }
+[/APPROVAL_REQUEST]
+```
+
+## Streaming with Tool Use
+
+Claude's tool use changes the streaming pattern. The `/api/chat` endpoint must handle:
+
+1. Normal text streaming (existing behavior)
+2. Tool use blocks mid-stream — Sage pauses, emits a tool call, endpoint executes the tool, returns the result to Claude, and streaming resumes
+3. Multiple tool calls in sequence (e.g., search → check calendar → propose reminder)
+
+This requires refactoring the SSE handler from a simple text-delta loop to a state machine that can handle `content_block_start`, `tool_use`, and `tool_result` events.
+
+---
+
+# Agentic Data Model Extensions
+
+*These tables extend the existing schema for Phases 1-2.*
+
+## Intentions (Phase 1)
+
+```
+intentions
+- id: uuid (PK)
+- user_id: uuid (FK → users)
+- domain: text (one of 8 life domains)
+- description: text ("exercise 3x per week")
+- action_type: enum ('schedule', 'find', 'remind', 'connect', 'research', 'habit')
+- frequency: text ('daily', 'weekly', '3x_per_week', 'one_time') nullable
+- constraints: jsonb (time preference, budget, location, etc.) nullable
+- status: enum ('active', 'paused', 'completed', 'abandoned')
+- sage_context: text (why this matters, from conversation)
+- source_session_id: uuid (FK → sessions) nullable
+- created_at: timestamptz
+- updated_at: timestamptz
+```
+
+## Reminders (Phase 1)
+
+```
+reminders
+- id: uuid (PK)
+- user_id: uuid (FK → users)
+- intention_id: uuid (FK → intentions) nullable
+- title: text
+- description: text nullable
+- remind_at: timestamptz
+- status: enum ('pending', 'sent', 'dismissed', 'acted_on')
+- domain: text nullable
+- created_at: timestamptz
+```
+
+## Agent Actions (Phase 2)
+
+```
+agent_actions
+- id: uuid (PK)
+- user_id: uuid (FK → users)
+- intention_id: uuid (FK → intentions) nullable
+- agent_type: text ('search', 'calendar', 'reminder', 'email', 'booking')
+- action_description: text
+- tool_calls: jsonb (full log of tool invocations)
+- result: text
+- user_approved: boolean nullable
+- user_feedback: text nullable
+- outcome: enum ('success', 'failed', 'cancelled', 'pending') nullable
+- created_at: timestamptz
+```
+
+## User Preferences (Phase 2)
+
+```
+user_preferences
+- id: uuid (PK)
+- user_id: uuid (FK → users)
+- category: text ('scheduling', 'communication', 'health', 'work', etc.)
+- key: text ('preferred_exercise_time', 'morning_person', etc.)
+- value: jsonb
+- confidence: decimal (0-1, increases with evidence)
+- learned_from: enum ('explicit', 'inferred')
+- evidence_count: integer
+- created_at: timestamptz
+- updated_at: timestamptz
+```
+
+## Approval Queue (Phase 2)
+
+```
+approval_queue
+- id: uuid (PK)
+- user_id: uuid (FK → users)
+- intention_id: uuid (FK → intentions) nullable
+- action_type: text
+- message: text ("I found a yoga class Tuesday at 6:15pm. Book it?")
+- options: jsonb (array of choices)
+- context: text (relevant Life Map context)
+- status: enum ('pending', 'approved', 'rejected', 'expired')
+- expires_at: timestamptz nullable
+- created_at: timestamptz
+- resolved_at: timestamptz nullable
+```
+
+---
+
+# OpenClaw Integration Path
+
+*Context: OpenClaw is a three-layer agentic system (Gateway → Channel → LLM) with 100K+ GitHub stars. Its architecture is relevant both as inspiration and as a potential integration target.*
+
+## Why It Matters for MeOS
+
+OpenClaw's memory is flat Markdown ([SOUL.md](http://SOUL.md) + daily logs). MeOS's Life Map is a relational, structured model with temporal patterns and domain-level granularity. This structural richness is the moat — no agent swarm can replicate the guided conversation methodology that builds the Life Map.
+
+## Integration Strategy: Path B with Path A as Growth Hack
+
+**Primary (Path B):** Build MeOS as a full-stack product with its own agent capabilities. Own the conversation, the Life Map, the tool execution, and the approval UX.
+
+**Secondary (Path A growth hack):** Package MeOS as an OpenClaw skill. The Life Map becomes a "[SOUL.md](http://SOUL.md) on steroids" for OpenClaw users — a structured, evolving identity model that OpenClaw agents can query.
+
+## MeOS as OpenClaw Skill (Phase 4)
+
+An OpenClaw skill is a folder with a [`SKILL.md`](http://SKILL.md) containing YAML frontmatter and instructions, plus optional tool definitions.
+
+```yaml
+---
+name: meos-life-map
+description: Access user's structured Life Map — goals, tensions, patterns, and intentions across 8 life domains. Built through guided Sage conversations.
+user-invocable: true
+---
+
+# MeOS Life Map
+
+This skill provides access to the user's Life Map, a structured understanding of who they are and what they want.
+
+## Available Tools
+- get_life_map() — returns full structured Life Map
+- get_domain_status(domain) — returns one domain's current state
+- get_active_intentions() — returns active intentions with context
+- get_patterns() — returns behavioral patterns detected over time
+- check_intention_alignment(proposed_action) — checks if an action aligns with user's goals
+```
+
+This skill surfaces the same data that an MCP server would expose, just in OpenClaw's native format.
+
+## MeOS MCP Server (Phase 3)
+
+The Life Map exposed via Model Context Protocol for any AI system to query:
+
+**Tools:**
+
+- `get_life_map()` — full Life Map JSON
+- `get_domain_status(domain)` — single domain detail
+- `get_active_intentions()` — current stated intentions
+- `get_patterns()` — active behavioral patterns
+- `get_anti_goals()` — what user is NOT doing
+- `check_intention_alignment(action)` — does this action align with goals?
+- `update_domain(domain, changes)` — update after agent action
+- `log_agent_action(action, result)` — record what agents did
+
+**Resources (read-only context):**
+
+- `meos://life-map/current` — full Life Map
+- `meos://sessions/recent` — last 5 session summaries
+- `meos://patterns/active` — active patterns
+- `meos://intentions/current` — current weekly intention
+
+---
+
+# Build Sequence: Q1 2026 (Current Plan)
+
+Sprint 1 code is complete. We are now in the testing and agentic evolution phase.
+
+## Week 1 (Feb 13-19): Audit & Fix
+
+- Self-test full flow end-to-end, document friction points
+- Fix top 5 blockers (voice reliability, parser edge cases, session state, loading states, mobile viewport)
+- Deploy to production (Vercel + Supabase)
+- Set up basic analytics (Supabase logging)
+- Schedule 5-8 user tests
+- Begin OpenClaw exploration (clone, read, run locally)
+
+## Week 2 (Feb 20-26): First User Tests + OpenClaw Deep Dive
+
+- Run 5-8 user tests with observation + post-session interviews
+- Document findings in structured feedback log
+- Identify top 3 conversation design issues
+- OpenClaw: understand [SOUL.md](http://SOUL.md) + agent architecture, run personally, write comparison doc
+
+## Week 3 (Feb 27 - Mar 5): Rapid Iteration + First POS Module
+
+- Rewrite Sage prompts based on real transcripts (highest-leverage work)
+- Fix top 3-5 UX friction points from testing
+- Run 3-5 more tests with improved version
+- Set up VAPID keys + real push notification delivery
+- **Build first POS module: Daily Journal.** 2-minute conversational reflection — Sage asks 1-2 questions, user responds, response updates Life Map passively. Proves the kernel architecture and gives users daily utility between check-ins.
+- Begin OpenClaw exploration (background — deprioritized vs. POS modules)
+
+## Week 4 (Mar 6-12): Expand Beta + POS Modules + Tool Use
+
+- Expand to 15-20 beta users (network + targeted community DMs)
+- Set up feedback channel (Discord/WhatsApp)
+- **Build POS module 2: Quick Notes/Capture.** Zero-friction input ("Hey Sage, remind me..." / "Had a thought about X") that feeds Life Map passively. Entry point for second brain.
+- **Build POS module 3: Day Planner.** Sage pulls from calendar + Life Map priorities to help plan the day. Requires calendar OAuth (below).
+- Implement web search tool in Sage conversations (Claude tool use)
+- Implement reminder creation with push delivery
+- Add Google Calendar read access (OAuth) — moved up from Week 5 to support Day Planner
+- Design and build approval UX pattern
+
+## Week 5 (Mar 13-19): Retention Week + Agentic Wiring
+
+- Monitor first check-in cohort: completion rate, "feeling known" signal
+- Analyze drop-off, reach out to non-returners
+- Tune check-in prompts based on real data
+- Add Google Calendar read access (OAuth)
+- Wire up intentions table from conversations
+- Build daily nudge prototype (cron → check intentions → push)
+
+## Week 6 (Mar 20-26): Pattern Detection + Polish
+
+- Implement post-session pattern detection (recurring themes, sentiment trends, commitment follow-through)
+- Surface patterns in check-in prompts
+- Build Life Map changelog
+- Full UX polish pass
+- Sage voice/tone consistency audit from real transcripts
+- Performance pass (streaming, transcription, transitions)
+
+## Week 7 (Mar 27-31): Q1 Close + Strategic Decision
+
+- Compile Q1 metrics (completion, retention, session length, voice/text split, tool adoption)
+- Deep user interviews (3-5)
+- Make OpenClaw Path A/B/Hybrid decision with data
+- Write Q2 plan (monetization, beta expansion, agentic depth, content marketing)
+- Update all strategy docs
+
+## Explicitly Out of Scope for Q1
+
+- Monetization / Stripe / paywall
+- Daily nudging beyond prototype
 - Content intake (newsletters, podcasts)
 - Habit tracking
 - Social / public features
 - Native mobile app
-- Payment / Stripe
-- TTS (text-to-speech for Sage responses)
-- Fancy data visualizations
-- Pattern detection beyond basic theme tracking
+- TTS for Sage responses
+- Monthly/quarterly review session types
+- Background orchestrator (Phase 2 — Q2)
+- MCP server (Phase 3 — Q2-Q3)
+- OpenClaw skill publish (Phase 4 — Q2-Q3)
 
 ---
 
-# Full Sprint Roadmap (Post-MVP)
+# Success Metrics
 
-## Sprint 2: Test With Real Humans (Weeks 2-3)
-
-- Put 15-30 people through the full loop (life mapping + at least 2 weekly check-ins)
-- Qualitative feedback after each session (short interview or survey)
-- Rapid iteration on conversation design: question ordering, tone, pacing, domain card formatting
-- Test voice vs. text preference split
-- Identify drop-off points in the life mapping conversation
-
-**Success criteria:**
-
-- 70%+ complete the life mapping session
-- 50%+ who complete life mapping do at least 2 weekly check-ins
-- Users express "this gets me" or "I feel clearer" sentiment
-
-## Sprint 3: Refinement + Expand Beta (Weeks 3-5)
-
-- Harden the product based on Sprint 2 feedback
-- Fix the top 3-5 UX friction points
-- Improve Sage's conversation quality (prompt refinement based on real transcripts)
-- Expand to 50-100 users
-- Start content flywheel: document the build publicly, share user stories (with permission)
-
-## Sprint 4: Monetization + Public Launch (Weeks 6-8)
-
-- Implement freemium gate: free life mapping + 2 check-ins/month, Pro $15-20/month for unlimited
-- Stripe integration for subscription billing
-- Product Hunt launch
-- Content push: "I have ADHD and built an AI life partner" viral video, Reddit posts, community seeding
-- Target subreddits: r/ADHD, r/productivity, r/getdisciplined
-- Notion/Obsidian communities: "for everyone who bounced off these tools"
-
-## Sprint 5: Daily Nudging Layer (Weeks 8-10)
-
-**Only proceed if retention from Sprints 2-3 is strong.**
-
-- Morning nudge: "Today you said you wanted to focus on X. Your one thing is Y."
-- Micro-prompts: "You mentioned wanting to reconnect with Z. Want to send them a message today?"
-- Pattern alerts: "Your mood has been trending down for two weeks. Want to talk about it?"
-- Win acknowledgment: "You've been consistent with morning walks for 3 weeks. That's real."
-- Design principle: These should feel like a thoughtful friend texting you, not an app sending notifications. Sparse, well-timed, personalized.
-
-## Sprint 6+: Platform Expansion (Month 3+)
-
-- Habit stacking: design and adapt habit routines tied to goals
-- Content/learning integration: pull in newsletters, podcasts, articles and connect to interest graph
-- Project management: decompose goals into projects with milestones
-- Knowledge graph: all conversations and inputs create a searchable map of user's thinking
-- Monthly and quarterly review cadences
-- Consider: Custom GPT in GPT Store for free distribution, WhatsApp bot for zero-friction entry
-
----
-
-# Success Metrics (Sprint 2: Testing)
-
-**For Life Mapping (the magic moment):**
+## Life Mapping (the magic moment)
 
 - Do 70%+ of testers complete the life mapping session?
 - Do they express something like "this gets me" or "I feel clearer"?
 - Do they want to come back for a check-in?
+- How long does the session take? (target: 15-30 min)
+- Voice vs text split?
 
-**For Weekly Check-Ins (the retention loop):**
+## Weekly Check-Ins (the retention loop)
 
 - Do 50%+ of users who complete life mapping do at least 2 weekly check-ins?
-- Do check-ins feel meaningfully different from the initial mapping (AI references context, surfaces patterns)?
+- Do check-ins feel meaningfully different from the initial mapping?
 - Do users report feeling "known" or "understood"?
+- Week-over-week retention curve?
 
-**Qualitative signals we're looking for:**
+## Tool Use (the agentic wedge)
+
+- Do users engage with tool suggestions (search, reminders)?
+- Approval rate on Sage's action proposals?
+- Do reminders actually drive behavior? (acted_on vs dismissed)
+- Does tool use increase check-in return rate?
+
+## Qualitative signals we're looking for
 
 - "I've never had an app understand me like this"
 - "It remembered what I said last week"
 - "It called me out on something I was avoiding"
 - "I want to keep doing this"
+- "It actually helped me do the thing" (agentic signal)
 
 ---
 
-# Open Questions for Post-MVP
+# Q2 Roadmap (Tentative — Depends on Q1 Data)
 
-- How do we handle users who want to redo their life mapping from scratch vs. iterate on the existing one?
+*Only firm up after Week 7 strategic decision.*
+
+## If retention is strong (50%+ weekly return):
+
+- **Month 1:** Monetization (Stripe, freemium gate), public launch prep
+- **Month 2:** Background orchestrator (Phase 2), daily nudging layer, content marketing push
+- **Month 3:** MCP server (Phase 3), OpenClaw skill publish (Phase 4), expand to 500+ users
+
+## If retention is weak but life mapping is strong:
+
+- **Month 1:** Deep dive on retention blockers, test different check-in cadences/formats
+- **Month 2:** Consider pivoting to Life Map as standalone product (Path A)
+- **Month 3:** MCP server to make Life Map the identity layer for other systems
+
+## If both are weak:
+
+- **Month 1:** Rethink core thesis. Is the product the conversation methodology, not the app?
+- **Month 2:** Test as a Custom GPT / Claude Project (zero infrastructure, pure conversation)
+- **Month 3:** Decide: iterate or pivot
+
+---
+
+# Open Questions
+
+## Answered
+
+- **Rebuild or extend the Sprint 1 codebase?** Extend. Architecture is aligned with agentic vision. Pending Claude Code diagnostic to confirm. (Feb 13, 2026)
+- **OpenClaw: compete or integrate?** Both. Path B (own product) with Path A (OpenClaw skill) as growth hack. Life Map's structured data model is the moat vs OpenClaw's flat [SOUL.md](http://SOUL.md). (Feb 13, 2026)
+- **When to introduce tool use?** Week 4-5 of Q1. After validating the core conversation works with real users. Don't add hands before the brain is proven. (Feb 13, 2026)
+- **What's the right build sequence?** User testing first (Weeks 1-3), tool use second (Weeks 4-5), pattern detection third (Week 6). Never build features before validating the foundation. (Feb 13, 2026)
+
+## Still Open
+
+- How do we handle users who want to redo life mapping from scratch vs. iterate?
 - What's the right cadence for monthly and quarterly reviews?
-- When and how do we introduce the daily nudging layer?
-- How do we handle sensitive mental health disclosures? (Need clear guardrails for Sage)
+- How do we handle sensitive mental health disclosures? (Need guardrails for Sage)
 - What's the data retention and privacy policy?
-- When do we introduce monetization without killing early adoption?
+- When exactly to introduce monetization? (Depends on Q1 retention data)
+- How much should Sage's tool use be visible vs. ambient? (Learn from user testing)
+- What's the right balance of proactive nudges vs. being annoying? (Learn from daily nudge prototype)
+- Should the MCP server be read-only or allow external agents to update the Life Map? (Security implications)
