@@ -25,6 +25,8 @@ export interface HomeData {
   quarterTheme: string | null
   daysSinceMapping: number | null
   reflectionNudge: ReflectionNudge | null
+  activeSessionId: string | null
+  activeSessionType: string | null
 }
 
 function getTimeGreeting(): string {
@@ -118,6 +120,26 @@ export async function getHomeData(
   if (onboardingCompleted && user?.next_checkin_at) {
     nextCheckinDate = user.next_checkin_at
     checkinOverdue = new Date(user.next_checkin_at) <= new Date()
+  }
+
+  // Check for active session
+  let activeSessionId: string | null = null
+  let activeSessionType: string | null = null
+
+  if (onboardingCompleted) {
+    const { data: activeSession } = await supabase
+      .from('sessions')
+      .select('id, session_type')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (activeSession) {
+      activeSessionId = activeSession.id
+      activeSessionType = activeSession.session_type
+    }
   }
 
   // Read from markdown files
@@ -241,5 +263,7 @@ export async function getHomeData(
     quarterTheme,
     daysSinceMapping,
     reflectionNudge,
+    activeSessionId,
+    activeSessionType,
   }
 }
