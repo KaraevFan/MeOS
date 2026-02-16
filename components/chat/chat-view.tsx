@@ -15,11 +15,12 @@ import { completeSession, updateDomainsExplored, updateSessionSummary } from '@/
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { handleAllFileUpdates } from '@/lib/markdown/file-write-handler'
 import type { FileUpdateData } from '@/types/chat'
-import { savePulseCheckRatings, pulseRatingToDomainStatus } from '@/lib/supabase/pulse-check'
+import { savePulseCheckRatings, pulseRatingToDomainStatus, getLatestRatingsPerDomain } from '@/lib/supabase/pulse-check'
 import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
 import { PinnedContextCard } from './pinned-context-card'
 import { SessionCompleteCard } from './session-complete-card'
 import { SessionHeader } from './session-header'
+import { PulseRatingCard } from './pulse-rating-card'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
 import { PULSE_DOMAINS } from '@/types/pulse-check'
 import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
@@ -143,6 +144,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [pulseCheckRatings, setPulseCheckRatings] = useState<PulseCheckRating[] | null>(null)
   const [sessionCompleted, setSessionCompleted] = useState(false)
   const [nextCheckinDate, setNextCheckinDate] = useState<string | null>(null)
+  const [showCheckinPulse, setShowCheckinPulse] = useState(false)
+  const [checkinPulseSubmitting, setCheckinPulseSubmitting] = useState(false)
+  const [previousRatings, setPreviousRatings] = useState<PulseCheckRating[]>([])
+
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<ChatMessage[]>([])
@@ -439,6 +444,36 @@ Do NOT list all 8 domains back. Keep it conversational.`
     }
   }
 
+  async function handleCheckinPulseSubmit(ratings: PulseCheckRating[]) {
+    if (!sessionId) return
+
+    setCheckinPulseSubmitting(true)
+
+    try {
+      await savePulseCheckRatings(supabase, sessionId, userId, ratings, false)
+      setShowCheckinPulse(false)
+
+      const ratingsText = ratings
+        .map((r) => `- ${r.domain}: ${r.rating} (${r.ratingNumeric}/5)`)
+        .join('\n')
+
+      triggerSageResponse(
+        `The user just re-rated their pulse. Here are the updated ratings:\n${ratingsText}\n\nNow proceed with the closing synthesis: write the FILE_UPDATE blocks.`
+      )
+    } catch {
+      setError("Couldn't save your ratings. Try again.")
+    } finally {
+      setCheckinPulseSubmitting(false)
+    }
+  }
+
+  function handleCheckinPulseSkip() {
+    setShowCheckinPulse(false)
+    triggerSageResponse(
+      'The user skipped the pulse re-rating. Proceed with the closing synthesis: write the FILE_UPDATE blocks.'
+    )
+  }
+
   // Handle ?explore=<domain> from life map CTA
   const exploreHandled = useRef(false)
   const validDomainLabels: string[] = PULSE_DOMAINS.map((d) => d.label)
@@ -597,6 +632,20 @@ Do NOT list all 8 domains back. Keep it conversational.`
         ...(extraSystemContext ? { pulseCheckContext: extraSystemContext } : {}),
         ...(exploreDomain ? { exploreDomain } : {}),
       }, sessionId)
+
+      // Detect [PULSE_CHECK] marker — Sage is asking for a pulse re-rating during check-in
+      if (accumulated.includes('[PULSE_CHECK]')) {
+        try {
+          const ratings = await getLatestRatingsPerDomain(supabase, userId)
+          setPreviousRatings(ratings)
+        } catch {
+          // If we can't fetch previous ratings, show empty card
+          setPreviousRatings([])
+        }
+        setShowCheckinPulse(true)
+        // Don't process FILE_UPDATE blocks yet — Sage will emit those after the re-rating
+        return
+      }
 
       // Handle structured blocks — persist to life map and manage session lifecycle
       const hasBlock = accumulated.includes('[FILE_UPDATE') ||
@@ -803,9 +852,9 @@ Do NOT list all 8 domains back. Keep it conversational.`
     )
   }
 
-  // Parse streaming text for display
+  // Parse streaming text for display (strip [PULSE_CHECK] marker)
   const streamingDisplay = streamingText
-    ? parseStreamingChunk(streamingText)
+    ? parseStreamingChunk(streamingText.replace(/\[PULSE_CHECK\]/g, ''))
     : null
 
   return (
@@ -882,7 +931,7 @@ Do NOT list all 8 domains back. Keep it conversational.`
           </>
         )}
 
-        {/* Pulse check card */}
+        {/* Pulse check card (onboarding) */}
         {showPulseCheck && (
           <PulseCheckCard
             onSubmit={handlePulseCheckSubmit}
@@ -891,6 +940,16 @@ Do NOT list all 8 domains back. Keep it conversational.`
             onRetry={() => {
               if (pulseCheckRatings) handlePulseCheckSubmit(pulseCheckRatings)
             }}
+          />
+        )}
+
+        {/* Check-in pulse re-rating card */}
+        {showCheckinPulse && (
+          <PulseRatingCard
+            previousRatings={previousRatings}
+            onSubmit={handleCheckinPulseSubmit}
+            onSkip={handleCheckinPulseSkip}
+            isSubmitting={checkinPulseSubmitting}
           />
         )}
 
@@ -951,9 +1010,9 @@ Do NOT list all 8 domains back. Keep it conversational.`
       {!sessionCompleted && (
         <ChatInput
           onSend={handleSend}
-          disabled={isStreaming || showPulseCheck}
+          disabled={isStreaming || showPulseCheck || showCheckinPulse}
           prefill={prefillText}
-          placeholder={showPulseCheck ? 'Rate your life areas above to begin.' : undefined}
+          placeholder={showPulseCheck ? 'Rate your life areas above to begin.' : showCheckinPulse ? 'Update your pulse ratings above, or skip.' : undefined}
         />
       )}
     </div>

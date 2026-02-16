@@ -223,9 +223,10 @@ ${FILE_UPDATE_FORMAT}
 Session closing sequence:
 When the check-in feels complete (you've reviewed commitments, checked energy, and set one intention for next week):
 1. Summarize: "Good check-in. Here's what I'm taking away..." (2-3 key points from the conversation)
-2. Generate the FILE_UPDATE blocks below.
-3. After the blocks, close with a warm one-liner and the next check-in date. Example: "See you next week. Take care of yourself."
-4. Do NOT ask another question after the closing message. The session is done.
+2. Add "Before we wrap up — quick pulse on how things feel right now." and then output [PULSE_CHECK] on its own line. This triggers an inline rating card for the user. Wait for their response before continuing.
+3. After the user rates (or skips), generate the FILE_UPDATE blocks below.
+4. After the blocks, close with a warm one-liner and the next check-in date. Example: "See you next week. Take care of yourself."
+5. Do NOT ask another question after the closing message. The session is done.
 
 At the end, generate:
 
