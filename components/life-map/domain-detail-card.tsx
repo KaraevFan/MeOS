@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import type { LifeMapDomain } from '@/types/database'
 import { pulseRatingToDomainStatus } from '@/lib/supabase/pulse-check'
 import type { PulseCheckRating } from '@/types/pulse-check'
+import type { TrendDirection } from '@/lib/supabase/pulse-check'
 
 const STATUS_COLORS: Record<string, string> = {
   thriving: 'bg-status-thriving',
@@ -58,12 +60,19 @@ function MarkdownText({ text, className }: { text: string; className?: string })
   )
 }
 
+const TREND_CONFIG: Record<TrendDirection, { arrow: string; label: string; className: string }> = {
+  improving: { arrow: '\u2191', label: 'improving', className: 'text-emerald-600' },
+  declining: { arrow: '\u2193', label: 'declining', className: 'text-accent-terra' },
+  steady: { arrow: '\u2192', label: 'steady', className: 'text-text-secondary' },
+}
+
 interface DomainDetailCardProps {
   domain: LifeMapDomain
   pulseRating?: PulseCheckRating
+  trend?: TrendDirection | null
 }
 
-export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps) {
+export function DomainDetailCard({ domain, pulseRating, trend }: DomainDetailCardProps) {
   const [expanded, setExpanded] = useState(false)
 
   // Domain is "explored" if Sage has written content (current_state exists)
@@ -84,9 +93,13 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
       : (STATUS_LABELS[effectiveStatus] || 'Stable')
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
+      aria-expanded={expanded}
       onClick={() => setExpanded(!expanded)}
-      className="w-full text-left bg-bg-card rounded-lg shadow-sm border border-border p-4 transition-all duration-200 hover:shadow-md"
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(!expanded) } }}
+      className="w-full text-left bg-bg-card rounded-lg shadow-sm border border-border p-4 transition-all duration-200 hover:shadow-md cursor-pointer"
     >
       {/* Collapsed header */}
       <div className="flex items-start justify-between">
@@ -108,6 +121,14 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
         </div>
         <div className="flex items-center gap-2 ml-2 flex-shrink-0">
           <span className="text-[11px] text-text-secondary">{statusLabel}</span>
+          {trend && TREND_CONFIG[trend] && (
+            <span
+              aria-label={TREND_CONFIG[trend].label}
+              className={cn('text-[11px] font-medium', TREND_CONFIG[trend].className)}
+            >
+              {TREND_CONFIG[trend].arrow}
+            </span>
+          )}
           <svg
             width="16"
             height="16"
@@ -210,15 +231,26 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
 
           {/* Only show initial pulse for unexplored domains — explored domains use Sage-assigned status */}
 
-          <p className="text-[11px] text-text-secondary">
-            Last updated {new Date(domain.updated_at).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            })}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] text-text-secondary">
+              Last updated {new Date(domain.updated_at).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            </p>
+            {isExplored && (
+              <Link
+                href={`/chat?type=ad_hoc&explore=${encodeURIComponent(domain.domain_name)}`}
+                onClick={(e) => e.stopPropagation()}
+                className="text-xs font-medium text-primary hover:text-primary-hover transition-colors"
+              >
+                Talk to Sage about this
+              </Link>
+            )}
+          </div>
         </div>
       )}
-    </button>
+    </div>
   )
 }

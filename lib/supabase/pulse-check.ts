@@ -83,6 +83,91 @@ export async function getBaselineRatings(
   }))
 }
 
+export type TrendDirection = 'improving' | 'declining' | 'steady'
+
+/**
+ * Get trend direction for each domain by comparing the two most recent ratings.
+ * Returns null for domains with fewer than 2 data points.
+ */
+export async function getDomainTrends(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<Record<string, TrendDirection | null>> {
+  // 8 domains × 2 ratings each = 16 max needed
+  const { data, error } = await supabase
+    .from('pulse_check_ratings')
+    .select('domain_name, rating_numeric, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(16)
+
+  if (error) throw error
+  if (!data || data.length === 0) return {}
+
+  // Group by domain and take the two most recent per domain
+  const byDomain = new Map<string, number[]>()
+  for (const row of data) {
+    const name = row.domain_name as string
+    const ratings = byDomain.get(name) || []
+    if (ratings.length < 2) {
+      ratings.push(row.rating_numeric as number)
+      byDomain.set(name, ratings)
+    }
+  }
+
+  const trends: Record<string, TrendDirection | null> = {}
+  for (const [domain, ratings] of byDomain) {
+    if (ratings.length < 2) {
+      trends[domain] = null
+    } else {
+      // ratings[0] is the latest, ratings[1] is the previous
+      const [latest, previous] = ratings
+      if (latest > previous) trends[domain] = 'improving'
+      else if (latest < previous) trends[domain] = 'declining'
+      else trends[domain] = 'steady'
+    }
+  }
+
+  return trends
+}
+
+/**
+ * Get the most recent rating per domain for pre-populating re-rating cards.
+ */
+export async function getLatestRatingsPerDomain(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<PulseCheckRating[]> {
+  // 8 domains × 1 rating each = 8 max needed
+  const { data, error } = await supabase
+    .from('pulse_check_ratings')
+    .select('domain_name, rating, rating_numeric, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(8)
+
+  if (error) throw error
+  if (!data || data.length === 0) return []
+
+  // Take the most recent per domain
+  const seen = new Set<string>()
+  const latest: PulseCheckRating[] = []
+  for (const row of data) {
+    const name = row.domain_name as string
+    if (!seen.has(name)) {
+      seen.add(name)
+      latest.push({
+        domain: name,
+        domainKey: domainToKey(name),
+        rating: row.rating as PulseRating,
+        ratingNumeric: row.rating_numeric as number,
+      })
+    }
+  }
+
+  return latest
+}
+
 /** Map pulse check rating to life map domain status */
 export function pulseRatingToDomainStatus(rating: PulseRating): DomainStatus {
   switch (rating) {

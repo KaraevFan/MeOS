@@ -59,6 +59,11 @@ export const SESSION_WRITE_PERMISSIONS: Record<string, string[]> = {
   ad_hoc: [
     'sage/',
   ],
+  /** Ad-hoc session with domain exploration — allows writing to the explored domain */
+  ad_hoc_explore: [
+    'life-map/',
+    'sage/',
+  ],
 }
 
 /** Maximum FILE_UPDATE blocks per message (rate limit) */

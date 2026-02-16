@@ -3,6 +3,7 @@ import { ALL_DOMAINS } from '@/lib/constants'
 import { DomainDetailCard } from './domain-detail-card'
 import type { LifeMapDomain } from '@/types/database'
 import type { PulseCheckRating } from '@/types/pulse-check'
+import type { TrendDirection } from '@/lib/supabase/pulse-check'
 
 const PULSE_RATING_COLORS: Record<string, string> = {
   thriving: 'bg-status-thriving',
@@ -23,9 +24,10 @@ const PULSE_RATING_LABELS: Record<string, string> = {
 interface DomainGridProps {
   domains: LifeMapDomain[]
   baselineRatings?: PulseCheckRating[] | null
+  domainTrends?: Record<string, TrendDirection | null>
 }
 
-export function DomainGrid({ domains, baselineRatings }: DomainGridProps) {
+export function DomainGrid({ domains, baselineRatings, domainTrends }: DomainGridProps) {
   const domainMap = new Map(domains.map((d) => [d.domain_name, d]))
   const ratingMap = new Map((baselineRatings || []).map((r) => [r.domain, r]))
 
@@ -53,7 +55,8 @@ export function DomainGrid({ domains, baselineRatings }: DomainGridProps) {
           {explored.map((domainName) => {
             const domain = domainMap.get(domainName)!
             const pulseRating = ratingMap.get(domainName)
-            return <DomainDetailCard key={domainName} domain={domain} pulseRating={pulseRating} />
+            const trend = domainTrends?.[domainName] ?? undefined
+            return <DomainDetailCard key={domainName} domain={domain} pulseRating={pulseRating} trend={trend} />
           })}
         </div>
       )}

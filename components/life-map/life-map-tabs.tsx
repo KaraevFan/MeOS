@@ -8,6 +8,7 @@ import { LifePlanView } from './life-plan-view'
 import type { LifeMap, LifeMapDomain } from '@/types/database'
 import type { PulseCheckRating } from '@/types/pulse-check'
 import type { Commitment } from '@/lib/markdown/extract'
+import type { TrendDirection } from '@/lib/supabase/pulse-check'
 
 export interface LifePlanData {
   quarterTheme: string | null
@@ -20,6 +21,7 @@ interface LifeMapTabsProps {
   lifeMap: LifeMap
   domains: LifeMapDomain[]
   baselineRatings: PulseCheckRating[]
+  domainTrends?: Record<string, TrendDirection | null>
   lifePlanData: LifePlanData
 }
 
@@ -27,6 +29,7 @@ export function LifeMapTabs({
   lifeMap,
   domains,
   baselineRatings,
+  domainTrends,
   lifePlanData,
 }: LifeMapTabsProps) {
   const [activeTab, setActiveTab] = useState<Tab>('where-i-am')
@@ -38,7 +41,7 @@ export function LifeMapTabs({
     return (
       <div className="space-y-lg">
         <SynthesisSection lifeMap={lifeMap} />
-        <DomainGrid domains={domains} baselineRatings={baselineRatings} />
+        <DomainGrid domains={domains} baselineRatings={baselineRatings} domainTrends={domainTrends} />
       </div>
     )
   }
@@ -50,7 +53,7 @@ export function LifeMapTabs({
       {activeTab === 'where-i-am' ? (
         <div className="space-y-lg">
           <SynthesisSection lifeMap={lifeMap} />
-          <DomainGrid domains={domains} baselineRatings={baselineRatings} />
+          <DomainGrid domains={domains} baselineRatings={baselineRatings} domainTrends={domainTrends} />
         </div>
       ) : (
         <LifePlanView

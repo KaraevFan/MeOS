@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { buildConversationContext } from '@/lib/ai/context'
+import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import Anthropic from '@anthropic-ai/sdk'
 import type { SessionType } from '@/types/chat'
 
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
     sessionType: SessionType
     messages: { role: 'user' | 'assistant'; content: string }[]
     pulseCheckContext?: string
+    exploreDomain?: string
   }
 
   try {
@@ -66,7 +68,7 @@ export async function POST(request: Request) {
     })
   }
 
-  const { sessionId, sessionType, messages, pulseCheckContext } = body
+  const { sessionId, sessionType, messages, pulseCheckContext, exploreDomain } = body
 
   // Validate session ownership
   const { data: sessionCheck } = await supabase
@@ -95,7 +97,13 @@ export async function POST(request: Request) {
   // Build system prompt with context
   let systemPrompt: string
   try {
-    systemPrompt = await buildConversationContext(sessionType, user.id)
+    const validatedExploreDomain = exploreDomain && typeof exploreDomain === 'string'
+      && exploreDomain in DOMAIN_FILE_MAP
+      ? exploreDomain
+      : undefined
+    systemPrompt = await buildConversationContext(sessionType, user.id, {
+      exploreDomain: validatedExploreDomain,
+    })
 
     // Inject pulse check context if provided (length-limited to prevent prompt injection abuse)
     // TODO: Reconstruct pulse context server-side from DB instead of accepting client text

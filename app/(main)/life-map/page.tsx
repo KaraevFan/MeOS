@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getBaselineRatings } from '@/lib/supabase/pulse-check'
+import { getBaselineRatings, getDomainTrends } from '@/lib/supabase/pulse-check'
+import type { TrendDirection } from '@/lib/supabase/pulse-check'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { FILE_TO_DOMAIN_MAP, DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { extractMarkdownSection, extractBulletList, extractCommitments } from '@/lib/markdown/extract'
@@ -96,11 +97,12 @@ export default async function LifeMapPage() {
     ? existingDomainFiles.map((d) => d.file_path.replace('life-map/', '').replace('.md', ''))
     : Object.values(DOMAIN_FILE_MAP) // Fallback to reading all if file_index unavailable
 
-  // Read overview + life plan + existing domains + baseline ratings in parallel
-  const [overview, lifePlan, baselineRatings, ...domainFileResults] = await Promise.allSettled([
+  // Read overview + life plan + existing domains + baseline ratings + trends in parallel
+  const [overview, lifePlan, baselineRatings, domainTrends, ...domainFileResults] = await Promise.allSettled([
     ufs.readOverview(),
     ufs.readLifePlan(),
     getBaselineRatings(supabase, user.id),
+    getDomainTrends(supabase, user.id),
     ...existingDomainFilenames.map(async (filename) => {
       const file = await ufs.readDomain(filename)
       if (!file) return null
@@ -113,6 +115,7 @@ export default async function LifeMapPage() {
   const overviewData = overview.status === 'fulfilled' ? overview.value : null
   const lifePlanData = lifePlan.status === 'fulfilled' ? lifePlan.value : null
   const baselineRatingsData = (baselineRatings.status === 'fulfilled' ? baselineRatings.value : null) ?? []
+  const trendsData: Record<string, TrendDirection | null> = domainTrends.status === 'fulfilled' ? domainTrends.value : {}
 
   const domains: LifeMapDomain[] = domainFileResults
     .filter((r): r is PromiseFulfilledResult<LifeMapDomain | null> => r.status === 'fulfilled')
@@ -176,6 +179,7 @@ export default async function LifeMapPage() {
         lifeMap={lifeMap}
         domains={domains}
         baselineRatings={baselineRatingsData}
+        domainTrends={trendsData}
         lifePlanData={{ quarterTheme, commitments, thingsToProtect, boundaries: lifePlanBoundaries }}
       />
 
