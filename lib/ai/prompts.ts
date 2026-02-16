@@ -278,8 +278,6 @@ Do NOT update other domains, the overview, life plan, or check-in summaries.`
 
 You may update your working model of the user and note patterns. Do NOT emit domain updates, overview updates, life-plan updates, or check-in summaries. Those belong to structured sessions only.
 
-${FILE_UPDATE_FORMAT}
-
 Only use these file update types in ad-hoc sessions:
 - type="sage-context" — Update your working model of the user
 - type="sage-patterns" — Note new patterns you observe`

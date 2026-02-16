@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import type { LifeMapDomain } from '@/types/database'
 import { pulseRatingToDomainStatus } from '@/lib/supabase/pulse-check'
@@ -74,7 +74,6 @@ interface DomainDetailCardProps {
 
 export function DomainDetailCard({ domain, pulseRating, trend }: DomainDetailCardProps) {
   const [expanded, setExpanded] = useState(false)
-  const router = useRouter()
 
   // Domain is "explored" if Sage has written content (current_state exists)
   const isExplored = Boolean(domain.current_state)
@@ -97,6 +96,7 @@ export function DomainDetailCard({ domain, pulseRating, trend }: DomainDetailCar
     <div
       role="button"
       tabIndex={0}
+      aria-expanded={expanded}
       onClick={() => setExpanded(!expanded)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(!expanded) } }}
       className="w-full text-left bg-bg-card rounded-lg shadow-sm border border-border p-4 transition-all duration-200 hover:shadow-md cursor-pointer"
@@ -122,7 +122,10 @@ export function DomainDetailCard({ domain, pulseRating, trend }: DomainDetailCar
         <div className="flex items-center gap-2 ml-2 flex-shrink-0">
           <span className="text-[11px] text-text-secondary">{statusLabel}</span>
           {trend && TREND_CONFIG[trend] && (
-            <span className={cn('text-[11px] font-medium', TREND_CONFIG[trend].className)}>
+            <span
+              aria-label={TREND_CONFIG[trend].label}
+              className={cn('text-[11px] font-medium', TREND_CONFIG[trend].className)}
+            >
               {TREND_CONFIG[trend].arrow}
             </span>
           )}
@@ -237,15 +240,13 @@ export function DomainDetailCard({ domain, pulseRating, trend }: DomainDetailCar
               })}
             </p>
             {isExplored && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  router.push(`/chat?type=ad_hoc&explore=${encodeURIComponent(domain.domain_name)}`)
-                }}
+              <Link
+                href={`/chat?type=ad_hoc&explore=${encodeURIComponent(domain.domain_name)}`}
+                onClick={(e) => e.stopPropagation()}
                 className="text-xs font-medium text-primary hover:text-primary-hover transition-colors"
               >
                 Talk to Sage about this
-              </button>
+              </Link>
             )}
           </div>
         </div>

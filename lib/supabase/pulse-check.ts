@@ -93,11 +93,13 @@ export async function getDomainTrends(
   supabase: SupabaseClient,
   userId: string
 ): Promise<Record<string, TrendDirection | null>> {
+  // 8 domains × 2 ratings each = 16 max needed
   const { data, error } = await supabase
     .from('pulse_check_ratings')
     .select('domain_name, rating_numeric, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
+    .limit(16)
 
   if (error) throw error
   if (!data || data.length === 0) return {}
@@ -136,11 +138,13 @@ export async function getLatestRatingsPerDomain(
   supabase: SupabaseClient,
   userId: string
 ): Promise<PulseCheckRating[]> {
+  // 8 domains × 1 rating each = 8 max needed
   const { data, error } = await supabase
     .from('pulse_check_ratings')
     .select('domain_name, rating, rating_numeric, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
+    .limit(8)
 
   if (error) throw error
   if (!data || data.length === 0) return []

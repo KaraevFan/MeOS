@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { buildConversationContext } from '@/lib/ai/context'
+import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import Anthropic from '@anthropic-ai/sdk'
 import type { SessionType } from '@/types/chat'
 
@@ -97,7 +98,8 @@ export async function POST(request: Request) {
   let systemPrompt: string
   try {
     const validatedExploreDomain = exploreDomain && typeof exploreDomain === 'string'
-      ? exploreDomain.slice(0, 100)
+      && exploreDomain in DOMAIN_FILE_MAP
+      ? exploreDomain
       : undefined
     systemPrompt = await buildConversationContext(sessionType, user.id, {
       exploreDomain: validatedExploreDomain,
