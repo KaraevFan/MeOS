@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import type { LifeMapDomain } from '@/types/database'
 import { pulseRatingToDomainStatus } from '@/lib/supabase/pulse-check'
 import type { PulseCheckRating } from '@/types/pulse-check'
+import type { TrendDirection } from '@/lib/supabase/pulse-check'
 
 const STATUS_COLORS: Record<string, string> = {
   thriving: 'bg-status-thriving',
@@ -59,12 +60,19 @@ function MarkdownText({ text, className }: { text: string; className?: string })
   )
 }
 
+const TREND_CONFIG: Record<TrendDirection, { arrow: string; label: string; className: string }> = {
+  improving: { arrow: '\u2191', label: 'improving', className: 'text-emerald-600' },
+  declining: { arrow: '\u2193', label: 'declining', className: 'text-accent-terra' },
+  steady: { arrow: '\u2192', label: 'steady', className: 'text-text-secondary' },
+}
+
 interface DomainDetailCardProps {
   domain: LifeMapDomain
   pulseRating?: PulseCheckRating
+  trend?: TrendDirection | null
 }
 
-export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps) {
+export function DomainDetailCard({ domain, pulseRating, trend }: DomainDetailCardProps) {
   const [expanded, setExpanded] = useState(false)
   const router = useRouter()
 
@@ -113,6 +121,11 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
         </div>
         <div className="flex items-center gap-2 ml-2 flex-shrink-0">
           <span className="text-[11px] text-text-secondary">{statusLabel}</span>
+          {trend && TREND_CONFIG[trend] && (
+            <span className={cn('text-[11px] font-medium', TREND_CONFIG[trend].className)}>
+              {TREND_CONFIG[trend].arrow}
+            </span>
+          )}
           <svg
             width="16"
             height="16"
