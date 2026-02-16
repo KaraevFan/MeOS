@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { cn } from '@/lib/utils'
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -92,7 +91,7 @@ const CLARIFICATION: ConversationExchange = {
 
 function TypingIndicator() {
   return (
-    <div className="flex items-center gap-1 px-4 py-3">
+    <div className="flex items-center justify-center gap-1.5 py-8">
       {[0, 1, 2].map((i) => (
         <motion.div
           key={i}
@@ -110,39 +109,45 @@ function TypingIndicator() {
   )
 }
 
-// ─── Message Components ─────────────────────────────────
+// ─── Exchange Card ──────────────────────────────────────
 
-function SageMessage({ text }: { text: string }) {
+function ExchangeCard({
+  exchange,
+  exchangeNum,
+  onSelect,
+}: {
+  exchange: ConversationExchange
+  exchangeNum: number
+  onSelect: (option: string) => void
+}) {
   return (
-    <motion.div
-      className="max-w-[85%] self-start"
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      <div className="bg-bg-sage rounded-2xl rounded-bl-md px-4 py-3">
-        {text.split('\n\n').map((paragraph, i) => (
-          <p key={i} className={cn('text-[15px] text-text leading-relaxed', i > 0 && 'mt-3')}>
+    <>
+      <h2 className="text-lg font-medium text-text leading-snug mb-8 text-center">
+        {exchange.sageMessage.split('\n\n').map((paragraph, i) => (
+          <span key={i}>
+            {i > 0 && <><br /><br /></>}
             {paragraph}
-          </p>
+          </span>
+        ))}
+      </h2>
+      <div className="flex flex-col gap-2.5">
+        {exchange.quickReplies.map((option, i) => (
+          <motion.button
+            key={option}
+            type="button"
+            onClick={() => onSelect(option)}
+            className="w-full text-left px-4 py-3.5 rounded-2xl border-[1.5px] border-border bg-bg text-[15px] text-text leading-snug active:bg-primary active:text-white active:border-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, delay: i * 0.06 }}
+            whileTap={{ scale: 0.98 }}
+            aria-label={`${option} (question ${exchangeNum})`}
+          >
+            {option}
+          </motion.button>
         ))}
       </div>
-    </motion.div>
-  )
-}
-
-function UserMessage({ text }: { text: string }) {
-  return (
-    <motion.div
-      className="max-w-[80%] self-end"
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-    >
-      <div className="bg-primary text-white rounded-2xl rounded-br-md px-4 py-3">
-        <p className="text-[15px] leading-relaxed">{text}</p>
-      </div>
-    </motion.div>
+    </>
   )
 }
 
@@ -166,7 +171,6 @@ export function MiniConversation({
   initialReplies,
 }: MiniConversationProps) {
   const prefersReducedMotion = useRef(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   // Check reduced motion preference
   useEffect(() => {
@@ -181,11 +185,6 @@ export function MiniConversation({
   const [replies, setReplies] = useState<QuickReplySelection[]>(initialReplies ?? [])
 
   const exchange1 = EXCHANGE_1_SCRIPTS[intent] ?? EXCHANGE_1_SCRIPTS.exploring
-
-  // Auto-scroll to bottom when content changes
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [phase, replies])
 
   // Handle typing delays
   useEffect(() => {
@@ -210,18 +209,15 @@ export function MiniConversation({
     setReplies(updated)
 
     if (exchange === 1) {
-      // After Exchange 1, show Exchange 2
       setPhase('typing_exchange2')
     } else if (exchange === 2) {
       if (option === 'What do you mean by "gut rating"?') {
         setPhase('typing_clarification')
       } else {
-        // "Let's do it" — complete
         setTimeout(() => onComplete(updated), 400)
         setPhase('complete')
       }
     } else if (exchange === 3) {
-      // After clarification — complete
       setTimeout(() => onComplete(updated), 400)
       setPhase('complete')
     }
@@ -230,12 +226,15 @@ export function MiniConversation({
   // Determine what replies we have
   const exchange1Reply = replies.find((r) => r.exchange === 1)
   const exchange2Reply = replies.find((r) => r.exchange === 2)
-  const clarificationReply = replies.find((r) => r.exchange === 3)
 
-  // Determine which quick replies to show
-  const showExchange1Replies = phase === 'showing_exchange1' && !exchange1Reply
-  const showExchange2Replies = phase === 'showing_exchange2' && !exchange2Reply
-  const showClarificationReplies = phase === 'showing_clarification' && !clarificationReply
+  // Determine which exchange to show
+  const showExchange1 = (phase === 'typing_exchange1' || phase === 'showing_exchange1') && !exchange1Reply
+  const showExchange2 = exchange1Reply && (phase === 'typing_exchange2' || phase === 'showing_exchange2') && !exchange2Reply
+  const showClarification =
+    exchange2Reply &&
+    exchange2Reply.selectedOption === 'What do you mean by "gut rating"?' &&
+    (phase === 'typing_clarification' || phase === 'showing_clarification') &&
+    !replies.find((r) => r.exchange === 3)
 
   return (
     <div className="flex flex-col min-h-[100dvh] relative z-10">
@@ -257,109 +256,77 @@ export function MiniConversation({
         </motion.button>
       </div>
 
-      {/* Chat area */}
+      {/* Card content area — one exchange at a time */}
       <div
-        ref={scrollRef}
-        className="flex-1 flex flex-col gap-3 px-5 pb-6 overflow-y-auto"
+        className="flex-1 flex flex-col items-center justify-center px-6 overflow-y-auto"
         aria-live="polite"
-        aria-label="Conversation with Sage"
+        aria-label="Questions from Sage"
       >
-        {/* Exchange 1: Sage message */}
-        {(phase !== 'typing_exchange1') && (
-          <SageMessage text={exchange1.sageMessage} />
-        )}
-        {phase === 'typing_exchange1' && <TypingIndicator />}
+        <AnimatePresence mode="wait">
+          {showExchange1 && (
+            <motion.div
+              key="exchange1"
+              initial={{ opacity: 0, x: 60 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -60 }}
+              transition={{ duration: 0.35 }}
+              className="w-full max-w-sm"
+            >
+              {phase === 'typing_exchange1' ? (
+                <TypingIndicator />
+              ) : (
+                <ExchangeCard
+                  exchange={exchange1}
+                  exchangeNum={1}
+                  onSelect={(option) => handleQuickReply(1, option)}
+                />
+              )}
+            </motion.div>
+          )}
 
-        {/* Exchange 1: User reply (if selected) */}
-        {exchange1Reply && (
-          <UserMessage text={exchange1Reply.selectedOption} />
-        )}
+          {showExchange2 && (
+            <motion.div
+              key="exchange2"
+              initial={{ opacity: 0, x: 60 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -60 }}
+              transition={{ duration: 0.35 }}
+              className="w-full max-w-sm"
+            >
+              {phase === 'typing_exchange2' ? (
+                <TypingIndicator />
+              ) : (
+                <ExchangeCard
+                  exchange={EXCHANGE_2}
+                  exchangeNum={2}
+                  onSelect={(option) => handleQuickReply(2, option)}
+                />
+              )}
+            </motion.div>
+          )}
 
-        {/* Exchange 2: Sage message */}
-        {phase === 'typing_exchange2' && <TypingIndicator />}
-        {exchange1Reply && phase !== 'typing_exchange2' && (phase === 'showing_exchange2' || exchange2Reply || phase === 'typing_clarification' || phase === 'showing_clarification' || phase === 'complete') && (
-          <SageMessage text={EXCHANGE_2.sageMessage} />
-        )}
-
-        {/* Exchange 2: User reply (if selected) */}
-        {exchange2Reply && (
-          <UserMessage text={exchange2Reply.selectedOption} />
-        )}
-
-        {/* Clarification: Sage message */}
-        {phase === 'typing_clarification' && <TypingIndicator />}
-        {exchange2Reply && exchange2Reply.selectedOption === 'What do you mean by "gut rating"?' && (phase === 'showing_clarification' || clarificationReply || phase === 'complete') && (
-          <SageMessage text={CLARIFICATION.sageMessage} />
-        )}
-
-        {/* Clarification: User reply (if selected) */}
-        {clarificationReply && (
-          <UserMessage text={clarificationReply.selectedOption} />
-        )}
+          {showClarification && (
+            <motion.div
+              key="clarification"
+              initial={{ opacity: 0, x: 60 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -60 }}
+              transition={{ duration: 0.35 }}
+              className="w-full max-w-sm"
+            >
+              {phase === 'typing_clarification' ? (
+                <TypingIndicator />
+              ) : (
+                <ExchangeCard
+                  exchange={CLARIFICATION}
+                  exchangeNum={3}
+                  onSelect={(option) => handleQuickReply(3, option)}
+                />
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-
-      {/* Quick reply buttons — fixed to bottom */}
-      <AnimatePresence mode="wait">
-        {showExchange1Replies && (
-          <QuickReplyBar
-            key="exchange1"
-            options={exchange1.quickReplies}
-            onSelect={(option) => handleQuickReply(1, option)}
-          />
-        )}
-        {showExchange2Replies && (
-          <QuickReplyBar
-            key="exchange2"
-            options={EXCHANGE_2.quickReplies}
-            onSelect={(option) => handleQuickReply(2, option)}
-          />
-        )}
-        {showClarificationReplies && (
-          <QuickReplyBar
-            key="clarification"
-            options={CLARIFICATION.quickReplies}
-            onSelect={(option) => handleQuickReply(3, option)}
-          />
-        )}
-      </AnimatePresence>
     </div>
-  )
-}
-
-// ─── Quick Reply Bar ────────────────────────────────────
-
-function QuickReplyBar({
-  options,
-  onSelect,
-}: {
-  options: string[]
-  onSelect: (option: string) => void
-}) {
-  return (
-    <motion.div
-      className="px-5 pb-8 pt-3 bg-gradient-to-t from-bg via-bg to-transparent"
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 8 }}
-      transition={{ duration: 0.25 }}
-    >
-      <div className="flex flex-col gap-2">
-        {options.map((option, i) => (
-          <motion.button
-            key={option}
-            type="button"
-            onClick={() => onSelect(option)}
-            className="w-full text-left px-4 py-3 rounded-2xl border-[1.5px] border-border bg-bg text-[15px] text-text leading-snug active:bg-primary active:text-white active:border-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: i * 0.06 }}
-            whileTap={{ scale: 0.98 }}
-            aria-label={option}
-          >
-            {option}
-          </motion.button>
-        ))}
-      </div>
-    </motion.div>
   )
 }
