@@ -537,6 +537,7 @@ Do NOT list all 8 domains back. Keep it conversational.`
         sessionType,
         messages: apiMessages,
         pulseCheckContext: pulseContext,
+        ...(exploreDomain ? { exploreDomain } : {}),
       }, currentSessionId)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
@@ -587,6 +588,7 @@ Do NOT list all 8 domains back. Keep it conversational.`
         sessionType,
         messages: apiMessages,
         ...(extraSystemContext ? { pulseCheckContext: extraSystemContext } : {}),
+        ...(exploreDomain ? { exploreDomain } : {}),
       }, sessionId)
 
       // Handle structured blocks — persist to life map and manage session lifecycle
@@ -704,7 +706,8 @@ Do NOT list all 8 domains back. Keep it conversational.`
           const updates: FileUpdateData[] = fileUpdateBlocks.map((b) => b.data)
 
           // Fire writes asynchronously — don't block the UI
-          handleAllFileUpdates(ufs, updates, sessionType).then((results) => {
+          const writeSessionType = (sessionType === 'ad_hoc' && exploreDomain) ? 'ad_hoc_explore' : sessionType
+          handleAllFileUpdates(ufs, updates, writeSessionType).then((results) => {
             for (const r of results) {
               if (!r.success) {
                 console.error(`[ChatView] File write failed: ${r.path} — ${r.error}`)

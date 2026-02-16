@@ -34,7 +34,8 @@ export default async function ChatPage({
   let sessionType: SessionType = 'life_mapping'
   if (requestedType === 'weekly_checkin') {
     sessionType = 'weekly_checkin'
-  } else if (requestedType === 'ad_hoc') {
+  } else if (requestedType === 'ad_hoc' || params.explore) {
+    // Explicit ad-hoc OR domain exploration from Life Map
     sessionType = 'ad_hoc'
   } else if (sessionState.state === 'checkin_due' || sessionState.state === 'checkin_overdue') {
     sessionType = 'weekly_checkin'

@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getLifeMappingPrompt, getWeeklyCheckinBasePrompt, getAdHocPrompt } from './prompts'
 import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
-import type { SessionType } from '@/types/chat'
+import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
+import type { SessionType, DomainName } from '@/types/chat'
 
 /**
  * Fetch user context from markdown files and serialize for system prompt injection.
@@ -17,7 +18,7 @@ import type { SessionType } from '@/types/chat'
  * 6. Flagged domain files (needs_attention / in_crisis only)
  * 7. Active patterns
  */
-async function fetchAndInjectFileContext(userId: string): Promise<string | null> {
+async function fetchAndInjectFileContext(userId: string, exploreDomain?: string): Promise<string | null> {
   const supabase = await createClient()
   const ufs = new UserFileSystem(supabase, userId)
 
@@ -98,6 +99,27 @@ async function fetchAndInjectFileContext(userId: string): Promise<string | null>
     }
   }
 
+  // 6b. Explore domain — inject regardless of status (for "Talk to Sage about this" from Life Map)
+  if (exploreDomain) {
+    const filename = DOMAIN_FILE_MAP[exploreDomain as DomainName]
+    if (filename) {
+      const alreadyInjected = flaggedDomains?.some((d) => d.domain_name === filename)
+      if (!alreadyInjected) {
+        try {
+          const domainFile = await ufs.readDomain(filename)
+          if (domainFile) {
+            const name = domainFile.frontmatter.domain ?? exploreDomain
+            const status = domainFile.frontmatter.status ?? 'unknown'
+            parts.push(`\n=== ${name.toUpperCase()} (${status.replace('_', ' ')}) [EXPLORE TARGET] ===`)
+            parts.push(domainFile.content)
+          }
+        } catch {
+          // Domain file may not exist yet — that's fine
+        }
+      }
+    }
+  }
+
   // 7. Active patterns
   if (patterns.status === 'fulfilled' && patterns.value) {
     parts.push('\nACTIVE PATTERNS:')
@@ -118,18 +140,19 @@ async function fetchAndInjectFileContext(userId: string): Promise<string | null>
  */
 export async function buildConversationContext(
   sessionType: SessionType,
-  userId: string
+  userId: string,
+  options?: { exploreDomain?: string }
 ): Promise<string> {
   let basePrompt: string
   if (sessionType === 'life_mapping') {
     basePrompt = getLifeMappingPrompt()
   } else if (sessionType === 'ad_hoc') {
-    basePrompt = getAdHocPrompt()
+    basePrompt = getAdHocPrompt(options?.exploreDomain)
   } else {
     basePrompt = getWeeklyCheckinBasePrompt()
   }
 
-  const fileContext = await fetchAndInjectFileContext(userId)
+  const fileContext = await fetchAndInjectFileContext(userId, options?.exploreDomain)
 
   if (!fileContext) {
     return basePrompt // New user, no context to inject
