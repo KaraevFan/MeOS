@@ -8,7 +8,6 @@ interface DomainCardProps {
   descriptor?: string
   rating: number | null
   onRate: (value: number) => void
-  isFirst: boolean
   showSageMessage: boolean
   currentIndex: number
   totalDomains: number
@@ -22,7 +21,6 @@ export function DomainCard({
   descriptor,
   rating,
   onRate,
-  isFirst,
   showSageMessage,
   currentIndex,
   totalDomains,
@@ -63,7 +61,7 @@ export function DomainCard({
       <div className="flex-1 flex flex-col items-center justify-center px-6 pb-20">
         {/* Sage message (first domain only) */}
         <AnimatePresence>
-          {isFirst && showSageMessage && (
+          {currentIndex === 0 && showSageMessage && (
             <motion.p
               className="text-[17px] text-text-secondary/60 italic text-center mb-6 select-none"
               initial={{ opacity: 0, y: 8 }}
@@ -100,8 +98,6 @@ export function DomainCard({
             {descriptor}
           </motion.p>
         )}
-
-        {!descriptor && <div className="mb-14" />}
 
         {/* Rating scale */}
         <motion.div

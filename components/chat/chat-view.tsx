@@ -20,6 +20,7 @@ import { isPushSupported, requestPushPermission } from '@/lib/notifications/push
 import { PinnedContextCard } from './pinned-context-card'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
 import { PULSE_DOMAINS } from '@/types/pulse-check'
+import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
 import type { PulseCheckRating } from '@/types/pulse-check'
 import type { SessionState, SessionStateResult } from '@/lib/supabase/session-state'
 import type { Commitment } from '@/lib/markdown/extract'
@@ -239,8 +240,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
             if (intentSession?.metadata && typeof intentSession.metadata === 'object') {
               const meta = intentSession.metadata as Record<string, unknown>
-              onboardingIntent = (meta.onboarding_intent as string) || null
-              onboardingName = (meta.onboarding_name as string) || null
+              onboardingIntent = typeof meta.onboarding_intent === 'string' ? meta.onboarding_intent : null
+              onboardingName = typeof meta.onboarding_name === 'string' ? meta.onboarding_name : null
               if (Array.isArray(meta.onboarding_quick_replies)) {
                 onboardingQuickReplies = meta.onboarding_quick_replies as { exchange: number; selectedOption: string }[]
               }
@@ -319,19 +320,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
                 }
 
                 if (onboardingIntent) {
-                  const INTENT_LABELS: Record<string, string> = {
-                    intentional: 'things are good and they want to be more intentional',
-                    new_start: "they're starting something new",
-                    stuck: "they're feeling stuck or scattered",
-                    tough_time: "they're going through a tough time",
-                    exploring: "they're just exploring",
-                    // Legacy intents (backward compat)
-                    scattered: "they're feeling scattered",
-                    transition: "they're going through a transition",
-                    clarity: 'they want more clarity on what matters',
-                    curious: "they're just curious",
-                  }
-                  const intentLabel = INTENT_LABELS[onboardingIntent] || onboardingIntent
+                  const intentLabel = INTENT_CONTEXT_LABELS[onboardingIntent] || "they didn't specify"
                   contextParts.push(`What brought them here: ${intentLabel}.`)
                 }
 

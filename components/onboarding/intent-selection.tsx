@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
@@ -77,10 +77,15 @@ const ease = [0.25, 0.46, 0.45, 0.94] as const
 
 export function IntentSelection({ onSelect, initialIntent }: IntentSelectionProps) {
   const [selected, setSelected] = useState<string | null>(initialIntent ?? null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  useEffect(() => {
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current) }
+  }, [])
 
   function handleSelect(value: string) {
     setSelected(value)
-    setTimeout(() => onSelect(value), 300)
+    timeoutRef.current = setTimeout(() => onSelect(value), 300)
   }
 
   return (

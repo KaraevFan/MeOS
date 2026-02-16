@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
@@ -13,7 +13,6 @@ export interface QuickReplySelection {
 
 interface MiniConversationProps {
   intent: string
-  userName: string
   onComplete: (quickReplies: QuickReplySelection[]) => void
   onBack: () => void
   initialReplies?: QuickReplySelection[]
@@ -174,14 +173,11 @@ export function MiniConversation({
     prefersReducedMotion.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   }, [])
 
-  // Determine starting phase from initialReplies
-  const getInitialPhase = useCallback((): ConversationPhase => {
+  const [phase, setPhase] = useState<ConversationPhase>(() => {
     if (!initialReplies || initialReplies.length === 0) return 'typing_exchange1'
     if (initialReplies.length === 1) return 'typing_exchange2'
     return 'complete'
-  }, [initialReplies])
-
-  const [phase, setPhase] = useState<ConversationPhase>(getInitialPhase)
+  })
   const [replies, setReplies] = useState<QuickReplySelection[]>(initialReplies ?? [])
 
   const exchange1 = EXCHANGE_1_SCRIPTS[intent] ?? EXCHANGE_1_SCRIPTS.exploring

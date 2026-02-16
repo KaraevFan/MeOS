@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
@@ -34,11 +34,31 @@ interface OnboardingState {
   quickReplies: QuickReplySelection[]
 }
 
+const VALID_STEPS: Step[] = ['intro', 'intent', 'conversation', 'domains', 'summary']
+
+function isValidOnboardingState(value: unknown): value is OnboardingState {
+  if (typeof value !== 'object' || value === null) return false
+  const obj = value as Record<string, unknown>
+  return (
+    typeof obj.step === 'string' && VALID_STEPS.includes(obj.step as Step) &&
+    typeof obj.domainIndex === 'number' &&
+    typeof obj.ratings === 'object' && obj.ratings !== null &&
+    (obj.intent === null || typeof obj.intent === 'string') &&
+    typeof obj.name === 'string' &&
+    Array.isArray(obj.quickReplies)
+  )
+}
+
 function loadSavedState(): OnboardingState | null {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    return JSON.parse(raw) as OnboardingState
+    const parsed: unknown = JSON.parse(raw)
+    if (!isValidOnboardingState(parsed)) {
+      sessionStorage.removeItem(STORAGE_KEY)
+      return null
+    }
+    return parsed
   } catch {
     return null
   }
@@ -83,6 +103,7 @@ const pageTransition = {
 export function OnboardingFlow() {
   const router = useRouter()
   const supabase = createClient()
+  const userRef = useRef<{ id: string } | null>(null)
 
   // Restore from sessionStorage if available
   const [initialized, setInitialized] = useState(false)
@@ -111,24 +132,32 @@ export function OnboardingFlow() {
       if (Object.keys(saved.ratings).length > 0) setShowSageMessage(false)
     }
 
-    // Check for OAuth display name to pre-fill
+    // Cache user and check for OAuth display name to pre-fill
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.user_metadata) {
-        const meta = user.user_metadata
-        const oName = (meta.full_name as string) || (meta.name as string) || undefined
-        if (oName) setOauthName(oName)
-        // If no name set yet, pre-fill from OAuth
-        if (!saved?.name && oName) setName(oName)
+      if (user) {
+        userRef.current = user
+        if (user.user_metadata) {
+          const meta = user.user_metadata
+          const fullName = typeof meta.full_name === 'string' ? meta.full_name : undefined
+          const metaName = typeof meta.name === 'string' ? meta.name : undefined
+          const oName = fullName || metaName || undefined
+          if (oName) setOauthName(oName)
+          // If no name set yet, pre-fill from OAuth
+          if (!saved?.name && oName) setName(oName)
+        }
       }
     })
 
     setInitialized(true)
   }, [supabase.auth])
 
-  // Persist state on every change (after initialization)
+  // Persist state on change (debounced to avoid blocking main thread during typing)
   useEffect(() => {
     if (!initialized) return
-    saveState({ step, domainIndex, ratings, intent, name, quickReplies })
+    const timer = setTimeout(() => {
+      saveState({ step, domainIndex, ratings, intent, name, quickReplies })
+    }, 300)
+    return () => clearTimeout(timer)
   }, [initialized, step, domainIndex, ratings, intent, name, quickReplies])
 
   const goForward = useCallback((nextStep: Step) => {
@@ -144,18 +173,17 @@ export function OnboardingFlow() {
   function handleIntroComplete(userName: string) {
     setName(userName)
 
-    // Save display name to DB (non-blocking)
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        supabase
-          .from('users')
-          .update({ display_name: userName })
-          .eq('id', user.id)
-          .then(({ error }) => {
-            if (error) console.error('Failed to save display name:', error)
-          })
-      }
-    })
+    // Save display name to DB (non-blocking, using cached user)
+    const user = userRef.current
+    if (user) {
+      supabase
+        .from('users')
+        .update({ display_name: userName })
+        .eq('id', user.id)
+        .then(({ error }) => {
+          if (error) console.error('Failed to save display name:', error)
+        })
+    }
 
     goForward('intent')
   }
@@ -211,9 +239,14 @@ export function OnboardingFlow() {
     setSubmitError(null)
 
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
+      // Use cached user, falling back to fresh fetch
+      let user = userRef.current
+      if (!user) {
+        const { data: { user: freshUser } } = await supabase.auth.getUser()
+        if (!freshUser) throw new Error('Not authenticated')
+        user = freshUser
+        userRef.current = freshUser
+      }
 
       // Check for existing active session to prevent duplicates on retry
       const { data: existingSession } = await supabase
@@ -253,31 +286,30 @@ export function OnboardingFlow() {
       }))
 
       // Save pulse check ratings (critical — abort on failure)
-      await savePulseCheckRatings(supabase, sessionId, user.id, pulseRatings, true)
+      const userId = user.id
+      await savePulseCheckRatings(supabase, sessionId, userId, pulseRatings, true)
 
-      // Seed life_map_domains with initial status (non-critical — log errors but continue)
-      try {
-        const lifeMap = await getOrCreateLifeMap(supabase, user.id)
-        await Promise.allSettled(
-          pulseRatings.map((rating) =>
-            upsertDomain(supabase, lifeMap.id, {
-              domain: rating.domain as DomainName,
-              currentState: '',
-              whatsWorking: [],
-              whatsNotWorking: [],
-              keyTension: '',
-              statedIntention: '',
-              status: pulseRatingToDomainStatus(rating.rating),
-            })
+      // Non-critical operations — run in parallel, log errors but continue
+      await Promise.allSettled([
+        // Seed life_map_domains with initial status
+        getOrCreateLifeMap(supabase, userId).then((lifeMap) =>
+          Promise.allSettled(
+            pulseRatings.map((rating) =>
+              upsertDomain(supabase, lifeMap.id, {
+                domain: rating.domain as DomainName,
+                currentState: '',
+                whatsWorking: [],
+                whatsNotWorking: [],
+                keyTension: '',
+                statedIntention: '',
+                status: pulseRatingToDomainStatus(rating.rating),
+              })
+            )
           )
-        )
-      } catch (err) {
-        console.error('Failed to seed life map domains (non-critical):', err)
-      }
+        ).catch((err) => console.error('Failed to seed life map domains:', err)),
 
-      // Store onboarding context in session metadata (non-critical)
-      try {
-        await supabase
+        // Store onboarding context in session metadata
+        supabase
           .from('sessions')
           .update({
             metadata: {
@@ -287,25 +319,26 @@ export function OnboardingFlow() {
             },
           })
           .eq('id', sessionId)
-      } catch (err) {
-        console.error('Failed to store session metadata (non-critical):', err)
-      }
+          .then(({ error }) => {
+            if (error) console.error('Failed to store session metadata:', error)
+          }),
 
-      // Ensure display name is saved (retry if Screen 1 save failed)
-      try {
-        await supabase
+        // Ensure display name is saved (retry if Screen 1 save failed)
+        supabase
           .from('users')
           .update({ display_name: name })
-          .eq('id', user.id)
-      } catch {
-        // Already attempted on Screen 1 — best effort
-      }
+          .eq('id', userId)
+          .then(({ error }) => {
+            if (error) console.error('Failed to save display name:', error)
+          }),
+      ])
 
       // Mark onboarding complete (only after critical data saved)
-      await supabase
+      const { error: completeError } = await supabase
         .from('users')
         .update({ onboarding_completed: true })
-        .eq('id', user.id)
+        .eq('id', userId)
+      if (completeError) console.error('Failed to mark onboarding complete:', completeError)
 
       // Clear saved state
       clearSavedState()
@@ -356,7 +389,6 @@ export function OnboardingFlow() {
             {step === 'conversation' && intent && (
               <MiniConversation
                 intent={intent}
-                userName={name}
                 onComplete={handleConversationComplete}
                 onBack={handleConversationBack}
                 initialReplies={quickReplies.length > 0 ? quickReplies : undefined}
@@ -369,7 +401,6 @@ export function OnboardingFlow() {
                 descriptor={PULSE_DOMAINS[domainIndex].descriptor}
                 rating={ratings[domainIndex] ?? null}
                 onRate={handleDomainRate}
-                isFirst={domainIndex === 0}
                 showSageMessage={showSageMessage}
                 currentIndex={domainIndex}
                 totalDomains={PULSE_DOMAINS.length}
