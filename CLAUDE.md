@@ -14,6 +14,13 @@
 
 When in doubt about product decisions, behavior, or design direction, consult these docs rather than guessing.
 
+### Steering & Priorities
+
+- `Docs/STEERING.md` — Current roadmap, backlog, and decisions log.
+  Read this at session start to understand current priorities.
+  When a feature ships or priorities change, update STEERING.md accordingly.
+  When a new idea is captured (from brainstorms, feedback, or conversation), add it to the appropriate Backlog epic.
+
 ### Generated docs (`Docs/generated/`) — machine-derived reference material:
 
 These are generated from the origin docs + codebase for human readability. Do NOT treat as source of truth — regenerate if stale.
