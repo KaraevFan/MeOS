@@ -36,6 +36,7 @@ interface ChatViewProps {
   exploreDomain?: string
   nudgeContext?: string
   sessionContext?: string
+  resumeSessionId?: string
 }
 
 function StateQuickReplies({
@@ -127,7 +128,7 @@ function getSageOpening(state: string, userName?: string, hasOnboardingPulse?: b
   }
 }
 
-export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain, nudgeContext, sessionContext }: ChatViewProps) {
+export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain, nudgeContext, sessionContext, resumeSessionId }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -173,6 +174,46 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   useEffect(() => {
     async function init() {
       try {
+        // Priority 1: Resume a specific session by ID
+        if (resumeSessionId) {
+          const { data: targetSession } = await supabase
+            .from('sessions')
+            .select('*')
+            .eq('id', resumeSessionId)
+            .eq('user_id', userId)
+            .eq('status', 'active')
+            .single()
+
+          if (targetSession) {
+            setSessionId(targetSession.id)
+
+            const { data: existingMessages } = await supabase
+              .from('messages')
+              .select('*')
+              .eq('session_id', targetSession.id)
+              .order('created_at', { ascending: true })
+
+            if (existingMessages && existingMessages.length > 0) {
+              setMessages(existingMessages.map((m) => ({
+                id: m.id,
+                sessionId: m.session_id,
+                role: m.role as 'user' | 'assistant',
+                content: m.content,
+                hasStructuredBlock: m.has_structured_block,
+                createdAt: m.created_at,
+              })))
+
+              if (targetSession.domains_explored) {
+                setDomainsExplored(new Set(targetSession.domains_explored as DomainName[]))
+              }
+            }
+
+            setIsLoading(false)
+            return
+          }
+          // If target session not found, fall through to normal init
+        }
+
         // Check for active session
         const { data: activeSession } = await supabase
           .from('sessions')
@@ -388,7 +429,7 @@ Do NOT list all 8 domains back. Keep it conversational.`
 
     init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, sessionType])
+  }, [userId, sessionType, resumeSessionId])
 
   async function handlePulseCheckSubmit(ratings: PulseCheckRating[]) {
     if (!sessionId) return

@@ -10,7 +10,7 @@ import type { SessionType } from '@/types/chat'
 export default async function ChatPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; explore?: string; nudge?: string; session_context?: string }>
+  searchParams: Promise<{ type?: string; explore?: string; nudge?: string; session_context?: string; session?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -20,6 +20,46 @@ export default async function ChatPage({
   }
 
   const params = await searchParams
+
+  // If a specific session ID is provided, load it directly (session resume)
+  if (params.session) {
+    const { data: targetSession } = await supabase
+      .from('sessions')
+      .select('id, session_type, status')
+      .eq('id', params.session)
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .single()
+
+    if (targetSession) {
+      const targetType = targetSession.session_type as SessionType
+
+      let targetCommitments: Commitment[] = []
+      if (targetType === 'weekly_checkin') {
+        try {
+          const lifePlan = await new UserFileSystem(supabase, user.id).readLifePlan()
+          if (lifePlan) {
+            targetCommitments = extractCommitments(lifePlan.content)
+          }
+        } catch {
+          // Graceful fallback
+        }
+      }
+
+      return (
+        <div className="fixed inset-0 bottom-16 pb-[env(safe-area-inset-bottom)]">
+          <ChatView
+            userId={user.id}
+            sessionType={targetType}
+            resumeSessionId={targetSession.id}
+            initialCommitments={targetCommitments}
+          />
+        </div>
+      )
+    }
+    // If session not found/not active, fall through to normal routing
+  }
+
   const requestedType = params.type as string | undefined
 
   // Start life plan read early if we already know it's a check-in from URL param

@@ -33,6 +33,24 @@ export async function getActiveSession(
   return { session: data, messages: messages || [] }
 }
 
+/** Lightweight lookup — finds any active session regardless of type (for routing decisions) */
+export async function findActiveSession(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('id, session_type, status, created_at, updated_at')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
 export async function createSession(
   supabase: SupabaseClient,
   userId: string,
