@@ -10,7 +10,7 @@ import type { SessionType } from '@/types/chat'
 export default async function ChatPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; explore?: string }>
+  searchParams: Promise<{ type?: string; explore?: string; nudge?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -20,7 +20,7 @@ export default async function ChatPage({
   }
 
   const params = await searchParams
-  const requestedType = params.type === 'weekly_checkin' ? 'weekly_checkin' : undefined
+  const requestedType = params.type as string | undefined
 
   // Start life plan read early if we already know it's a check-in from URL param
   const lifePlanPromise = requestedType === 'weekly_checkin'
@@ -34,8 +34,13 @@ export default async function ChatPage({
   let sessionType: SessionType = 'life_mapping'
   if (requestedType === 'weekly_checkin') {
     sessionType = 'weekly_checkin'
+  } else if (requestedType === 'ad_hoc') {
+    sessionType = 'ad_hoc'
   } else if (sessionState.state === 'checkin_due' || sessionState.state === 'checkin_overdue') {
     sessionType = 'weekly_checkin'
+  } else if (sessionState.state === 'mapping_complete') {
+    // Between check-ins — default to ad-hoc conversation
+    sessionType = 'ad_hoc'
   }
 
   // Read commitments for weekly check-in pinned context card

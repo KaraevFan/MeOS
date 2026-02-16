@@ -300,6 +300,13 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               setShowPulseCheck(true)
             }
 
+            // Auto-trigger Sage for ad-hoc sessions (context-aware opening from system prompt)
+            if (sessionType === 'ad_hoc' && state === 'mapping_complete') {
+              setTimeout(() => {
+                triggerSageResponse('Generate your opening message. Look at the user\'s life context and open with something specific.')
+              }, 100)
+            }
+
             // Auto-trigger Sage with pulse context for post-onboarding users
             if (hasOnboardingPulse && state === 'new_user') {
               // Fetch the actual ratings

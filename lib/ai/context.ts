@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getLifeMappingPrompt, getWeeklyCheckinBasePrompt } from './prompts'
+import { getLifeMappingPrompt, getWeeklyCheckinBasePrompt, getAdHocPrompt } from './prompts'
 import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import type { SessionType } from '@/types/chat'
@@ -120,9 +120,14 @@ export async function buildConversationContext(
   sessionType: SessionType,
   userId: string
 ): Promise<string> {
-  const basePrompt = sessionType === 'life_mapping'
-    ? getLifeMappingPrompt()
-    : getWeeklyCheckinBasePrompt()
+  let basePrompt: string
+  if (sessionType === 'life_mapping') {
+    basePrompt = getLifeMappingPrompt()
+  } else if (sessionType === 'ad_hoc') {
+    basePrompt = getAdHocPrompt()
+  } else {
+    basePrompt = getWeeklyCheckinBasePrompt()
+  }
 
   const fileContext = await fetchAndInjectFileContext(userId)
 
