@@ -10,32 +10,34 @@ const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') || 'mailto:hello@meos.app'
 
-/**
- * Minimal Web Push implementation for Deno using the Web Crypto API.
- * Sends a push notification to a subscription endpoint.
- */
+type PushResult = 'sent' | 'expired' | 'error'
+
+// Initialize web-push once at module scope (lazy — set on first use)
+let webpushInitialized = false
+
+async function initWebPush() {
+  if (webpushInitialized) return
+  const webpush = await import('npm:web-push@3.6.7')
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY!, VAPID_PRIVATE_KEY!)
+  webpushInitialized = true
+}
+
 async function sendWebPush(
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
   payload: string,
-  vapidPublicKey: string,
-  vapidPrivateKey: string,
-  vapidSubject: string
-): Promise<boolean> {
-  // Import web-push compatible library for Deno
-  // Using the npm: specifier for Deno's Node compatibility
+): Promise<PushResult> {
   try {
+    await initWebPush()
     const webpush = await import('npm:web-push@3.6.7')
-    webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey)
     await webpush.sendNotification(subscription, payload)
-    return true
+    return 'sent'
   } catch (err: unknown) {
     const statusCode = (err as { statusCode?: number }).statusCode
     if (statusCode === 410 || statusCode === 404) {
-      // Subscription expired or invalid — caller should clean up
-      return false
+      return 'expired'
     }
     console.error('Web push send error:', err)
-    return false
+    return 'error'
   }
 }
 
@@ -125,23 +127,21 @@ Deno.serve(async () => {
 
     let anySent = false
     for (const sub of subscriptions) {
-      const success = await sendWebPush(
+      const result = await sendWebPush(
         { endpoint: sub.endpoint, keys: sub.keys },
         payload,
-        VAPID_PUBLIC_KEY,
-        VAPID_PRIVATE_KEY,
-        VAPID_SUBJECT
       )
 
-      if (success) {
+      if (result === 'sent') {
         anySent = true
-      } else {
-        // Clean up expired/invalid subscription
+      } else if (result === 'expired') {
+        // Only delete subscription when definitively expired (410/404)
         await supabase
           .from('push_subscriptions')
           .delete()
           .eq('id', sub.id)
       }
+      // 'error' — transient failure, leave subscription intact
     }
 
     // Mark notification as sent

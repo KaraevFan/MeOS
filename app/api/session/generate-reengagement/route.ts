@@ -73,6 +73,18 @@ export async function POST(request: Request) {
     })
   }
 
+  // Idempotency guard — prevent duplicate content on re-fire
+  const { count } = await supabase
+    .from('scheduled_notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('session_id', sessionId)
+
+  if (count && count > 0) {
+    return new Response(JSON.stringify({ ok: true, skipped: 'already_generated' }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
   try {
     // Build context from recent messages
     const conversationSummary = recentMessages
