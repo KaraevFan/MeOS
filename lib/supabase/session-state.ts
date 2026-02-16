@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ALL_DOMAINS } from '@/lib/constants'
 import type { DomainName } from '@/types/chat'
+import { getDisplayName } from '@/lib/utils'
 
 export type SessionState =
   | 'new_user'
@@ -28,7 +29,7 @@ export async function detectSessionState(
   const [userResult, activeSessionResult, lastCompletedResult] = await Promise.all([
     supabase
       .from('users')
-      .select('onboarding_completed, next_checkin_at, email')
+      .select('onboarding_completed, next_checkin_at, email, display_name')
       .eq('id', userId)
       .single(),
     supabase
@@ -53,9 +54,10 @@ export async function detectSessionState(
   const activeSession = activeSessionResult.data
   const lastCompleted = lastCompletedResult.data
 
-  // Extract first name from email
-  const email = user?.email || ''
-  const userName = email.split('@')[0]?.split(/[._+-]/)[0] || undefined
+  const userName = getDisplayName({
+    display_name: user?.display_name,
+    email: user?.email,
+  }) || undefined
 
   // 1. New user
   if (!user?.onboarding_completed) {

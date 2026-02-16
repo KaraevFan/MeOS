@@ -223,8 +223,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             .limit(1)
             .maybeSingle()
 
-          // Check for session with onboarding intent
+          // Check for session with onboarding context (intent, name, quick replies)
           let onboardingIntent: string | null = null
+          let onboardingName: string | null = null
+          let onboardingQuickReplies: { exchange: number; selectedOption: string }[] = []
           if (existingPulseSession) {
             const { data: intentSession } = await supabase
               .from('sessions')
@@ -238,6 +240,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             if (intentSession?.metadata && typeof intentSession.metadata === 'object') {
               const meta = intentSession.metadata as Record<string, unknown>
               onboardingIntent = (meta.onboarding_intent as string) || null
+              onboardingName = (meta.onboarding_name as string) || null
+              if (Array.isArray(meta.onboarding_quick_replies)) {
+                onboardingQuickReplies = meta.onboarding_quick_replies as { exchange: number; selectedOption: string }[]
+              }
             }
           }
 
@@ -305,13 +311,44 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
                   .map((r) => `- ${r.domain_name}: ${r.rating} (${r.rating_numeric}/5)`)
                   .join('\n')
 
-                const intentContext = onboardingIntent
-                  ? `\nThe user selected "${onboardingIntent}" as their reason for coming to MeOS. Reference this in your opening.`
+                // Build onboarding context parts
+                const contextParts: string[] = []
+
+                if (onboardingName) {
+                  contextParts.push(`The user's name is ${onboardingName}. Greet them by name.`)
+                }
+
+                if (onboardingIntent) {
+                  const INTENT_LABELS: Record<string, string> = {
+                    intentional: 'things are good and they want to be more intentional',
+                    new_start: "they're starting something new",
+                    stuck: "they're feeling stuck or scattered",
+                    tough_time: "they're going through a tough time",
+                    exploring: "they're just exploring",
+                    // Legacy intents (backward compat)
+                    scattered: "they're feeling scattered",
+                    transition: "they're going through a transition",
+                    clarity: 'they want more clarity on what matters',
+                    curious: "they're just curious",
+                  }
+                  const intentLabel = INTENT_LABELS[onboardingIntent] || onboardingIntent
+                  contextParts.push(`What brought them here: ${intentLabel}.`)
+                }
+
+                if (onboardingQuickReplies.length > 0) {
+                  const replyText = onboardingQuickReplies
+                    .map((r) => `"${r.selectedOption}"`)
+                    .join(', ')
+                  contextParts.push(`In our brief intro conversation, they said: ${replyText}.`)
+                }
+
+                const onboardingContext = contextParts.length > 0
+                  ? `\n\nONBOARDING CONTEXT:\n${contextParts.join('\n')}\nReference this context naturally — weave it in, don't robotically list things.`
                   : ''
 
                 const pulseContext = `The user just completed their onboarding pulse check. Here are their self-ratings:
 ${ratingsText}
-${intentContext}
+${onboardingContext}
 Your job now:
 1. Briefly reflect back the overall pattern you see (1-2 sentences). Note any contrasts.
 2. Propose starting with the domain that seems most pressing (lowest rated), but give the user choice.

@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { extractMarkdownSection, extractBulletList, extractCommitments } from '@/lib/markdown/extract'
 import type { Commitment } from '@/lib/markdown/extract'
+import { getDisplayName } from '@/lib/utils'
 
 export interface HomeData {
   greeting: string
@@ -92,15 +93,16 @@ export async function getHomeData(
   // Get user profile
   const { data: user } = await supabase
     .from('users')
-    .select('email, onboarding_completed, next_checkin_at')
+    .select('email, display_name, onboarding_completed, next_checkin_at')
     .eq('id', userId)
     .single()
 
   const onboardingCompleted = user?.onboarding_completed ?? false
 
-  // Extract first name from email
-  const email = user?.email || ''
-  const firstName = email.split('@')[0]?.split(/[._+-]/)[0] || null
+  const firstName = getDisplayName({
+    display_name: user?.display_name,
+    email: user?.email,
+  })
 
   // Use next_checkin_at from users table (set by completeSession)
   let nextCheckinDate: string | null = null
