@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import type { LifeMapDomain } from '@/types/database'
 import { pulseRatingToDomainStatus } from '@/lib/supabase/pulse-check'
@@ -65,6 +66,7 @@ interface DomainDetailCardProps {
 
 export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps) {
   const [expanded, setExpanded] = useState(false)
+  const router = useRouter()
 
   // Domain is "explored" if Sage has written content (current_state exists)
   const isExplored = Boolean(domain.current_state)
@@ -84,9 +86,12 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
       : (STATUS_LABELS[effectiveStatus] || 'Stable')
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => setExpanded(!expanded)}
-      className="w-full text-left bg-bg-card rounded-lg shadow-sm border border-border p-4 transition-all duration-200 hover:shadow-md"
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(!expanded) } }}
+      className="w-full text-left bg-bg-card rounded-lg shadow-sm border border-border p-4 transition-all duration-200 hover:shadow-md cursor-pointer"
     >
       {/* Collapsed header */}
       <div className="flex items-start justify-between">
@@ -210,15 +215,28 @@ export function DomainDetailCard({ domain, pulseRating }: DomainDetailCardProps)
 
           {/* Only show initial pulse for unexplored domains — explored domains use Sage-assigned status */}
 
-          <p className="text-[11px] text-text-secondary">
-            Last updated {new Date(domain.updated_at).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            })}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] text-text-secondary">
+              Last updated {new Date(domain.updated_at).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            </p>
+            {isExplored && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  router.push(`/chat?type=ad_hoc&explore=${encodeURIComponent(domain.domain_name)}`)
+                }}
+                className="text-xs font-medium text-primary hover:text-primary-hover transition-colors"
+              >
+                Talk to Sage about this
+              </button>
+            )}
+          </div>
         </div>
       )}
-    </button>
+    </div>
   )
 }

@@ -19,6 +19,7 @@ import { savePulseCheckRatings, pulseRatingToDomainStatus } from '@/lib/supabase
 import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
 import { PinnedContextCard } from './pinned-context-card'
 import { SessionCompleteCard } from './session-complete-card'
+import { SessionHeader } from './session-header'
 import type { ChatMessage, SessionType, DomainName } from '@/types/chat'
 import { PULSE_DOMAINS } from '@/types/pulse-check'
 import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
@@ -33,6 +34,7 @@ interface ChatViewProps {
   initialCommitments?: Commitment[]
   exploreDomain?: string
   nudgeContext?: string
+  sessionContext?: string
 }
 
 function StateQuickReplies({
@@ -124,7 +126,7 @@ function getSageOpening(state: string, userName?: string, hasOnboardingPulse?: b
   }
 }
 
-export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain, nudgeContext }: ChatViewProps) {
+export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain, nudgeContext, sessionContext }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -303,11 +305,16 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
             // Auto-trigger Sage for ad-hoc sessions (context-aware opening from system prompt)
             if (sessionType === 'ad_hoc' && state === 'mapping_complete') {
-              const nudgeInstruction = nudgeContext
-                ? `The user is responding to this reflection prompt: "${nudgeContext}". Open by acknowledging it and asking how it's landing.`
-                : 'Generate your opening message. Look at the user\'s life context and open with something specific.'
+              let adHocInstruction: string
+              if (sessionContext) {
+                adHocInstruction = sessionContext
+              } else if (nudgeContext) {
+                adHocInstruction = `The user is responding to this reflection prompt: "${nudgeContext}". Open by acknowledging it and asking how it's landing.`
+              } else {
+                adHocInstruction = 'Generate your opening message. Look at the user\'s life context and open with something specific.'
+              }
               setTimeout(() => {
-                triggerSageResponse(nudgeInstruction)
+                triggerSageResponse(adHocInstruction)
               }, 100)
             }
 
@@ -810,6 +817,7 @@ Do NOT list all 8 domains back. Keep it conversational.`
 
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <SessionHeader sessionType={sessionType} exploreDomain={exploreDomain} nudgeContext={nudgeContext} />
         {messages.map((message, index) => {
           const parsed = parseMessage(message.content)
           const isLastMessage = index === messages.length - 1

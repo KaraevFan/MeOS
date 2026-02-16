@@ -39,6 +39,7 @@ export default async function SessionDetailPage({ params }: SessionDetailPagePro
     weekly_checkin: 'Weekly Check-In',
     monthly_review: 'Monthly Review',
     quarterly_review: 'Quarterly Review',
+    ad_hoc: 'Conversation',
   }
 
   const typeLabel = SESSION_TYPE_LABELS[session.session_type] || session.session_type
@@ -102,7 +103,14 @@ export default async function SessionDetailPage({ params }: SessionDetailPagePro
           <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">
             Session summary
           </p>
-          <p className="text-sm text-text">{session.ai_summary}</p>
+          <p className="text-sm text-text mb-3">{session.ai_summary}</p>
+          <Link
+            href={`/chat?type=ad_hoc&session_context=${sessionId}`}
+            className="inline-flex items-center justify-center w-full h-10 px-4 bg-primary text-white text-sm font-medium rounded-md
+                       hover:bg-primary-hover transition-colors"
+          >
+            Talk to Sage about this
+          </Link>
         </div>
       )}
     </div>

@@ -10,7 +10,7 @@ import type { SessionType } from '@/types/chat'
 export default async function ChatPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; explore?: string; nudge?: string }>
+  searchParams: Promise<{ type?: string; explore?: string; nudge?: string; session_context?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -74,6 +74,41 @@ export default async function ChatPage({
     }
   }
 
+  // Load session context if navigating from history "Talk to Sage about this"
+  let sessionContext: string | undefined
+  if (params.session_context && sessionType === 'ad_hoc') {
+    const { data: pastSession } = await supabase
+      .from('sessions')
+      .select('session_type, ai_summary, key_themes, commitments_made, sentiment, created_at')
+      .eq('id', params.session_context)
+      .eq('user_id', user.id)
+      .single()
+
+    if (pastSession?.ai_summary) {
+      const pastDate = new Date(pastSession.created_at).toLocaleDateString('en-US', {
+        month: 'long', day: 'numeric', year: 'numeric',
+      })
+      const pastTypeLabel: Record<string, string> = {
+        life_mapping: 'life mapping', weekly_checkin: 'weekly check-in', ad_hoc: 'conversation',
+      }
+      const parts = [
+        `The user wants to revisit a past ${pastTypeLabel[pastSession.session_type] || 'session'} from ${pastDate}.`,
+        `Session summary: ${pastSession.ai_summary}`,
+      ]
+      if (pastSession.key_themes?.length) {
+        parts.push(`Key themes: ${pastSession.key_themes.join(', ')}`)
+      }
+      if (pastSession.commitments_made?.length) {
+        parts.push(`Commitments discussed: ${pastSession.commitments_made.join(', ')}`)
+      }
+      if (pastSession.sentiment) {
+        parts.push(`Overall sentiment: ${pastSession.sentiment}`)
+      }
+      parts.push('Open by acknowledging this past session and asking what about it the user wants to explore or revisit. Reference specific details from the summary.')
+      sessionContext = parts.join('\n')
+    }
+  }
+
   return (
     <div className="fixed inset-0 bottom-16 pb-[env(safe-area-inset-bottom)]">
       <ChatView
@@ -83,6 +118,7 @@ export default async function ChatPage({
         initialCommitments={commitments}
         exploreDomain={params.explore}
         nudgeContext={nudgeContext}
+        sessionContext={sessionContext}
       />
     </div>
   )

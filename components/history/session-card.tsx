@@ -7,6 +7,7 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
   weekly_checkin: 'Weekly Check-In',
   monthly_review: 'Monthly Review',
   quarterly_review: 'Quarterly Review',
+  ad_hoc: 'Conversation',
 }
 
 interface SessionCardProps {
