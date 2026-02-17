@@ -36,6 +36,7 @@ interface ChatViewProps {
   exploreDomain?: string
   nudgeContext?: string
   sessionContext?: string
+  resumeSessionId?: string
 }
 
 function StateQuickReplies({
@@ -51,7 +52,7 @@ function StateQuickReplies({
   disabled: boolean
   pulseCheckRatings?: PulseCheckRating[] | null
 }) {
-  const buttonClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm bg-bg border border-border text-text hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
+  const buttonClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium bg-bg border border-text-secondary/15 text-text shadow-sm hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
   const primaryClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm bg-primary/10 border border-primary/30 text-primary font-medium hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
 
   switch (state) {
@@ -62,7 +63,7 @@ function StateQuickReplies({
         domains = [...domains].sort((a, b) => (ratingMap.get(a) ?? 3) - (ratingMap.get(b) ?? 3))
       }
       return (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
           {domains.map((d) => (
             <button key={d} onClick={() => onSelect(`Let's explore ${d}`)} disabled={disabled} className={buttonClass}>{d}</button>
           ))}
@@ -73,7 +74,7 @@ function StateQuickReplies({
     }
     case 'mapping_complete':
       return (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
           <button onClick={() => onSelect("I'd like to start my check-in early.")} disabled={disabled} className={primaryClass}>Start check-in early</button>
           <button onClick={() => onSelect("Something's on my mind.")} disabled={disabled} className={buttonClass}>Something on my mind</button>
           <button onClick={() => onSelect("I'd like to update my life map.")} disabled={disabled} className={buttonClass}>Update my life map</button>
@@ -82,14 +83,14 @@ function StateQuickReplies({
     case 'checkin_due':
     case 'checkin_overdue':
       return (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
           <button onClick={() => onSelect("Let's do it.")} disabled={disabled} className={primaryClass}>Let&apos;s do it</button>
           <button onClick={() => onSelect("Not right now.")} disabled={disabled} className={buttonClass}>Not right now</button>
         </div>
       )
     case 'mid_conversation':
       return (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
           <button onClick={() => onSelect("Let's continue.")} disabled={disabled} className={primaryClass}>Continue</button>
           <button onClick={() => onSelect("Start fresh.")} disabled={disabled} className={buttonClass}>Start fresh</button>
         </div>
@@ -127,7 +128,7 @@ function getSageOpening(state: string, userName?: string, hasOnboardingPulse?: b
   }
 }
 
-export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain, nudgeContext, sessionContext }: ChatViewProps) {
+export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain, nudgeContext, sessionContext, resumeSessionId }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -171,12 +172,50 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
   // Initialize session
   useEffect(() => {
+    /** Load messages for a session and hydrate state. Returns true if session was found. */
+    async function loadSessionMessages(sid: string, domains?: DomainName[] | null): Promise<boolean> {
+      const { data: existingMessages } = await supabase
+        .from('messages')
+        .select('id, session_id, role, content, has_structured_block, created_at')
+        .eq('session_id', sid)
+        .order('created_at', { ascending: true })
+
+      if (!existingMessages || existingMessages.length === 0) {
+        // Session exists but has no messages — still set session ID
+        setSessionId(sid)
+        if (domains) setDomainsExplored(new Set(domains))
+        return true
+      }
+
+      setSessionId(sid)
+      setMessages(existingMessages.map((m) => ({
+        id: m.id,
+        sessionId: m.session_id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        hasStructuredBlock: m.has_structured_block,
+        createdAt: m.created_at,
+      })))
+      if (domains) setDomainsExplored(new Set(domains))
+      return true
+    }
+
     async function init() {
       try {
+        // Priority 1: Resume a specific session by ID (server already validated it's active + owned)
+        if (resumeSessionId) {
+          const loaded = await loadSessionMessages(resumeSessionId)
+          if (loaded) {
+            setIsLoading(false)
+            return
+          }
+          // If session not found, fall through to normal init
+        }
+
         // Check for active session
         const { data: activeSession } = await supabase
           .from('sessions')
-          .select('*')
+          .select('id, session_type, domains_explored, status')
           .eq('user_id', userId)
           .eq('session_type', sessionType)
           .eq('status', 'active')
@@ -185,44 +224,30 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           .single()
 
         if (activeSession) {
-          setSessionId(activeSession.id)
-
-          // Load existing messages
-          const { data: existingMessages } = await supabase
-            .from('messages')
-            .select('*')
-            .eq('session_id', activeSession.id)
-            .order('created_at', { ascending: true })
-
-          if (existingMessages && existingMessages.length > 0) {
-            setMessages(existingMessages.map((m) => ({
-              id: m.id,
-              sessionId: m.session_id,
-              role: m.role as 'user' | 'assistant',
-              content: m.content,
-              hasStructuredBlock: m.has_structured_block,
-              createdAt: m.created_at,
-            })))
-
-            // Restore explored domains
-            if (activeSession.domains_explored) {
-              setDomainsExplored(new Set(activeSession.domains_explored as DomainName[]))
-            }
-          }
+          await loadSessionMessages(activeSession.id, activeSession.domains_explored as DomainName[] | null)
 
           // Show pulse check if new user hasn't completed it yet
           // (handles page refresh, HMR, and StrictMode double-mount)
           const isNewUser = initialSessionState?.state === 'new_user'
-          const hasNoUserMessages = !existingMessages?.some((m) => m.role === 'user')
-          if (isNewUser && sessionType === 'life_mapping' && hasNoUserMessages) {
-            const { data: ratings } = await supabase
-              .from('pulse_check_ratings')
+          if (isNewUser && sessionType === 'life_mapping') {
+            // Check messages table directly — loadSessionMessages may have set state asynchronously
+            const { data: userMsgs } = await supabase
+              .from('messages')
               .select('id')
               .eq('session_id', activeSession.id)
+              .eq('role', 'user')
               .limit(1)
 
-            if (!ratings || ratings.length === 0) {
-              setShowPulseCheck(true)
+            if (!userMsgs || userMsgs.length === 0) {
+              const { data: ratings } = await supabase
+                .from('pulse_check_ratings')
+                .select('id')
+                .eq('session_id', activeSession.id)
+                .limit(1)
+
+              if (!ratings || ratings.length === 0) {
+                setShowPulseCheck(true)
+              }
             }
           }
         } else {
@@ -328,7 +353,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               // Fetch the actual ratings
               const { data: pulseData } = await supabase
                 .from('pulse_check_ratings')
-                .select('*')
+                .select('domain_name, rating, rating_numeric')
                 .eq('user_id', userId)
                 .eq('is_baseline', true)
                 .order('created_at', { ascending: true })
@@ -388,7 +413,7 @@ Do NOT list all 8 domains back. Keep it conversational.`
 
     init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, sessionType])
+  }, [userId, sessionType, resumeSessionId])
 
   async function handlePulseCheckSubmit(ratings: PulseCheckRating[]) {
     if (!sessionId) return
@@ -865,7 +890,8 @@ Do NOT list all 8 domains back. Keep it conversational.`
       )}
 
       {/* Messages area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="min-h-full flex flex-col justify-end space-y-4">
         <SessionHeader sessionType={sessionType} exploreDomain={exploreDomain} nudgeContext={nudgeContext} />
         {messages.map((message, index) => {
           const parsed = parseMessage(message.content)
@@ -891,7 +917,7 @@ Do NOT list all 8 domains back. Keep it conversational.`
                 onCorrectDomain={handleCorrectDomain}
               />
               {showDomainQuickReplies && (
-                <div className="mt-3">
+                <div className="mt-2">
                   <QuickReplyButtons
                     domainsExplored={domainsExplored}
                     onSelect={handleSend}
@@ -1004,6 +1030,7 @@ Do NOT list all 8 domains back. Keep it conversational.`
             </div>
           </div>
         )}
+        </div>
       </div>
 
       {/* Input area */}
