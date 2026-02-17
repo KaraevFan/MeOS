@@ -2,7 +2,7 @@ import type { FileType } from '@/lib/markdown/constants'
 
 export type MessageRole = 'user' | 'assistant'
 
-export type SessionType = 'life_mapping' | 'weekly_checkin' | 'ad_hoc'
+export type SessionType = 'life_mapping' | 'weekly_checkin' | 'ad_hoc' | 'close_day'
 
 export type PulseContextMode = 'none' | 'onboarding_baseline' | 'checkin_after_rerate' | 'checkin_after_skip'
 
@@ -71,6 +71,8 @@ export interface FileUpdateData {
   previewLine?: string
   /** Domain status override (parsed from FILE_UPDATE tag attribute) */
   status?: DomainStatus
+  /** Additional attributes from FILE_UPDATE tag (energy, mood_signal, etc.) */
+  attributes?: Record<string, string>
 }
 
 export type StructuredBlock =

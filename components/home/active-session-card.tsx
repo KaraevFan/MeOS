@@ -13,6 +13,7 @@ const SESSION_TYPE_LABELS: Record<SessionType, string> = {
   life_mapping: 'life mapping',
   weekly_checkin: 'weekly check-in',
   ad_hoc: 'conversation',
+  close_day: 'evening reflection',
 }
 
 export function ActiveSessionCard({ sessionId, sessionType }: ActiveSessionCardProps) {

@@ -9,6 +9,9 @@ export const ALLOWED_PATH_PREFIXES = [
   'life-plan/',
   'check-ins/',
   'sage/',
+  'daily-logs/',
+  'day-plans/',
+  'captures/',
 ] as const
 
 /** Strict path regex: lowercase alphanumeric, hyphens, underscores, max 3 directory levels, ending in .md */
@@ -40,6 +43,7 @@ export const FILE_TYPES = {
   SAGE_CONTEXT: 'sage-context',
   SAGE_PATTERNS: 'sage-patterns',
   SESSION_INSIGHTS: 'session-insights',
+  DAILY_LOG: 'daily-log',
 } as const
 
 export type FileType = (typeof FILE_TYPES)[keyof typeof FILE_TYPES]
@@ -64,6 +68,10 @@ export const SESSION_WRITE_PERMISSIONS: Record<string, string[]> = {
   ad_hoc_explore: [
     'life-map/',
     'sage/',
+  ],
+  close_day: [
+    'daily-logs/',
+    'sage/context.md',
   ],
 }
 

@@ -81,12 +81,22 @@ function parseFileUpdateBlock(openTag: string, body: string): FileUpdateData | n
     }
   }
 
+  // Collect additional attributes (beyond type, name, preview_line, status)
+  const knownKeys = new Set(['type', 'name', 'preview_line', 'status'])
+  const extraAttrs: Record<string, string> = {}
+  for (const [key, value] of Object.entries(attrs)) {
+    if (!knownKeys.has(key)) {
+      extraAttrs[key] = value
+    }
+  }
+
   return {
     fileType: fileType as FileType,
     name,
     content: body.trim(),
     ...(previewLine ? { previewLine } : {}),
     ...(status ? { status } : {}),
+    ...(Object.keys(extraAttrs).length > 0 ? { attributes: extraAttrs } : {}),
   }
 }
 

@@ -14,6 +14,7 @@ import {
   generateCheckInFrontmatter,
   generateSageContextFrontmatter,
   generatePatternsFrontmatter,
+  generateDailyLogFrontmatter,
 } from './frontmatter'
 import {
   DomainFileFrontmatterSchema,
@@ -22,6 +23,7 @@ import {
   CheckInFileFrontmatterSchema,
   SageContextFrontmatterSchema,
   PatternsFrontmatterSchema,
+  DailyLogFrontmatterSchema,
 } from '@/types/markdown-files'
 import type {
   DomainFileFrontmatter,
@@ -30,6 +32,7 @@ import type {
   CheckInFileFrontmatter,
   SageContextFrontmatter,
   PatternsFrontmatter,
+  DailyLogFrontmatter,
   ParsedMarkdownFile,
 } from '@/types/markdown-files'
 import type { DomainName } from '@/types/chat'
@@ -262,6 +265,27 @@ export class UserFileSystem {
     }
   }
 
+  async readDailyLog(date: string): Promise<ParsedMarkdownFile<DailyLogFrontmatter> | null> {
+    const file = await this.readFile(`daily-logs/${date}-journal.md`)
+    if (!file) return null
+
+    const parsed = DailyLogFrontmatterSchema.safeParse(file.frontmatter)
+    return {
+      frontmatter: parsed.success ? parsed.data : file.frontmatter as DailyLogFrontmatter,
+      content: file.content,
+    }
+  }
+
+  /**
+   * List daily log files, sorted newest first. Returns filenames (not full paths).
+   */
+  async listDailyLogs(limit?: number): Promise<string[]> {
+    const files = await this.listFiles('daily-logs/')
+    const filenames = files.map((f) => f.replace('daily-logs/', ''))
+    const sorted = filenames.sort().reverse()
+    return limit ? sorted.slice(0, limit) : sorted
+  }
+
   /**
    * List check-in files, sorted newest first. Returns filenames (not full paths).
    */
@@ -319,6 +343,13 @@ export class UserFileSystem {
     const filename = `${date}-${sessionType}.md`
     await this.writeFile(`check-ins/${filename}`, frontmatter, content)
     await this.updateFileIndex(`check-ins/${filename}`, FILE_TYPES.CHECK_IN, frontmatter)
+  }
+
+  async writeDailyLog(date: string, content: string, overrides?: Partial<DailyLogFrontmatter>): Promise<void> {
+    const frontmatter = generateDailyLogFrontmatter(date, overrides)
+    const filename = `${date}-journal.md`
+    await this.writeFile(`daily-logs/${filename}`, frontmatter, content)
+    await this.updateFileIndex(`daily-logs/${filename}`, FILE_TYPES.DAILY_LOG, frontmatter)
   }
 
   async writeSageContext(content: string, overrides?: Partial<SageContextFrontmatter>, existingFrontmatter?: Partial<SageContextFrontmatter> | null): Promise<void> {
@@ -390,7 +421,7 @@ export class UserFileSystem {
    * Rebuild the entire file index by reading all files. Used for recovery.
    */
   async rebuildIndex(): Promise<void> {
-    const prefixes = ['life-map/', 'life-plan/', 'check-ins/', 'sage/']
+    const prefixes = ['life-map/', 'life-plan/', 'check-ins/', 'sage/', 'daily-logs/']
     for (const prefix of prefixes) {
       const files = await this.listFiles(prefix)
       for (const filePath of files) {
@@ -437,6 +468,7 @@ export class UserFileSystem {
     if (filePath === 'sage/context.md') return FILE_TYPES.SAGE_CONTEXT
     if (filePath === 'sage/patterns.md') return FILE_TYPES.SAGE_PATTERNS
     if (filePath === 'sage/session-insights.md') return FILE_TYPES.SESSION_INSIGHTS
+    if (filePath.startsWith('daily-logs/')) return FILE_TYPES.DAILY_LOG
     return 'unknown'
   }
 }
