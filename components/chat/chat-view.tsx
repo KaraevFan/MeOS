@@ -27,6 +27,8 @@ import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
 import type { PulseCheckRating } from '@/types/pulse-check'
 import type { SessionState, SessionStateResult } from '@/lib/supabase/session-state'
 import type { Commitment } from '@/lib/markdown/extract'
+import { useSidebarContext } from './sidebar-context'
+import { ALL_DOMAINS } from '@/lib/constants'
 
 /** Safely extract onboarding context from session metadata (JSONB). */
 interface OnboardingMeta {
@@ -118,8 +120,8 @@ function StateQuickReplies({
   disabled: boolean
   pulseCheckRatings?: PulseCheckRating[] | null
 }) {
-  const buttonClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium bg-bg border border-text-secondary/15 text-text shadow-sm hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
-  const primaryClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm bg-primary/10 border border-primary/30 text-primary font-medium hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
+  const buttonClass = 'flex-shrink-0 px-3 py-1.5 min-h-[44px] rounded-full text-sm font-medium bg-bg-card/50 border border-text-secondary/25 text-text shadow-sm hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
+  const primaryClass = 'flex-shrink-0 px-3 py-1.5 min-h-[44px] rounded-full text-sm bg-primary/10 border border-primary/30 text-primary font-medium hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
 
   switch (state) {
     case 'mapping_in_progress': {
@@ -215,6 +217,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [checkinPulseSubmitting, setCheckinPulseSubmitting] = useState(false)
   const [previousRatings, setPreviousRatings] = useState<PulseCheckRating[]>([])
 
+  const { setActiveDomain } = useSidebarContext()
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<ChatMessage[]>([])
@@ -876,8 +879,29 @@ Do NOT list all 8 domains back. Keep it conversational.`
           }
           if (domainChanged) {
             setDomainsExplored(newDomains)
+            setActiveDomain(null) // Clear sidebar active domain after card is generated
             updateDomainsExplored(supabase, sessionId, [...newDomains]).catch(() => {
               console.error('Failed to update domains explored')
+            })
+          }
+
+          // Handle [REFLECTION_PROMPT] blocks — store for home screen display
+          const reflectionBlock = parsed.segments.find(
+            (s): s is Extract<typeof s, { type: 'block'; blockType: 'reflection_prompt' }> =>
+              s.type === 'block' && s.blockType === 'reflection_prompt'
+          )
+          if (reflectionBlock) {
+            supabase.from('reflection_prompts').upsert(
+              {
+                user_id: userId,
+                session_id: sessionId,
+                prompt_text: reflectionBlock.data.content,
+                type: 'sage_generated',
+                created_at: new Date().toISOString(),
+              },
+              { onConflict: 'user_id,session_id' }
+            ).then(({ error }) => {
+              if (error) console.error('[ChatView] Failed to store reflection prompt:', error.message)
             })
           }
 
@@ -933,6 +957,17 @@ Do NOT list all 8 domains back. Keep it conversational.`
 
   function handleSend(text: string) {
     setPrefillText(undefined)
+
+    // Detect domain exploration for sidebar active domain
+    const exploreMatch = text.match(/^Let's explore (.+)$/i)
+    if (exploreMatch) {
+      const domainName = exploreMatch[1].trim()
+      const matchedDomain = ALL_DOMAINS.find((d) => d.toLowerCase() === domainName.toLowerCase())
+      if (matchedDomain) {
+        setActiveDomain(matchedDomain)
+      }
+    }
+
     sendMessage(text)
   }
 

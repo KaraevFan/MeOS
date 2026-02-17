@@ -8,6 +8,7 @@ export const DomainFileFrontmatterSchema = z.object({
   domain: z.string(),
   status: z.enum(['thriving', 'stable', 'needs_attention', 'in_crisis']).default('stable'),
   score: z.number().min(1).max(5).optional(),
+  preview_line: z.string().optional(),
   last_updated: z.string(),
   updated_by: z.enum(['sage', 'system', 'user']).default('sage'),
   version: z.number().int().positive().default(1),

@@ -108,9 +108,9 @@ export function DomainDetailCard({ domain, pulseRating, trend }: DomainDetailCar
             <div className={cn('w-2 h-2 rounded-full flex-shrink-0', statusColor)} />
             <h3 className="text-sm font-bold text-text truncate">{domain.domain_name}</h3>
           </div>
-          {domain.current_state && (
+          {(domain.preview_line || domain.current_state) && (
             <p className="text-xs text-text-secondary line-clamp-1 ml-4">
-              {domain.current_state}
+              {domain.preview_line || domain.current_state}
             </p>
           )}
           {domain.stated_intentions && domain.stated_intentions.length > 0 && (

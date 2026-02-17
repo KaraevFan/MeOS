@@ -39,6 +39,7 @@ export const FILE_TYPES = {
   CHECK_IN: 'check-in',
   SAGE_CONTEXT: 'sage-context',
   SAGE_PATTERNS: 'sage-patterns',
+  SESSION_INSIGHTS: 'session-insights',
 } as const
 
 export type FileType = (typeof FILE_TYPES)[keyof typeof FILE_TYPES]

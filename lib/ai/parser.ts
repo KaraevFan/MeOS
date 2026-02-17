@@ -10,8 +10,10 @@ import type {
   DomainName,
 } from '@/types/chat'
 import { FILE_TYPES } from '@/lib/markdown/constants'
+import type { FileType } from '@/lib/markdown/constants'
 
 const VALID_FILE_TYPES: Set<string> = new Set(Object.values(FILE_TYPES))
+const VALID_STATUSES: DomainStatus[] = ['thriving', 'stable', 'needs_attention', 'in_crisis']
 
 // ============================================
 // Legacy block tags (kept for backward compat rendering)
@@ -28,17 +30,34 @@ const LEGACY_BLOCK_TAGS = [
 // ============================================
 
 /**
- * Regex to match [FILE_UPDATE type="..." name="..."] opening tags.
- * type is required, name is optional (absent for singleton files like overview, life-plan).
+ * Two-step FILE_UPDATE parsing: match the full tag, then extract key="value" pairs.
+ * Order-independent — attributes can appear in any order.
  */
-const FILE_UPDATE_OPEN_REGEX = /\[FILE_UPDATE\s+type="([^"]+)"(?:\s+name="([^"]*)")?\s*\]/
+const FILE_UPDATE_TAG_REGEX = /\[FILE_UPDATE\s+([^\]]+)\]/
 const FILE_UPDATE_CLOSE = '[/FILE_UPDATE]'
+const ATTR_REGEX = /(\w+)="([^"]*)"/g
+
+function parseFileUpdateAttributes(attrString: string): Record<string, string> {
+  const attrs: Record<string, string> = {}
+  let m: RegExpExecArray | null
+  while ((m = ATTR_REGEX.exec(attrString)) !== null) {
+    attrs[m[1]] = m[2]
+  }
+  return attrs
+}
+
+/** [REFLECTION_PROMPT] block markers */
+const REFLECTION_PROMPT_OPEN = '[REFLECTION_PROMPT]'
+const REFLECTION_PROMPT_CLOSE = '[/REFLECTION_PROMPT]'
 
 function parseFileUpdateBlock(openTag: string, body: string): FileUpdateData | null {
-  const match = openTag.match(FILE_UPDATE_OPEN_REGEX)
-  if (!match) return null
+  const tagMatch = openTag.match(FILE_UPDATE_TAG_REGEX)
+  if (!tagMatch) return null
 
-  const fileType = match[1]
+  const attrs = parseFileUpdateAttributes(tagMatch[1])
+  const fileType = attrs['type']
+
+  if (!fileType) return null
 
   // Reject unknown file types (prevents prompt injection of arbitrary types)
   if (!VALID_FILE_TYPES.has(fileType)) {
@@ -46,20 +65,27 @@ function parseFileUpdateBlock(openTag: string, body: string): FileUpdateData | n
     return null
   }
 
-  const name = match[2] || undefined
+  const name = attrs['name'] || undefined
+  const previewLine = attrs['preview_line'] || undefined
+  const statusRaw = attrs['status'] || undefined
+
+  // Validate status if present
+  const status = statusRaw && VALID_STATUSES.includes(statusRaw as DomainStatus)
+    ? (statusRaw as DomainStatus)
+    : undefined
 
   return {
-    fileType,
+    fileType: fileType as FileType,
     name,
     content: body.trim(),
+    ...(previewLine ? { previewLine } : {}),
+    ...(status ? { status } : {}),
   }
 }
 
 // ============================================
 // Legacy block parsing (unchanged)
 // ============================================
-
-const VALID_STATUSES: DomainStatus[] = ['thriving', 'stable', 'needs_attention', 'in_crisis']
 
 function parseKeyValueLines(content: string): Record<string, string> {
   const result: Record<string, string> = {}
@@ -154,14 +180,14 @@ export function parseMessage(content: string): ParsedMessage {
   let remaining = content
 
   while (remaining.length > 0) {
-    // Find the earliest opening tag: check FILE_UPDATE first, then legacy
+    // Find the earliest opening tag: check FILE_UPDATE first, then REFLECTION_PROMPT, then legacy
     let earliestOpen = -1
-    let matchType: 'file_update' | 'legacy' = 'legacy'
+    let matchType: 'file_update' | 'reflection_prompt' | 'legacy' = 'legacy'
     let matchedLegacyTag: (typeof LEGACY_BLOCK_TAGS)[number] | null = null
     let fileUpdateOpenMatch: RegExpExecArray | null = null
 
     // Check for [FILE_UPDATE ...] opening tag
-    const fuMatch = FILE_UPDATE_OPEN_REGEX.exec(remaining)
+    const fuMatch = FILE_UPDATE_TAG_REGEX.exec(remaining)
     if (fuMatch && fuMatch.index !== undefined) {
       const fuIdx = remaining.indexOf(fuMatch[0])
       if (fuIdx !== -1) {
@@ -169,6 +195,15 @@ export function parseMessage(content: string): ParsedMessage {
         matchType = 'file_update'
         fileUpdateOpenMatch = fuMatch
       }
+    }
+
+    // Check for [REFLECTION_PROMPT] tag
+    const rpIdx = remaining.indexOf(REFLECTION_PROMPT_OPEN)
+    if (rpIdx !== -1 && (earliestOpen === -1 || rpIdx < earliestOpen)) {
+      earliestOpen = rpIdx
+      matchType = 'reflection_prompt'
+      fileUpdateOpenMatch = null
+      matchedLegacyTag = null
     }
 
     // Check legacy tags
@@ -223,6 +258,26 @@ export function parseMessage(content: string): ParsedMessage {
       }
 
       remaining = remaining.slice(closeIndex + FILE_UPDATE_CLOSE.length)
+    } else if (matchType === 'reflection_prompt') {
+      // Parse [REFLECTION_PROMPT] block
+      const closeIndex = remaining.indexOf(REFLECTION_PROMPT_CLOSE, earliestOpen + REFLECTION_PROMPT_OPEN.length)
+      if (closeIndex === -1) {
+        const text = remaining.trim()
+        if (text) {
+          segments.push({ type: 'text', content: text })
+        }
+        break
+      }
+
+      const textBefore = remaining.slice(0, earliestOpen).trim()
+      if (textBefore) {
+        segments.push({ type: 'text', content: textBefore })
+      }
+
+      const blockContent = remaining.slice(earliestOpen + REFLECTION_PROMPT_OPEN.length, closeIndex).trim()
+      segments.push({ type: 'block', blockType: 'reflection_prompt', data: { content: blockContent } })
+
+      remaining = remaining.slice(closeIndex + REFLECTION_PROMPT_CLOSE.length)
     } else if (matchType === 'legacy' && matchedLegacyTag) {
       // Parse legacy block
       const closeIndex = remaining.indexOf(matchedLegacyTag.close, earliestOpen + matchedLegacyTag.open.length)
@@ -271,7 +326,7 @@ export function parseStreamingChunk(accumulated: string): {
   completedBlock: StructuredBlock | null
 } {
   // Check for FILE_UPDATE blocks first
-  const fuMatch = FILE_UPDATE_OPEN_REGEX.exec(accumulated)
+  const fuMatch = FILE_UPDATE_TAG_REGEX.exec(accumulated)
   if (fuMatch) {
     const openIdx = accumulated.indexOf(fuMatch[0])
     const closeIdx = accumulated.indexOf(FILE_UPDATE_CLOSE, openIdx)
@@ -294,6 +349,27 @@ export function parseStreamingChunk(accumulated: string): {
         pendingBlock: false,
         completedBlock: { type: 'file_update', data: fileUpdate },
       }
+    }
+  }
+
+  // Check [REFLECTION_PROMPT] block
+  const rpOpenIdx = accumulated.indexOf(REFLECTION_PROMPT_OPEN)
+  if (rpOpenIdx !== -1) {
+    const rpCloseIdx = accumulated.indexOf(REFLECTION_PROMPT_CLOSE, rpOpenIdx)
+    if (rpCloseIdx === -1) {
+      return {
+        displayText: accumulated.slice(0, rpOpenIdx).trim(),
+        pendingBlock: true,
+        completedBlock: null,
+      }
+    }
+
+    const textBefore = accumulated.slice(0, rpOpenIdx).trim()
+    const blockContent = accumulated.slice(rpOpenIdx + REFLECTION_PROMPT_OPEN.length, rpCloseIdx).trim()
+    return {
+      displayText: textBefore,
+      pendingBlock: false,
+      completedBlock: { type: 'reflection_prompt', data: { content: blockContent } },
     }
   }
 

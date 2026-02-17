@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { PULSE_DOMAINS, PULSE_RATING_OPTIONS } from '@/types/pulse-check'
 import type { PulseCheckRating, PulseRating } from '@/types/pulse-check'
@@ -12,12 +13,12 @@ interface PulseCheckCardProps {
   onRetry: () => void
 }
 
-const RATING_COLORS: Record<PulseRating, { selected: string; ring: string }> = {
-  thriving: { selected: 'bg-status-thriving text-white', ring: 'ring-status-thriving/30' },
-  good: { selected: 'bg-accent-sage text-white', ring: 'ring-accent-sage/30' },
-  okay: { selected: 'bg-primary text-white', ring: 'ring-primary/30' },
-  struggling: { selected: 'bg-accent-terra text-white', ring: 'ring-accent-terra/30' },
-  in_crisis: { selected: 'bg-status-crisis text-white', ring: 'ring-status-crisis/30' },
+const RATING_COLORS: Record<PulseRating, { selected: string; ring: string; tint: string }> = {
+  thriving: { selected: 'bg-status-thriving text-white', ring: 'ring-status-thriving/30', tint: 'bg-status-thriving/10' },
+  good: { selected: 'bg-accent-sage text-white', ring: 'ring-accent-sage/30', tint: 'bg-accent-sage/10' },
+  okay: { selected: 'bg-primary text-white', ring: 'ring-primary/30', tint: 'bg-primary/10' },
+  struggling: { selected: 'bg-accent-terra text-white', ring: 'ring-accent-terra/30', tint: 'bg-accent-terra/10' },
+  in_crisis: { selected: 'bg-status-crisis text-white', ring: 'ring-status-crisis/30', tint: 'bg-status-crisis/10' },
 }
 
 export function PulseCheckCard({ onSubmit, isSubmitting, submitError, onRetry }: PulseCheckCardProps) {
@@ -57,7 +58,7 @@ export function PulseCheckCard({ onSubmit, isSubmitting, submitError, onRetry }:
         Life Pulse Check
       </h3>
 
-      <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+      <div className="space-y-2 max-h-[60vh] overflow-y-auto">
         {PULSE_DOMAINS.map((domain) => {
           const selected = ratings.get(domain.key) || null
 
@@ -74,25 +75,28 @@ export function PulseCheckCard({ onSubmit, isSubmitting, submitError, onRetry }:
                   const colors = RATING_COLORS[option.value]
 
                   return (
-                    <button
+                    <motion.button
                       key={option.value}
                       role="radio"
                       aria-checked={isSelected}
-                      aria-label={option.label}
+                      aria-label={`${option.numeric} - ${option.label}`}
                       onClick={() => handleRate(domain.key, option.value)}
                       disabled={isSubmitting}
+                      whileTap={{ scale: 0.95 }}
+                      whileHover={{ scale: 1.02 }}
                       className={cn(
-                        'flex-1 min-h-[44px] rounded-md text-xs font-medium',
-                        'transition-all duration-150 active:scale-95',
+                        'flex-1 min-h-[44px] rounded-md flex flex-col items-center justify-center gap-0.5',
+                        'transition-colors duration-150',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
                         'disabled:opacity-50 disabled:cursor-not-allowed',
                         isSelected
                           ? cn(colors.selected, 'shadow-sm')
-                          : 'bg-bg border border-border text-text-secondary hover:border-primary/40'
+                          : cn(colors.tint, 'border border-border text-text-secondary hover:border-primary/40')
                       )}
                     >
-                      {option.label}
-                    </button>
+                      <span className="text-[11px] font-bold leading-none">{option.numeric}</span>
+                      <span className="text-[9px] font-medium leading-none">{option.label}</span>
+                    </motion.button>
                   )
                 })}
               </div>

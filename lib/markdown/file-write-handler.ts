@@ -43,6 +43,8 @@ export function resolveFileUpdatePath(update: FileUpdateData): string | null {
       return 'sage/context.md'
     case FILE_TYPES.SAGE_PATTERNS:
       return 'sage/patterns.md'
+    case FILE_TYPES.SESSION_INSIGHTS:
+      return 'sage/session-insights.md'
     default:
       console.warn(`[FileWriteHandler] Unknown file type: ${update.fileType}`)
       return null
@@ -100,6 +102,8 @@ export async function handleFileUpdate(
           await ufs.writeDomain(filename, update.content, {
             domain: filename,
             updated_by: 'sage',
+            ...(update.status ? { status: update.status } : {}),
+            ...(update.previewLine ? { preview_line: update.previewLine } : {}),
           })
         }
         break
@@ -123,6 +127,9 @@ export async function handleFileUpdate(
         break
       case FILE_TYPES.SAGE_PATTERNS:
         await ufs.writePatterns(update.content)
+        break
+      case FILE_TYPES.SESSION_INSIGHTS:
+        await ufs.writeSessionInsights(update.content)
         break
       default:
         return {

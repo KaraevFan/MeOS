@@ -227,10 +227,22 @@ export async function getHomeData(
       })
     : null
 
-  // Fetch latest unused reflection prompt for home screen nudge
+  // Fetch latest unused reflection prompt for home screen nudge.
+  // Prefer Sage-generated prompts over system-generated ones.
   let reflectionNudge: ReflectionNudge | null = null
   if (onboardingCompleted) {
-    const { data: nudge } = await supabase
+    // Try sage_generated first (from [REFLECTION_PROMPT] blocks)
+    const { data: sageNudge } = await supabase
+      .from('reflection_prompts')
+      .select('id, prompt_text, context_hint')
+      .eq('user_id', userId)
+      .eq('type', 'sage_generated')
+      .is('used_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const nudge = sageNudge ?? (await supabase
       .from('reflection_prompts')
       .select('id, prompt_text, context_hint')
       .eq('user_id', userId)
@@ -238,6 +250,7 @@ export async function getHomeData(
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
+    ).data
 
     if (nudge) {
       reflectionNudge = {

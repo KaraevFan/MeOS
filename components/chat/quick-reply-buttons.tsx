@@ -27,16 +27,36 @@ export function QuickReplyButtons({ domainsExplored, onSelect, disabled, pulseCh
 
   if (remainingDomains.length === 0 && domainsExplored.size === 0) return null
 
+  // After 3+ domains explored, emphasize wrapping up
+  const suggestWrapUp = domainsExplored.size >= 3
+
   return (
     <div className="flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+      {suggestWrapUp && (
+        <button
+          onClick={() => onSelect("Let's wrap up and synthesize what we've covered.")}
+          disabled={disabled}
+          className={cn(
+            'flex-shrink-0 px-3 py-1.5 min-h-[44px] rounded-full text-sm font-medium',
+            'bg-primary border border-primary text-white shadow-sm',
+            'hover:bg-primary/90',
+            'active:scale-95 transition-all duration-150',
+            'disabled:opacity-50 disabled:cursor-not-allowed'
+          )}
+        >
+          Wrap up & synthesize
+        </button>
+      )}
       {remainingDomains.map((domain) => (
         <button
           key={domain}
           onClick={() => onSelect(`Let's explore ${domain}`)}
           disabled={disabled}
           className={cn(
-            'flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium',
-            'bg-bg border border-text-secondary/15 text-text shadow-sm',
+            'flex-shrink-0 px-3 py-1.5 min-h-[44px] rounded-full text-sm font-medium',
+            suggestWrapUp
+              ? 'bg-bg-card/50 border border-text-secondary/20 text-text-secondary shadow-sm'
+              : 'bg-bg-card/50 border border-text-secondary/25 text-text shadow-sm',
             'hover:bg-primary hover:text-white hover:border-primary',
             'active:scale-95 transition-all duration-150',
             'disabled:opacity-50 disabled:cursor-not-allowed'
@@ -45,19 +65,21 @@ export function QuickReplyButtons({ domainsExplored, onSelect, disabled, pulseCh
           {domain}
         </button>
       ))}
-      <button
-        onClick={() => onSelect("Let's wrap up and synthesize what we've covered.")}
-        disabled={disabled}
-        className={cn(
-          'flex-shrink-0 px-3 py-1.5 rounded-full text-sm',
-          'bg-primary/10 border border-primary/30 text-primary font-medium',
-          'hover:bg-primary hover:text-white hover:border-primary',
-          'active:scale-95 transition-all duration-150',
-          'disabled:opacity-50 disabled:cursor-not-allowed'
-        )}
-      >
-        Wrap up
-      </button>
+      {!suggestWrapUp && (
+        <button
+          onClick={() => onSelect("Let's wrap up and synthesize what we've covered.")}
+          disabled={disabled}
+          className={cn(
+            'flex-shrink-0 px-3 py-1.5 min-h-[44px] rounded-full text-sm',
+            'bg-primary/10 border border-primary/30 text-primary font-medium',
+            'hover:bg-primary hover:text-white hover:border-primary',
+            'active:scale-95 transition-all duration-150',
+            'disabled:opacity-50 disabled:cursor-not-allowed'
+          )}
+        >
+          Wrap up
+        </button>
+      )}
     </div>
   )
 }

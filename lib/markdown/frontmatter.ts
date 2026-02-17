@@ -31,6 +31,7 @@ export function generateDomainFrontmatter(
     domain: sanitizeYamlValue(updates.domain ?? existing?.domain) ?? '',
     status: updates.status ?? existing?.status ?? 'stable',
     score: updates.score ?? existing?.score,
+    preview_line: sanitizeYamlValue(updates.preview_line ?? existing?.preview_line),
     last_updated: now(),
     updated_by: updates.updated_by ?? 'sage',
     version: bumpVersion(existing?.version),
