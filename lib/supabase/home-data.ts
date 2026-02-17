@@ -3,6 +3,7 @@ import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { extractMarkdownSection, extractBulletList, extractCommitments } from '@/lib/markdown/extract'
 import type { Commitment } from '@/lib/markdown/extract'
 import { getDisplayName } from '@/lib/utils'
+import type { SessionType } from '@/types/chat'
 
 export interface ReflectionNudge {
   id: string
@@ -25,6 +26,8 @@ export interface HomeData {
   quarterTheme: string | null
   daysSinceMapping: number | null
   reflectionNudge: ReflectionNudge | null
+  activeSessionId: string | null
+  activeSessionType: SessionType | null
 }
 
 function getTimeGreeting(): string {
@@ -121,6 +124,8 @@ export async function getHomeData(
   }
 
   // Read from markdown files
+  let activeSessionId: string | null = null
+  let activeSessionType: SessionType | null = null
   let quarterlyPriorities: string[] = []
   let northStar: string | null = null
   let northStarFull: string | null = null
@@ -133,8 +138,8 @@ export async function getHomeData(
   if (onboardingCompleted) {
     const ufs = new UserFileSystem(supabase, userId)
 
-    // Read overview + life plan + last check-in all in parallel
-    const [overview, lifePlan, lastCheckinResult] = await Promise.allSettled([
+    // Read overview + life plan + last check-in + active session all in parallel
+    const [overview, lifePlan, lastCheckinResult, activeSessionResult] = await Promise.allSettled([
       ufs.readOverview(),
       ufs.readLifePlan(),
       supabase
@@ -144,6 +149,14 @@ export async function getHomeData(
         .eq('session_type', 'weekly_checkin')
         .eq('status', 'completed')
         .order('completed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('sessions')
+        .select('id, session_type')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
     ])
@@ -187,6 +200,15 @@ export async function getHomeData(
       const lastCheckin = lastCheckinResult.value.data
       if (lastCheckin?.completed_at) {
         daysSinceCheckin = Math.floor((Date.now() - new Date(lastCheckin.completed_at).getTime()) / (1000 * 60 * 60 * 24))
+      }
+    }
+
+    // Extract active session from parallel result
+    if (activeSessionResult.status === 'fulfilled') {
+      const activeSession = activeSessionResult.value.data
+      if (activeSession) {
+        activeSessionId = activeSession.id
+        activeSessionType = activeSession.session_type
       }
     }
   }
@@ -241,5 +263,7 @@ export async function getHomeData(
     quarterTheme,
     daysSinceMapping,
     reflectionNudge,
+    activeSessionId,
+    activeSessionType,
   }
 }

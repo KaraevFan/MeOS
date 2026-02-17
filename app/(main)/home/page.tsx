@@ -5,6 +5,7 @@ import { getHomeData } from '@/lib/supabase/home-data'
 import { NorthStarCard } from '@/components/ui/north-star-card'
 import { CommitmentCard } from '@/components/home/commitment-card'
 import { PreOnboardingHero, TalkToSageOrb } from '@/components/home/pre-onboarding-hero'
+import { ActiveSessionCard } from '@/components/home/active-session-card'
 import { ReflectionNudgeCard } from '@/components/home/reflection-nudge-card'
 
 export default async function HomePage() {
@@ -138,8 +139,15 @@ export default async function HomePage() {
           </div>
         )}
 
-        {/* 7. Talk to Sage */}
-        <TalkToSageOrb />
+        {/* 7. Talk to Sage / Resume active session */}
+        {homeData.activeSessionId && homeData.activeSessionType ? (
+          <ActiveSessionCard
+            sessionId={homeData.activeSessionId}
+            sessionType={homeData.activeSessionType}
+          />
+        ) : (
+          <TalkToSageOrb />
+        )}
       </div>
     </div>
   )

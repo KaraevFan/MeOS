@@ -10,9 +10,45 @@ interface RatingScaleProps {
 
 const LABELS = ['Rough', 'Struggling', 'Okay', 'Good', 'Thriving']
 
+// Gradient hint colors (unselected state) — subtle status preview
+const HINT_COLORS = [
+  'bg-status-crisis/15',     // Rough
+  'bg-status-attention/15',  // Struggling
+  'bg-primary/15',           // Okay
+  'bg-accent-sage/15',       // Good
+  'bg-accent-sage/20',       // Thriving
+]
+
+// Selected state colors
+const SELECTED_COLORS = [
+  'bg-status-crisis',     // Rough — #B05A5A
+  'bg-status-attention',  // Struggling — #C17B5D
+  'bg-primary',           // Okay — #D97706
+  'bg-accent-sage',       // Good — #7D8E7B
+  'bg-accent-sage',       // Thriving — #7D8E7B
+]
+
+// Selected glow shadows
+const SELECTED_SHADOWS = [
+  '0 0 12px rgba(176, 90, 90, 0.35)',
+  '0 0 12px rgba(193, 123, 93, 0.35)',
+  '0 0 12px rgba(212, 165, 116, 0.35)',
+  '0 0 12px rgba(125, 142, 123, 0.35)',
+  '0 0 14px rgba(125, 142, 123, 0.45)',
+]
+
+// Label text colors (match selected circle)
+const LABEL_COLORS = [
+  'text-status-crisis',
+  'text-status-attention',
+  'text-primary',
+  'text-accent-sage',
+  'text-accent-sage',
+]
+
 export function RatingScale({ value, onSelect }: RatingScaleProps) {
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-2.5">
       {/* End labels */}
       <div className="flex justify-between w-full max-w-[280px] px-1">
         <span className="text-[10px] uppercase tracking-[0.08em] text-text-secondary font-medium">
@@ -25,8 +61,13 @@ export function RatingScale({ value, onSelect }: RatingScaleProps) {
 
       {/* Scale */}
       <div className="relative flex items-center justify-between w-full max-w-[280px]" role="radiogroup" aria-label="Rating scale">
-        {/* Connecting line */}
-        <div className="absolute inset-x-[22px] top-1/2 -translate-y-1/2 h-[1.5px] bg-border opacity-30" />
+        {/* Connecting line — gradient from crisis to sage */}
+        <div
+          className="absolute inset-x-[22px] top-1/2 -translate-y-1/2 h-[1.5px] opacity-20"
+          style={{
+            background: 'linear-gradient(to right, #B05A5A, #C17B5D, #D97706, #7D8E7B, #7D8E7B)',
+          }}
+        />
 
         {LABELS.map((label, i) => {
           const isSelected = value === i
@@ -40,15 +81,15 @@ export function RatingScale({ value, onSelect }: RatingScaleProps) {
               role="radio"
               className="relative w-12 h-12 flex items-center justify-center z-10"
             >
-              {/* Unselected circle */}
+              {/* Unselected circle — gradient hint color */}
               <div
                 className={cn(
                   'w-[44px] h-[44px] rounded-full border-[1.5px] transition-opacity duration-200',
-                  isSelected ? 'opacity-0' : 'border-border opacity-100 bg-bg/60'
+                  isSelected ? 'opacity-0' : `border-border opacity-100 ${HINT_COLORS[i]}`
                 )}
               />
 
-              {/* Selected indicator */}
+              {/* Selected indicator — status color + matching glow */}
               {isSelected && (
                 <motion.div
                   className="absolute inset-0 flex items-center justify-center"
@@ -57,8 +98,8 @@ export function RatingScale({ value, onSelect }: RatingScaleProps) {
                   transition={{ type: 'spring', damping: 14, stiffness: 220 }}
                 >
                   <div
-                    className="w-[44px] h-[44px] rounded-full bg-primary"
-                    style={{ boxShadow: '0 0 12px rgba(212, 165, 116, 0.35)' }}
+                    className={cn('w-[44px] h-[44px] rounded-full', SELECTED_COLORS[i])}
+                    style={{ boxShadow: SELECTED_SHADOWS[i] }}
                   />
                 </motion.div>
               )}
@@ -67,13 +108,13 @@ export function RatingScale({ value, onSelect }: RatingScaleProps) {
         })}
       </div>
 
-      {/* Selected label */}
-      <div className="h-6">
+      {/* Selected label — color matches selected circle */}
+      <div className="h-5">
         <AnimatePresence mode="wait">
           {value !== null && (
             <motion.p
               key={value}
-              className="text-[13px] font-medium text-primary tracking-wide text-center"
+              className={cn('text-[13px] font-medium tracking-wide text-center', LABEL_COLORS[value])}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}

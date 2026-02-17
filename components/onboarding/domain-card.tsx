@@ -58,7 +58,7 @@ export function DomainCard({
       </div>
 
       {/* Content — centered vertically */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-20">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-12">
         {/* Sage message (first domain only) */}
         <AnimatePresence>
           {currentIndex === 0 && showSageMessage && (
@@ -90,7 +90,7 @@ export function DomainCard({
         {descriptor && (
           <motion.p
             id={descriptorId}
-            className="text-[14px] text-text-secondary italic text-center mb-12"
+            className="text-[14px] text-text-secondary italic text-center mb-8"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4, delay: 0.15 }}
