@@ -55,7 +55,7 @@ export interface SessionSummary {
 
 /** Semantic identifier from [FILE_UPDATE] blocks. System resolves to file path. */
 export interface FileUpdateData {
-  /** File type: "domain", "overview", "life-plan", "check-in", "sage-context", "sage-patterns" */
+  /** File type: "domain", "overview", "life-plan", "check-in", "sage-context", "sage-patterns", "session-insights" */
   fileType: string
   /** Semantic name, e.g., "Career / Work" for domains, or absent for singleton files */
   name?: string
@@ -63,6 +63,10 @@ export interface FileUpdateData {
   resolvedPath?: string
   /** Markdown body content (no frontmatter) */
   content: string
+  /** One-line preview for domain cards (parsed from FILE_UPDATE tag attribute) */
+  previewLine?: string
+  /** Domain status override (parsed from FILE_UPDATE tag attribute) */
+  status?: DomainStatus
 }
 
 export type StructuredBlock =
@@ -70,6 +74,7 @@ export type StructuredBlock =
   | { type: 'life_map_synthesis'; data: LifeMapSynthesis }
   | { type: 'session_summary'; data: SessionSummary }
   | { type: 'file_update'; data: FileUpdateData }
+  | { type: 'reflection_prompt'; data: { content: string } }
 
 export type ParsedSegment =
   | { type: 'text'; content: string }
@@ -77,6 +82,7 @@ export type ParsedSegment =
   | { type: 'block'; blockType: 'life_map_synthesis'; data: LifeMapSynthesis }
   | { type: 'block'; blockType: 'session_summary'; data: SessionSummary }
   | { type: 'block'; blockType: 'file_update'; data: FileUpdateData }
+  | { type: 'block'; blockType: 'reflection_prompt'; data: { content: string } }
 
 export interface ParsedMessage {
   segments: ParsedSegment[]

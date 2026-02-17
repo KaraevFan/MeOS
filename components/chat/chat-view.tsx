@@ -881,6 +881,26 @@ Do NOT list all 8 domains back. Keep it conversational.`
             })
           }
 
+          // Handle [REFLECTION_PROMPT] blocks — store for home screen display
+          const reflectionBlock = parsed.segments.find(
+            (s): s is Extract<typeof s, { type: 'block'; blockType: 'reflection_prompt' }> =>
+              s.type === 'block' && s.blockType === 'reflection_prompt'
+          )
+          if (reflectionBlock) {
+            supabase.from('reflection_prompts').upsert(
+              {
+                user_id: userId,
+                session_id: sessionId,
+                prompt_text: reflectionBlock.data.content,
+                type: 'sage_generated',
+                created_at: new Date().toISOString(),
+              },
+              { onConflict: 'user_id,session_id' }
+            ).then(({ error }) => {
+              if (error) console.error('[ChatView] Failed to store reflection prompt:', error.message)
+            })
+          }
+
           // Handle session lifecycle for synthesis/check-in file updates
           const hasOverview = updates.some((u) => u.fileType === 'overview')
           const hasCheckIn = updates.some((u) => u.fileType === 'check-in')

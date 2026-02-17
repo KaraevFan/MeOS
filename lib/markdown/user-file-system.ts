@@ -341,6 +341,16 @@ export class UserFileSystem {
     this.updateFileIndex('sage/patterns.md', FILE_TYPES.SAGE_PATTERNS, frontmatter)
   }
 
+  /**
+   * Write session insights (cross-cutting patterns). No frontmatter needed —
+   * this is an ephemeral file overwritten each session and subsumed by the overview during synthesis.
+   */
+  async writeSessionInsights(content: string): Promise<void> {
+    const metadata = { last_updated: new Date().toISOString() }
+    await this.writeFile('sage/session-insights.md', metadata, content)
+    this.updateFileIndex('sage/session-insights.md', FILE_TYPES.SESSION_INSIGHTS, metadata)
+  }
+
   // ============================================
   // Index operations
   // ============================================
@@ -426,6 +436,7 @@ export class UserFileSystem {
     if (filePath.startsWith('check-ins/')) return FILE_TYPES.CHECK_IN
     if (filePath === 'sage/context.md') return FILE_TYPES.SAGE_CONTEXT
     if (filePath === 'sage/patterns.md') return FILE_TYPES.SAGE_PATTERNS
+    if (filePath === 'sage/session-insights.md') return FILE_TYPES.SESSION_INSIGHTS
     return 'unknown'
   }
 }

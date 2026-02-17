@@ -28,11 +28,15 @@ const LEGACY_BLOCK_TAGS = [
 // ============================================
 
 /**
- * Regex to match [FILE_UPDATE type="..." name="..."] opening tags.
- * type is required, name is optional (absent for singleton files like overview, life-plan).
+ * Regex to match [FILE_UPDATE type="..." name="..." preview_line="..." status="..."] opening tags.
+ * type is required; name, preview_line, and status are optional.
  */
-const FILE_UPDATE_OPEN_REGEX = /\[FILE_UPDATE\s+type="([^"]+)"(?:\s+name="([^"]*)")?\s*\]/
+const FILE_UPDATE_OPEN_REGEX = /\[FILE_UPDATE\s+type="([^"]+)"(?:\s+name="([^"]*)")?(?:\s+preview_line="([^"]*)")?(?:\s+status="([^"]*)")?\s*\]/
 const FILE_UPDATE_CLOSE = '[/FILE_UPDATE]'
+
+/** [REFLECTION_PROMPT] block markers */
+const REFLECTION_PROMPT_OPEN = '[REFLECTION_PROMPT]'
+const REFLECTION_PROMPT_CLOSE = '[/REFLECTION_PROMPT]'
 
 function parseFileUpdateBlock(openTag: string, body: string): FileUpdateData | null {
   const match = openTag.match(FILE_UPDATE_OPEN_REGEX)
@@ -47,11 +51,21 @@ function parseFileUpdateBlock(openTag: string, body: string): FileUpdateData | n
   }
 
   const name = match[2] || undefined
+  const previewLine = match[3] || undefined
+  const statusRaw = match[4] || undefined
+
+  // Validate status if present
+  const validStatuses: DomainStatus[] = ['thriving', 'stable', 'needs_attention', 'in_crisis']
+  const status = statusRaw && validStatuses.includes(statusRaw as DomainStatus)
+    ? (statusRaw as DomainStatus)
+    : undefined
 
   return {
     fileType,
     name,
     content: body.trim(),
+    ...(previewLine ? { previewLine } : {}),
+    ...(status ? { status } : {}),
   }
 }
 
@@ -154,9 +168,9 @@ export function parseMessage(content: string): ParsedMessage {
   let remaining = content
 
   while (remaining.length > 0) {
-    // Find the earliest opening tag: check FILE_UPDATE first, then legacy
+    // Find the earliest opening tag: check FILE_UPDATE first, then REFLECTION_PROMPT, then legacy
     let earliestOpen = -1
-    let matchType: 'file_update' | 'legacy' = 'legacy'
+    let matchType: 'file_update' | 'reflection_prompt' | 'legacy' = 'legacy'
     let matchedLegacyTag: (typeof LEGACY_BLOCK_TAGS)[number] | null = null
     let fileUpdateOpenMatch: RegExpExecArray | null = null
 
@@ -169,6 +183,15 @@ export function parseMessage(content: string): ParsedMessage {
         matchType = 'file_update'
         fileUpdateOpenMatch = fuMatch
       }
+    }
+
+    // Check for [REFLECTION_PROMPT] tag
+    const rpIdx = remaining.indexOf(REFLECTION_PROMPT_OPEN)
+    if (rpIdx !== -1 && (earliestOpen === -1 || rpIdx < earliestOpen)) {
+      earliestOpen = rpIdx
+      matchType = 'reflection_prompt'
+      fileUpdateOpenMatch = null
+      matchedLegacyTag = null
     }
 
     // Check legacy tags
@@ -223,6 +246,26 @@ export function parseMessage(content: string): ParsedMessage {
       }
 
       remaining = remaining.slice(closeIndex + FILE_UPDATE_CLOSE.length)
+    } else if (matchType === 'reflection_prompt') {
+      // Parse [REFLECTION_PROMPT] block
+      const closeIndex = remaining.indexOf(REFLECTION_PROMPT_CLOSE, earliestOpen + REFLECTION_PROMPT_OPEN.length)
+      if (closeIndex === -1) {
+        const text = remaining.trim()
+        if (text) {
+          segments.push({ type: 'text', content: text })
+        }
+        break
+      }
+
+      const textBefore = remaining.slice(0, earliestOpen).trim()
+      if (textBefore) {
+        segments.push({ type: 'text', content: textBefore })
+      }
+
+      const blockContent = remaining.slice(earliestOpen + REFLECTION_PROMPT_OPEN.length, closeIndex).trim()
+      segments.push({ type: 'block', blockType: 'reflection_prompt', data: { content: blockContent } })
+
+      remaining = remaining.slice(closeIndex + REFLECTION_PROMPT_CLOSE.length)
     } else if (matchType === 'legacy' && matchedLegacyTag) {
       // Parse legacy block
       const closeIndex = remaining.indexOf(matchedLegacyTag.close, earliestOpen + matchedLegacyTag.open.length)
@@ -294,6 +337,27 @@ export function parseStreamingChunk(accumulated: string): {
         pendingBlock: false,
         completedBlock: { type: 'file_update', data: fileUpdate },
       }
+    }
+  }
+
+  // Check [REFLECTION_PROMPT] block
+  const rpOpenIdx = accumulated.indexOf(REFLECTION_PROMPT_OPEN)
+  if (rpOpenIdx !== -1) {
+    const rpCloseIdx = accumulated.indexOf(REFLECTION_PROMPT_CLOSE, rpOpenIdx)
+    if (rpCloseIdx === -1) {
+      return {
+        displayText: accumulated.slice(0, rpOpenIdx).trim(),
+        pendingBlock: true,
+        completedBlock: null,
+      }
+    }
+
+    const textBefore = accumulated.slice(0, rpOpenIdx).trim()
+    const blockContent = accumulated.slice(rpOpenIdx + REFLECTION_PROMPT_OPEN.length, rpCloseIdx).trim()
+    return {
+      displayText: textBefore,
+      pendingBlock: false,
+      completedBlock: { type: 'reflection_prompt', data: { content: blockContent } },
     }
   }
 
