@@ -30,7 +30,6 @@ interface DomainSlot {
 
 interface LifeMapSidebarProps {
   userId: string
-  sessionId: string | null
 }
 
 const STATUS_DOT_COLORS: Record<string, string> = {
@@ -48,7 +47,7 @@ const PULSE_DOT_COLORS: Record<number, string> = {
   1: 'bg-status-crisis/60',
 }
 
-export function LifeMapSidebar({ userId, sessionId }: LifeMapSidebarProps) {
+export function LifeMapSidebar({ userId }: LifeMapSidebarProps) {
   const supabase = createClient()
   const { activeDomain } = useSidebarContext()
 
@@ -66,6 +65,20 @@ export function LifeMapSidebar({ userId, sessionId }: LifeMapSidebarProps) {
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', String(collapsed))
   }, [collapsed])
+
+  const fetchInsightsContent = useCallback(async () => {
+    const fullPath = `users/${userId}/sage/session-insights.md`
+    const { data } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .download(fullPath)
+
+    if (data) {
+      const text = await data.text()
+      // Strip frontmatter if present
+      const bodyMatch = text.match(/^---[\s\S]*?---\s*([\s\S]*)$/)
+      setInsightsContent(bodyMatch ? bodyMatch[1].trim() : text.trim())
+    }
+  }, [userId, supabase])
 
   // Fetch initial data
   useEffect(() => {
@@ -118,7 +131,7 @@ export function LifeMapSidebar({ userId, sessionId }: LifeMapSidebarProps) {
     }
 
     fetchInitialData()
-  }, [userId, supabase])
+  }, [userId, supabase, fetchInsightsContent])
 
   // Supabase Realtime subscription for file_index changes
   useEffect(() => {
@@ -156,21 +169,7 @@ export function LifeMapSidebar({ userId, sessionId }: LifeMapSidebarProps) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [userId, supabase])
-
-  const fetchInsightsContent = useCallback(async () => {
-    const fullPath = `users/${userId}/sage/session-insights.md`
-    const { data } = await supabase.storage
-      .from(STORAGE_BUCKET)
-      .download(fullPath)
-
-    if (data) {
-      const text = await data.text()
-      // Strip frontmatter if present
-      const bodyMatch = text.match(/^---[\s\S]*?---\s*([\s\S]*)$/)
-      setInsightsContent(bodyMatch ? bodyMatch[1].trim() : text.trim())
-    }
-  }, [userId, supabase])
+  }, [userId, supabase, fetchInsightsContent])
 
   // Build domain slot data
   const pulseMap = new Map(pulseRatings.map((r) => [r.domain, r.ratingNumeric]))
