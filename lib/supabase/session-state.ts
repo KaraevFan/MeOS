@@ -4,6 +4,13 @@ import type { DomainName } from '@/types/chat'
 import { getDisplayName } from '@/lib/utils'
 
 export type SessionState =
+  /**
+   * User has not completed initial life mapping. Covers two sub-cases:
+   * - onboarding_completed = false: user has never seen onboarding
+   * - onboarding_completed = true, no completed sessions: user finished
+   *   onboarding but hasn't completed their first conversation yet.
+   * Consumers distinguish via hasOnboardingPulse check.
+   */
   | 'new_user'
   | 'mapping_in_progress'
   | 'mapping_complete'
@@ -94,6 +101,18 @@ export async function detectSessionState(
         unexploredDomains: unexplored,
         userName,
       }
+    }
+  }
+
+  // 2b. Post-onboarding: user completed onboarding but hasn't finished a real conversation yet.
+  // Return 'new_user' because chat-view treats this identically to first-time users
+  // (shows pulse-check greeting, triggers Sage with pulse context).
+  if (!lastCompleted) {
+    return {
+      state: 'new_user',
+      activeSessionId: activeSession?.id,
+      activeSessionType: activeSession?.session_type,
+      userName,
     }
   }
 

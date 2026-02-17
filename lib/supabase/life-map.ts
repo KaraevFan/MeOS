@@ -57,7 +57,7 @@ export async function upsertDomain(
     .select('id')
     .eq('life_map_id', lifeMapId)
     .eq('domain_name', domain.domain)
-    .single()
+    .maybeSingle()
 
   const domainRow = {
     life_map_id: lifeMapId,
