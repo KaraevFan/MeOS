@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { extractMarkdownSection, extractBulletList, extractCommitments } from '@/lib/markdown/extract'
 import type { Commitment } from '@/lib/markdown/extract'
-import { getDisplayName } from '@/lib/utils'
+import { diffLocalCalendarDays, getDisplayName } from '@/lib/utils'
 import type { SessionType } from '@/types/chat'
 
 export interface ReflectionNudge {
@@ -49,9 +49,8 @@ function getSageLine(context: {
 
   // Check-in imminent
   if (nextCheckinAt) {
-    const diffMs = new Date(nextCheckinAt).getTime() - Date.now()
-    const diffHours = diffMs / (1000 * 60 * 60)
-    if (diffHours > 0 && diffHours <= 24) {
+    const dayDiff = diffLocalCalendarDays(nextCheckinAt)
+    if (dayDiff === 1) {
       return "Check-in's tomorrow. Take a minute to notice how the week felt."
     }
   }
@@ -120,7 +119,7 @@ export async function getHomeData(
 
   if (onboardingCompleted && user?.next_checkin_at) {
     nextCheckinDate = user.next_checkin_at
-    checkinOverdue = new Date(user.next_checkin_at) <= new Date()
+    checkinOverdue = diffLocalCalendarDays(user.next_checkin_at) <= 0
   }
 
   // Read from markdown files

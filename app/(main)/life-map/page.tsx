@@ -101,11 +101,20 @@ export default async function LifeMapPage() {
     : Object.values(DOMAIN_FILE_MAP) // Fallback to reading all if file_index unavailable
 
   // Read overview + life plan + existing domains + baseline ratings + trends in parallel
-  const [overview, lifePlan, baselineRatings, domainTrends, ...domainFileResults] = await Promise.allSettled([
+  const [overview, lifePlan, baselineRatings, domainTrends, lastCheckinResult, ...domainFileResults] = await Promise.allSettled([
     ufs.readOverview(),
     ufs.readLifePlan(),
     getBaselineRatings(supabase, user.id),
     getDomainTrends(supabase, user.id),
+    supabase
+      .from('sessions')
+      .select('completed_at')
+      .eq('user_id', user.id)
+      .eq('session_type', 'weekly_checkin')
+      .eq('status', 'completed')
+      .order('completed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
     ...existingDomainFilenames.map(async (filename) => {
       const file = await ufs.readDomain(filename)
       if (!file) return null
@@ -119,6 +128,7 @@ export default async function LifeMapPage() {
   const lifePlanData = lifePlan.status === 'fulfilled' ? lifePlan.value : null
   const baselineRatingsData = (baselineRatings.status === 'fulfilled' ? baselineRatings.value : null) ?? []
   const trendsData: Record<string, TrendDirection | null> = domainTrends.status === 'fulfilled' ? domainTrends.value : {}
+  const lastCheckinAt = lastCheckinResult.status === 'fulfilled' ? lastCheckinResult.value.data?.completed_at ?? null : null
 
   const domains: LifeMapDomain[] = domainFileResults
     .filter((r): r is PromiseFulfilledResult<LifeMapDomain | null> => r.status === 'fulfilled')
@@ -189,6 +199,12 @@ export default async function LifeMapPage() {
     })
   }
 
+  const changedSinceLastCheckin = lastCheckinAt
+    ? domains
+        .filter((d) => new Date(d.updated_at).getTime() > new Date(lastCheckinAt).getTime())
+        .map((d) => d.domain_name)
+    : []
+
   return (
     <div className="px-md pt-lg pb-lg max-w-lg mx-auto space-y-lg">
       <h1 className="text-xl font-bold tracking-tight">Your Life Map</h1>
@@ -210,6 +226,7 @@ export default async function LifeMapPage() {
         domains={domains}
         baselineRatings={baselineRatingsData}
         domainTrends={trendsData}
+        changedSinceLastCheckin={changedSinceLastCheckin}
         lifePlanData={{ quarterTheme, commitments, thingsToProtect, boundaries: lifePlanBoundaries }}
       />
 

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { SessionType } from '@/types/chat'
+import { addDaysIso } from '@/lib/utils'
 
 export async function getActiveSession(
   supabase: SupabaseClient,
@@ -93,12 +94,9 @@ export async function completeSession(
 
   // Set next check-in date to 7 days from now
   if (session) {
-    const nextCheckin = new Date()
-    nextCheckin.setDate(nextCheckin.getDate() + 7)
-
     await supabase
       .from('users')
-      .update({ next_checkin_at: nextCheckin.toISOString() })
+      .update({ next_checkin_at: addDaysIso(new Date(), 7) })
       .eq('id', session.user_id)
   }
 }

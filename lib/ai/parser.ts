@@ -70,9 +70,16 @@ function parseFileUpdateBlock(openTag: string, body: string): FileUpdateData | n
   const statusRaw = attrs['status'] || undefined
 
   // Validate status if present
-  const status = statusRaw && VALID_STATUSES.includes(statusRaw as DomainStatus)
-    ? (statusRaw as DomainStatus)
-    : undefined
+  let status: DomainStatus | undefined
+  if (statusRaw) {
+    if (VALID_STATUSES.includes(statusRaw as DomainStatus)) {
+      status = statusRaw as DomainStatus
+    } else {
+      console.warn(
+        `[Parser] Invalid FILE_UPDATE status "${statusRaw}" for type="${fileType}" name="${name ?? 'n/a'}" — ignoring status`
+      )
+    }
+  }
 
   return {
     fileType: fileType as FileType,

@@ -7,6 +7,7 @@ import { CommitmentCard } from '@/components/home/commitment-card'
 import { PreOnboardingHero, TalkToSageOrb } from '@/components/home/pre-onboarding-hero'
 import { ActiveSessionCard } from '@/components/home/active-session-card'
 import { ReflectionNudgeCard } from '@/components/home/reflection-nudge-card'
+import { diffLocalCalendarDays } from '@/lib/utils'
 
 export default async function HomePage() {
   const supabase = await createClient()
@@ -122,6 +123,24 @@ export default async function HomePage() {
           </div>
         )}
 
+        {/* 5b. Pre-checkin prep */}
+        {homeData.nextCheckinDate && diffLocalCalendarDays(homeData.nextCheckinDate) <= 1 && (
+          <div className="bg-primary/5 rounded-lg border border-primary/20 p-4">
+            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">
+              2-minute prep
+            </p>
+            <p className="text-sm text-text mb-3">
+              Warm up with one quick reflection before your check-in.
+            </p>
+            <Link
+              href="/chat?type=ad_hoc&precheckin=1"
+              className="inline-flex items-center justify-center h-9 px-4 bg-primary text-white rounded-md text-sm font-medium hover:bg-primary-hover transition-colors"
+            >
+              Start prep
+            </Link>
+          </div>
+        )}
+
         {/* 6. Boundaries — only when data exists */}
         {homeData.boundaries.length > 0 && (
           <div className="opacity-75">
@@ -155,9 +174,7 @@ export default async function HomePage() {
 
 function formatCheckinDate(dateStr: string): string {
   const date = new Date(dateStr)
-  const now = new Date()
-  const diffMs = date.getTime() - now.getTime()
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  const diffDays = diffLocalCalendarDays(dateStr)
 
   if (diffDays <= 0) return 'Due now'
   if (diffDays === 1) return 'Tomorrow'
