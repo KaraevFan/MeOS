@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getLifeMappingPrompt, getWeeklyCheckinBasePrompt, getAdHocPrompt } from './prompts'
+import { getLifeMappingPrompt, getWeeklyCheckinBasePrompt, getAdHocPrompt, getCloseDayPrompt } from './prompts'
 import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
@@ -18,14 +18,14 @@ import type { SessionType, DomainName } from '@/types/chat'
  * 6. Flagged domain files (needs_attention / in_crisis only)
  * 7. Active patterns
  */
-async function fetchAndInjectFileContext(userId: string, exploreDomain?: string): Promise<string | null> {
+async function fetchAndInjectFileContext(userId: string, exploreDomain?: string, sessionType?: SessionType): Promise<string | null> {
   const supabase = await createClient()
   const ufs = new UserFileSystem(supabase, userId)
 
   const parts: string[] = ["=== USER'S LIFE CONTEXT ==="]
 
   // Read all context sources in parallel
-  const [sageContext, overview, lifePlan, checkInFilenames, patterns, pulseBaseline] =
+  const [sageContext, overview, lifePlan, checkInFilenames, patterns, pulseBaseline, dailyLogFilenames] =
     await Promise.allSettled([
       ufs.readSageContext(),
       ufs.readOverview(),
@@ -33,6 +33,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string)
       ufs.listCheckIns(3),
       ufs.readPatterns(),
       getBaselineRatings(supabase, userId),
+      ufs.listDailyLogs(7),
     ])
 
   // 1. Pulse check baseline (still from relational DB)
@@ -126,6 +127,59 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string)
     parts.push(patterns.value.content)
   }
 
+  // 8. Daily journal context (session-type dependent)
+  if (dailyLogFilenames.status === 'fulfilled' && dailyLogFilenames.value.length > 0) {
+    const logFilenames = dailyLogFilenames.value
+
+    if (sessionType === 'close_day') {
+      // For close_day: inject yesterday's journal (most recent) for continuity
+      const lastLog = logFilenames[0] // Already sorted newest-first
+      if (lastLog) {
+        const dateFromFilename = lastLog.replace('-journal.md', '')
+        const logFile = await ufs.readDailyLog(dateFromFilename)
+        if (logFile) {
+          parts.push(`\n=== YESTERDAY'S JOURNAL (${dateFromFilename}) ===`)
+          parts.push(logFile.content)
+        }
+      }
+    } else if (sessionType === 'weekly_checkin') {
+      // For weekly check-in: inject all daily logs since last check-in
+      let lastCheckInDate: string | null = null
+      if (checkInFilenames.status === 'fulfilled' && checkInFilenames.value.length > 0) {
+        // Extract date from filename like "2026-02-14-weekly.md"
+        const match = checkInFilenames.value[0].match(/^(\d{4}-\d{2}-\d{2})/)
+        if (match) lastCheckInDate = match[1]
+      }
+
+      const logResults = await Promise.allSettled(
+        logFilenames
+          .filter((filename) => {
+            if (!lastCheckInDate) return true // No check-in yet — include all
+            const logDate = filename.replace('-journal.md', '')
+            return logDate > lastCheckInDate
+          })
+          .map((filename) => {
+            const dateFromFilename = filename.replace('-journal.md', '')
+            return ufs.readDailyLog(dateFromFilename)
+          })
+      )
+
+      const validLogs = logResults
+        .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof ufs.readDailyLog>>> =>
+          r.status === 'fulfilled' && r.value !== null
+        )
+        .map((r) => r.value!)
+
+      if (validLogs.length > 0) {
+        parts.push('\n=== DAILY JOURNALS THIS WEEK ===')
+        for (const log of validLogs) {
+          parts.push(`\n--- ${log.frontmatter.date} (energy: ${log.frontmatter.energy ?? 'unknown'}) ---`)
+          parts.push(log.content)
+        }
+      }
+    }
+  }
+
   parts.push("\n=== END LIFE CONTEXT ===")
 
   // If only header + footer, no meaningful content was found
@@ -146,13 +200,15 @@ export async function buildConversationContext(
   let basePrompt: string
   if (sessionType === 'life_mapping') {
     basePrompt = getLifeMappingPrompt()
+  } else if (sessionType === 'close_day') {
+    basePrompt = getCloseDayPrompt()
   } else if (sessionType === 'ad_hoc') {
     basePrompt = getAdHocPrompt(options?.exploreDomain)
   } else {
     basePrompt = getWeeklyCheckinBasePrompt()
   }
 
-  const fileContext = await fetchAndInjectFileContext(userId, options?.exploreDomain)
+  const fileContext = await fetchAndInjectFileContext(userId, options?.exploreDomain, sessionType)
 
   if (!fileContext) {
     return basePrompt // New user, no context to inject
@@ -162,6 +218,7 @@ export async function buildConversationContext(
 
   if (sessionType === 'weekly_checkin') {
     prompt += `\n\nThe user's pulse check baseline is included above. When discussing domains, reference how things have shifted since their initial self-assessment. For example: "When we first talked, you rated career as 'struggling' — it sounds like things have moved to a better place."`
+    prompt += `\n\nIf daily journal entries are available above, use them as the week's narrative. Reference specific observations the user made in their evening reflections rather than asking "how was your week?" cold. For example: "Looking at your week, you mentioned feeling stuck on onboarding three times in your evening reflections — what's going on there?"`
   }
 
   return prompt
