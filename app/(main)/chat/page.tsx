@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ChatView } from '@/components/chat/chat-view'
+import { ChatLayout } from '@/components/chat/chat-layout'
 import { detectSessionState } from '@/lib/supabase/session-state'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { extractCommitments } from '@/lib/markdown/extract'
@@ -48,12 +49,14 @@ export default async function ChatPage({
 
       return (
         <div className="fixed inset-0 bottom-16 pb-[env(safe-area-inset-bottom)]">
-          <ChatView
-            userId={user.id}
-            sessionType={targetType}
-            resumeSessionId={targetSession.id}
-            initialCommitments={targetCommitments}
-          />
+          <ChatLayout userId={user.id} sessionType={targetType}>
+            <ChatView
+              userId={user.id}
+              sessionType={targetType}
+              resumeSessionId={targetSession.id}
+              initialCommitments={targetCommitments}
+            />
+          </ChatLayout>
         </div>
       )
     }
@@ -151,15 +154,17 @@ export default async function ChatPage({
 
   return (
     <div className="fixed inset-0 bottom-16 pb-[env(safe-area-inset-bottom)]">
-      <ChatView
-        userId={user.id}
-        sessionType={sessionType}
-        initialSessionState={sessionState}
-        initialCommitments={commitments}
-        exploreDomain={params.explore}
-        nudgeContext={nudgeContext}
-        sessionContext={sessionContext}
-      />
+      <ChatLayout userId={user.id} sessionType={sessionType}>
+        <ChatView
+          userId={user.id}
+          sessionType={sessionType}
+          initialSessionState={sessionState}
+          initialCommitments={commitments}
+          exploreDomain={params.explore}
+          nudgeContext={nudgeContext}
+          sessionContext={sessionContext}
+        />
+      </ChatLayout>
     </div>
   )
 }

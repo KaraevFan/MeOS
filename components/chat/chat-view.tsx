@@ -27,6 +27,8 @@ import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
 import type { PulseCheckRating } from '@/types/pulse-check'
 import type { SessionState, SessionStateResult } from '@/lib/supabase/session-state'
 import type { Commitment } from '@/lib/markdown/extract'
+import { useSidebarContext } from './sidebar-context'
+import { ALL_DOMAINS } from '@/lib/constants'
 
 /** Safely extract onboarding context from session metadata (JSONB). */
 interface OnboardingMeta {
@@ -215,6 +217,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [checkinPulseSubmitting, setCheckinPulseSubmitting] = useState(false)
   const [previousRatings, setPreviousRatings] = useState<PulseCheckRating[]>([])
 
+  const { setActiveDomain } = useSidebarContext()
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<ChatMessage[]>([])
@@ -876,6 +879,7 @@ Do NOT list all 8 domains back. Keep it conversational.`
           }
           if (domainChanged) {
             setDomainsExplored(newDomains)
+            setActiveDomain(null) // Clear sidebar active domain after card is generated
             updateDomainsExplored(supabase, sessionId, [...newDomains]).catch(() => {
               console.error('Failed to update domains explored')
             })
@@ -953,6 +957,17 @@ Do NOT list all 8 domains back. Keep it conversational.`
 
   function handleSend(text: string) {
     setPrefillText(undefined)
+
+    // Detect domain exploration for sidebar active domain
+    const exploreMatch = text.match(/^Let's explore (.+)$/i)
+    if (exploreMatch) {
+      const domainName = exploreMatch[1].trim()
+      const matchedDomain = ALL_DOMAINS.find((d) => d.toLowerCase() === domainName.toLowerCase())
+      if (matchedDomain) {
+        setActiveDomain(matchedDomain)
+      }
+    }
+
     sendMessage(text)
   }
 
