@@ -172,52 +172,50 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
   // Initialize session
   useEffect(() => {
+    /** Load messages for a session and hydrate state. Returns true if session was found. */
+    async function loadSessionMessages(sid: string, domains?: DomainName[] | null): Promise<boolean> {
+      const { data: existingMessages } = await supabase
+        .from('messages')
+        .select('id, session_id, role, content, has_structured_block, created_at')
+        .eq('session_id', sid)
+        .order('created_at', { ascending: true })
+
+      if (!existingMessages || existingMessages.length === 0) {
+        // Session exists but has no messages — still set session ID
+        setSessionId(sid)
+        if (domains) setDomainsExplored(new Set(domains))
+        return true
+      }
+
+      setSessionId(sid)
+      setMessages(existingMessages.map((m) => ({
+        id: m.id,
+        sessionId: m.session_id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        hasStructuredBlock: m.has_structured_block,
+        createdAt: m.created_at,
+      })))
+      if (domains) setDomainsExplored(new Set(domains))
+      return true
+    }
+
     async function init() {
       try {
-        // Priority 1: Resume a specific session by ID
+        // Priority 1: Resume a specific session by ID (server already validated it's active + owned)
         if (resumeSessionId) {
-          const { data: targetSession } = await supabase
-            .from('sessions')
-            .select('*')
-            .eq('id', resumeSessionId)
-            .eq('user_id', userId)
-            .eq('status', 'active')
-            .single()
-
-          if (targetSession) {
-            setSessionId(targetSession.id)
-
-            const { data: existingMessages } = await supabase
-              .from('messages')
-              .select('*')
-              .eq('session_id', targetSession.id)
-              .order('created_at', { ascending: true })
-
-            if (existingMessages && existingMessages.length > 0) {
-              setMessages(existingMessages.map((m) => ({
-                id: m.id,
-                sessionId: m.session_id,
-                role: m.role as 'user' | 'assistant',
-                content: m.content,
-                hasStructuredBlock: m.has_structured_block,
-                createdAt: m.created_at,
-              })))
-
-              if (targetSession.domains_explored) {
-                setDomainsExplored(new Set(targetSession.domains_explored as DomainName[]))
-              }
-            }
-
+          const loaded = await loadSessionMessages(resumeSessionId)
+          if (loaded) {
             setIsLoading(false)
             return
           }
-          // If target session not found, fall through to normal init
+          // If session not found, fall through to normal init
         }
 
         // Check for active session
         const { data: activeSession } = await supabase
           .from('sessions')
-          .select('*')
+          .select('id, session_type, domains_explored, status')
           .eq('user_id', userId)
           .eq('session_type', sessionType)
           .eq('status', 'active')
@@ -226,44 +224,30 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           .single()
 
         if (activeSession) {
-          setSessionId(activeSession.id)
-
-          // Load existing messages
-          const { data: existingMessages } = await supabase
-            .from('messages')
-            .select('*')
-            .eq('session_id', activeSession.id)
-            .order('created_at', { ascending: true })
-
-          if (existingMessages && existingMessages.length > 0) {
-            setMessages(existingMessages.map((m) => ({
-              id: m.id,
-              sessionId: m.session_id,
-              role: m.role as 'user' | 'assistant',
-              content: m.content,
-              hasStructuredBlock: m.has_structured_block,
-              createdAt: m.created_at,
-            })))
-
-            // Restore explored domains
-            if (activeSession.domains_explored) {
-              setDomainsExplored(new Set(activeSession.domains_explored as DomainName[]))
-            }
-          }
+          await loadSessionMessages(activeSession.id, activeSession.domains_explored as DomainName[] | null)
 
           // Show pulse check if new user hasn't completed it yet
           // (handles page refresh, HMR, and StrictMode double-mount)
           const isNewUser = initialSessionState?.state === 'new_user'
-          const hasNoUserMessages = !existingMessages?.some((m) => m.role === 'user')
-          if (isNewUser && sessionType === 'life_mapping' && hasNoUserMessages) {
-            const { data: ratings } = await supabase
-              .from('pulse_check_ratings')
+          if (isNewUser && sessionType === 'life_mapping') {
+            // Check messages table directly — loadSessionMessages may have set state asynchronously
+            const { data: userMsgs } = await supabase
+              .from('messages')
               .select('id')
               .eq('session_id', activeSession.id)
+              .eq('role', 'user')
               .limit(1)
 
-            if (!ratings || ratings.length === 0) {
-              setShowPulseCheck(true)
+            if (!userMsgs || userMsgs.length === 0) {
+              const { data: ratings } = await supabase
+                .from('pulse_check_ratings')
+                .select('id')
+                .eq('session_id', activeSession.id)
+                .limit(1)
+
+              if (!ratings || ratings.length === 0) {
+                setShowPulseCheck(true)
+              }
             }
           }
         } else {
@@ -369,7 +353,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               // Fetch the actual ratings
               const { data: pulseData } = await supabase
                 .from('pulse_check_ratings')
-                .select('*')
+                .select('domain_name, rating, rating_numeric')
                 .eq('user_id', userId)
                 .eq('is_baseline', true)
                 .order('created_at', { ascending: true })

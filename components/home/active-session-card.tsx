@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { BreathingOrb } from '@/components/ui/breathing-orb'
+import type { SessionType } from '@/types/chat'
 
 interface ActiveSessionCardProps {
   sessionId: string
-  sessionType: string
+  sessionType: SessionType
 }
 
-const SESSION_TYPE_LABELS: Record<string, string> = {
+const SESSION_TYPE_LABELS: Record<SessionType, string> = {
   life_mapping: 'life mapping',
   weekly_checkin: 'weekly check-in',
   ad_hoc: 'conversation',

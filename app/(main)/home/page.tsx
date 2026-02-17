@@ -140,10 +140,10 @@ export default async function HomePage() {
         )}
 
         {/* 7. Talk to Sage / Resume active session */}
-        {homeData.activeSessionId ? (
+        {homeData.activeSessionId && homeData.activeSessionType ? (
           <ActiveSessionCard
             sessionId={homeData.activeSessionId}
-            sessionType={homeData.activeSessionType!}
+            sessionType={homeData.activeSessionType}
           />
         ) : (
           <TalkToSageOrb />
