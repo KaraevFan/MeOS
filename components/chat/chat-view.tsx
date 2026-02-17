@@ -28,6 +28,72 @@ import type { PulseCheckRating } from '@/types/pulse-check'
 import type { SessionState, SessionStateResult } from '@/lib/supabase/session-state'
 import type { Commitment } from '@/lib/markdown/extract'
 
+/** Safely extract onboarding context from session metadata (JSONB). */
+interface OnboardingMeta {
+  intent: string | null
+  name: string | null
+  quickReplies: { exchange: number; selectedOption: string }[]
+}
+
+function extractOnboardingMeta(metadata: unknown): OnboardingMeta {
+  if (!metadata || typeof metadata !== 'object') {
+    return { intent: null, name: null, quickReplies: [] }
+  }
+  const meta = metadata as Record<string, unknown>
+  const quickReplies: OnboardingMeta['quickReplies'] = []
+  if (Array.isArray(meta.onboarding_quick_replies)) {
+    for (const item of meta.onboarding_quick_replies) {
+      if (item && typeof item === 'object' && 'exchange' in item && 'selectedOption' in item
+        && typeof (item as Record<string, unknown>).exchange === 'number'
+        && typeof (item as Record<string, unknown>).selectedOption === 'string') {
+        quickReplies.push(item as { exchange: number; selectedOption: string })
+      }
+    }
+  }
+  return {
+    intent: typeof meta.onboarding_intent === 'string' ? meta.onboarding_intent : null,
+    name: typeof meta.onboarding_name === 'string' ? meta.onboarding_name : null,
+    quickReplies,
+  }
+}
+
+/** Build the Sage auto-trigger prompt for post-onboarding users with pulse data. */
+function buildOnboardingPulseContext(
+  pulseData: { domain_name: string; rating: string; rating_numeric: number }[],
+  onboarding: OnboardingMeta
+): string {
+  const ratingsText = pulseData
+    .map((r) => `- ${r.domain_name}: ${r.rating} (${r.rating_numeric}/5)`)
+    .join('\n')
+
+  const contextParts: string[] = []
+  if (onboarding.name) {
+    contextParts.push(`The user's name is ${onboarding.name}. Greet them by name.`)
+  }
+  if (onboarding.intent) {
+    const intentLabel = INTENT_CONTEXT_LABELS[onboarding.intent] || "they didn't specify"
+    contextParts.push(`What brought them here: ${intentLabel}.`)
+  }
+  if (onboarding.quickReplies.length > 0) {
+    const replyText = onboarding.quickReplies.map((r) => `"${r.selectedOption}"`).join(', ')
+    contextParts.push(`In our brief intro conversation, they said: ${replyText}.`)
+  }
+
+  const onboardingContext = contextParts.length > 0
+    ? `\n\nONBOARDING CONTEXT:\n${contextParts.join('\n')}\nReference this context naturally — weave it in, don't robotically list things.`
+    : ''
+
+  return `The user just completed their onboarding pulse check. Here are their self-ratings:
+${ratingsText}
+${onboardingContext}
+Your job now:
+1. Briefly reflect back the overall pattern you see (1-2 sentences). Note any contrasts.
+2. Propose starting with the domain that seems most pressing (lowest rated), but give the user choice.
+3. Ask a specific opening question — NOT "tell me about X" but something like "You rated X as 'struggling' — what's the main source of tension there?"
+
+Do NOT list all 8 domains back. Keep it conversational.`
+}
+
 interface ChatViewProps {
   userId: string
   sessionType?: SessionType
@@ -215,13 +281,13 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
         // Check for active session
         const { data: activeSession } = await supabase
           .from('sessions')
-          .select('id, session_type, domains_explored, status')
+          .select('id, session_type, domains_explored, status, metadata')
           .eq('user_id', userId)
           .eq('session_type', sessionType)
           .eq('status', 'active')
           .order('created_at', { ascending: false })
           .limit(1)
-          .single()
+          .maybeSingle()
 
         if (activeSession) {
           await loadSessionMessages(activeSession.id, activeSession.domains_explored as DomainName[] | null)
@@ -231,14 +297,15 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           const isNewUser = initialSessionState?.state === 'new_user'
           if (isNewUser && sessionType === 'life_mapping') {
             // Check messages table directly — loadSessionMessages may have set state asynchronously
-            const { data: userMsgs } = await supabase
+            const { data: allMsgs } = await supabase
               .from('messages')
               .select('id')
               .eq('session_id', activeSession.id)
-              .eq('role', 'user')
               .limit(1)
 
-            if (!userMsgs || userMsgs.length === 0) {
+            const hasNoMessages = !allMsgs || allMsgs.length === 0
+
+            if (hasNoMessages) {
               const { data: ratings } = await supabase
                 .from('pulse_check_ratings')
                 .select('id')
@@ -246,7 +313,52 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
                 .limit(1)
 
               if (!ratings || ratings.length === 0) {
+                // No pulse data yet — show pulse check UI
                 setShowPulseCheck(true)
+              } else {
+                // Post-onboarding: session has pulse data but no messages
+                // Generate opening message and auto-trigger Sage with pulse context
+                const onboarding = extractOnboardingMeta(activeSession.metadata)
+                const openingMessage = getSageOpening('new_user', initialSessionState?.userName, true)
+
+                const { data: savedMsg, error: insertError } = await supabase
+                  .from('messages')
+                  .insert({
+                    session_id: activeSession.id,
+                    role: 'assistant',
+                    content: openingMessage,
+                    has_structured_block: false,
+                  })
+                  .select()
+                  .single()
+
+                if (insertError) {
+                  console.error('[ChatView] Failed to insert opening message:', insertError)
+                } else if (savedMsg) {
+                  setMessages([{
+                    id: savedMsg.id,
+                    sessionId: savedMsg.session_id,
+                    role: 'assistant',
+                    content: savedMsg.content,
+                    hasStructuredBlock: false,
+                    createdAt: savedMsg.created_at,
+                  }])
+
+                  // Fetch full pulse ratings and auto-trigger Sage
+                  const { data: pulseData } = await supabase
+                    .from('pulse_check_ratings')
+                    .select('domain_name, rating, rating_numeric')
+                    .eq('user_id', userId)
+                    .eq('is_baseline', true)
+                    .order('created_at', { ascending: true })
+
+                  if (pulseData && pulseData.length > 0) {
+                    const pulseContext = buildOnboardingPulseContext(pulseData, onboarding)
+                    setTimeout(() => {
+                      triggerSageResponse(pulseContext)
+                    }, 100)
+                  }
+                }
               }
             }
           }
@@ -260,10 +372,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             .limit(1)
             .maybeSingle()
 
-          // Check for session with onboarding context (intent, name, quick replies)
-          let onboardingIntent: string | null = null
-          let onboardingName: string | null = null
-          let onboardingQuickReplies: { exchange: number; selectedOption: string }[] = []
+          // Extract onboarding context from the most recent life_mapping session
+          let onboarding: OnboardingMeta = { intent: null, name: null, quickReplies: [] }
           if (existingPulseSession) {
             const { data: intentSession } = await supabase
               .from('sessions')
@@ -274,14 +384,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               .limit(1)
               .maybeSingle()
 
-            if (intentSession?.metadata && typeof intentSession.metadata === 'object') {
-              const meta = intentSession.metadata as Record<string, unknown>
-              onboardingIntent = typeof meta.onboarding_intent === 'string' ? meta.onboarding_intent : null
-              onboardingName = typeof meta.onboarding_name === 'string' ? meta.onboarding_name : null
-              if (Array.isArray(meta.onboarding_quick_replies)) {
-                onboardingQuickReplies = meta.onboarding_quick_replies as { exchange: number; selectedOption: string }[]
-              }
-            }
+            onboarding = extractOnboardingMeta(intentSession?.metadata)
           }
 
           const hasOnboardingPulse = Boolean(existingPulseSession)
@@ -306,7 +409,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             // Add Sage's opening message
             const openingMessage = getSageOpening(state, initialSessionState?.userName, hasOnboardingPulse)
 
-            const { data: savedMsg } = await supabase
+            const { data: savedMsg, error: insertError } = await supabase
               .from('messages')
               .insert({
                 session_id: newSession.id,
@@ -317,7 +420,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               .select()
               .single()
 
-            if (savedMsg) {
+            if (insertError) {
+              console.error('[ChatView] Failed to insert opening message:', insertError)
+            } else if (savedMsg) {
               setMessages([{
                 id: savedMsg.id,
                 sessionId: savedMsg.session_id,
@@ -350,7 +455,6 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
             // Auto-trigger Sage with pulse context for post-onboarding users
             if (hasOnboardingPulse && state === 'new_user') {
-              // Fetch the actual ratings
               const { data: pulseData } = await supabase
                 .from('pulse_check_ratings')
                 .select('domain_name, rating, rating_numeric')
@@ -359,44 +463,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
                 .order('created_at', { ascending: true })
 
               if (pulseData && pulseData.length > 0) {
-                const ratingsText = pulseData
-                  .map((r) => `- ${r.domain_name}: ${r.rating} (${r.rating_numeric}/5)`)
-                  .join('\n')
-
-                // Build onboarding context parts
-                const contextParts: string[] = []
-
-                if (onboardingName) {
-                  contextParts.push(`The user's name is ${onboardingName}. Greet them by name.`)
-                }
-
-                if (onboardingIntent) {
-                  const intentLabel = INTENT_CONTEXT_LABELS[onboardingIntent] || "they didn't specify"
-                  contextParts.push(`What brought them here: ${intentLabel}.`)
-                }
-
-                if (onboardingQuickReplies.length > 0) {
-                  const replyText = onboardingQuickReplies
-                    .map((r) => `"${r.selectedOption}"`)
-                    .join(', ')
-                  contextParts.push(`In our brief intro conversation, they said: ${replyText}.`)
-                }
-
-                const onboardingContext = contextParts.length > 0
-                  ? `\n\nONBOARDING CONTEXT:\n${contextParts.join('\n')}\nReference this context naturally — weave it in, don't robotically list things.`
-                  : ''
-
-                const pulseContext = `The user just completed their onboarding pulse check. Here are their self-ratings:
-${ratingsText}
-${onboardingContext}
-Your job now:
-1. Briefly reflect back the overall pattern you see (1-2 sentences). Note any contrasts.
-2. Propose starting with the domain that seems most pressing (lowest rated), but give the user choice.
-3. Ask a specific opening question — NOT "tell me about X" but something like "You rated X as 'struggling' — what's the main source of tension there?"
-
-Do NOT list all 8 domains back. Keep it conversational.`
-
-                // Use setTimeout to let state settle before triggering
+                const pulseContext = buildOnboardingPulseContext(pulseData, onboarding)
                 setTimeout(() => {
                   triggerSageResponse(pulseContext)
                 }, 100)

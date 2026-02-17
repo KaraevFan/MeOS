@@ -1,7 +1,5 @@
 const CACHE_NAME = 'meos-v1'
 const STATIC_ASSETS = [
-  '/',
-  '/home',
   '/manifest.json',
 ]
 
