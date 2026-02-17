@@ -7,45 +7,50 @@ interface RadarChartProps {
   domains: string[]
   ratings: Record<number, number>
   maxRating: number
+  /** SVG size in pixels (default 320) */
+  size?: number
+  /** Domain names that have been fully explored (shown with full opacity dots) */
+  exploredDomains?: string[]
 }
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const
 
-export function RadarChart({ domains, ratings, maxRating }: RadarChartProps) {
+export function RadarChart({ domains, ratings, maxRating, size = 320, exploredDomains }: RadarChartProps) {
   const [animationProgress, setAnimationProgress] = useState(0)
 
   const numAxes = domains.length
-  const centerX = 160
-  const centerY = 160
-  const maxRadius = 120
-  const labelRadius = maxRadius + 28
+  const center = size / 2
+  const maxRadius = size * 0.375 // ~120px at 320, ~75px at 200
+  const labelRadius = maxRadius + (size * 0.0875) // ~28px at 320, ~17.5px at 200
 
   useEffect(() => {
     const timer = setTimeout(() => setAnimationProgress(1), 100)
     return () => clearTimeout(timer)
   }, [])
 
+  const exploredSet = exploredDomains ? new Set(exploredDomains) : null
+
   function getPoint(index: number, value: number) {
     const angle = (Math.PI * 2 * index) / numAxes - Math.PI / 2
     const radius = (value / maxRating) * maxRadius * animationProgress
     return {
-      x: centerX + radius * Math.cos(angle),
-      y: centerY + radius * Math.sin(angle),
+      x: center + radius * Math.cos(angle),
+      y: center + radius * Math.sin(angle),
     }
   }
 
   function getAxisEnd(index: number) {
     const angle = (Math.PI * 2 * index) / numAxes - Math.PI / 2
     return {
-      x: centerX + maxRadius * Math.cos(angle),
-      y: centerY + maxRadius * Math.sin(angle),
+      x: center + maxRadius * Math.cos(angle),
+      y: center + maxRadius * Math.sin(angle),
     }
   }
 
   function getLabelPosition(index: number) {
     const angle = (Math.PI * 2 * index) / numAxes - Math.PI / 2
-    const x = centerX + labelRadius * Math.cos(angle)
-    const y = centerY + labelRadius * Math.sin(angle)
+    const x = center + labelRadius * Math.cos(angle)
+    const y = center + labelRadius * Math.sin(angle)
     let anchor = 'middle'
     if (Math.cos(angle) < -0.1) anchor = 'end'
     else if (Math.cos(angle) > 0.1) anchor = 'start'
@@ -61,6 +66,7 @@ export function RadarChart({ domains, ratings, maxRating }: RadarChartProps) {
     dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z'
 
   const rings = [0.25, 0.5, 0.75, 1]
+  const fontSize = Math.max(8, size * 0.033) // Scale font with size, min 8px
 
   return (
     <motion.div
@@ -69,15 +75,15 @@ export function RadarChart({ domains, ratings, maxRating }: RadarChartProps) {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.6, ease }}
     >
-      <svg width="320" height="320" viewBox="0 0 320 320" className="overflow-visible">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
         {/* Grid rings */}
         {rings.map((scale) => {
           const ringPoints = domains.map((_, i) => {
             const angle = (Math.PI * 2 * i) / numAxes - Math.PI / 2
             const r = maxRadius * scale
             return {
-              x: centerX + r * Math.cos(angle),
-              y: centerY + r * Math.sin(angle),
+              x: center + r * Math.cos(angle),
+              y: center + r * Math.sin(angle),
             }
           })
           const ringPath =
@@ -100,8 +106,8 @@ export function RadarChart({ domains, ratings, maxRating }: RadarChartProps) {
           return (
             <line
               key={`axis-${i}`}
-              x1={centerX}
-              y1={centerY}
+              x1={center}
+              y1={center}
               x2={end.x}
               y2={end.y}
               stroke="#B8A99A"
@@ -124,26 +130,30 @@ export function RadarChart({ domains, ratings, maxRating }: RadarChartProps) {
           transition={{ delay: 0.3, duration: 0.8 }}
         />
 
-        {/* Data points */}
-        {dataPoints.map((p, i) => (
-          <motion.circle
-            key={`point-${i}`}
-            cx={p.x}
-            cy={p.y}
-            r={3.5}
-            fill="#D4A574"
-            stroke="#FAF7F2"
-            strokeWidth="1.5"
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{
-              delay: 0.5 + i * 0.06,
-              type: 'spring',
-              damping: 15,
-              stiffness: 200,
-            }}
-          />
-        ))}
+        {/* Data points — explored domains get full opacity, rated-only get 50% */}
+        {dataPoints.map((p, i) => {
+          const isExplored = exploredSet ? exploredSet.has(domains[i]) : true
+          return (
+            <motion.circle
+              key={`point-${i}`}
+              cx={p.x}
+              cy={p.y}
+              r={isExplored ? 3.5 : 2.5}
+              fill="#D4A574"
+              stroke="#FAF7F2"
+              strokeWidth="1.5"
+              opacity={isExplored ? 1 : 0.5}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: isExplored ? 1 : 0.5 }}
+              transition={{
+                delay: 0.5 + i * 0.06,
+                type: 'spring',
+                damping: 15,
+                stiffness: 200,
+              }}
+            />
+          )
+        })}
 
         {/* Domain labels */}
         {domains.map((domain, i) => {
@@ -156,7 +166,7 @@ export function RadarChart({ domains, ratings, maxRating }: RadarChartProps) {
               textAnchor={pos.anchor as 'start' | 'middle' | 'end'}
               dominantBaseline="central"
               fill="#8B7D6B"
-              fontSize="10.5"
+              fontSize={fontSize}
               fontWeight="500"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
