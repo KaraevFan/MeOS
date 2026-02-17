@@ -63,6 +63,8 @@ User taps "Close your day"
 
 ## Implementation Phases
 
+**Revised timeline: ~12 days** (expanded from 10 due to full home screen redesign)
+
 ### Phase 1: Infrastructure & Types (Days 1-2)
 
 Foundation layer. Everything else depends on this.
@@ -390,46 +392,210 @@ if (sessionType === 'close_day') {
 
 ---
 
-### Phase 4: Home Screen & Entry Points (Days 5-6)
+### Phase 4: Home Screen Redesign (Days 5-8)
 
-How users discover and enter the Close the Day flow.
+Full home screen redesign: time-aware contextual card stack. Source of truth: `Docs/feedback/20260218_Home_page_design.md` with design reference code at `inspiration/20260218_Homescreen_design/src/App.tsx`.
 
-#### 4.1 Evening CTA Component
+**This replaces the existing home screen entirely.** The current page (`app/(main)/home/page.tsx`) is rewritten as a time-aware card stack with three states: Morning (before ~11am), Mid-Day (~11am-6pm), Evening (after ~6pm).
 
-**New file:** `components/home/close-day-cta.tsx` (or inline in home page)
+#### 4.1 Layout Skeleton & Shared Components
 
-A `'use client'` component that:
-1. Reads `new Date().getHours()` on the client
-2. Shows "Close your day" card when hour >= 17 (5pm)
-3. Queries whether a `close_day` session exists for today
-4. If already closed: shows "Update tonight's journal" variant
-5. Links to `/chat?type=close_day`
+**Rewrite:** `app/(main)/home/page.tsx` — becomes a server component that fetches data, passes it to a client wrapper for time-aware rendering.
 
-**Visual:** Warm amber background card. "How was today?" heading. Tapping navigates to chat.
+**New file:** `components/home/home-screen.tsx` — `'use client'` wrapper that:
+1. Detects time state from `new Date().getHours()` (morning < 11, midday 11-18, evening >= 18)
+2. Renders the appropriate card stack based on time state
+3. Receives server-fetched data as props (onboarding status, session data, check-in state)
 
-**Gating logic:** Only render if:
-- User has `onboarding_completed === true`
-- Hour >= 17 local time
-- No `checkin_overdue` state (check-in CTA takes precedence in the hero position; close_day CTA can still appear below)
+**Layout structure** (from spec, top to bottom):
+```
+Status Bar (native)
+Greeting + Date
+Session Chips [Open Day] [Capture] [Close Day]
+Hero Card (Tier 1) — changes per time state
+Capture Bar (morning/evening only)
+Content Cards (Tier 2) — conditional, data-dependent
+Ambient Card (Tier 3) — optional, below fold
+[80px safe zone for tab bar]
+Tab Bar with Voice Orb
+```
 
-#### 4.2 Home Page Integration
+#### 4.2 Greeting Component
 
-**File:** `app/(main)/home/page.tsx`
+**New file:** `components/home/greeting.tsx`
 
-Add the `CloseDayCTA` component to the home page layout. Position it above the existing content when conditions are met. The home page is a server component, so the time-aware rendering must be handled by the client component wrapper.
+- Time-aware greeting: "Good morning/afternoon/evening, {name}"
+- Subtext: day of week + date
+- Font: Large heading weight, warm dark gray
+- Thresholds: morning < 11am, afternoon 11am-6pm, evening >= 6pm
 
-Pass server-fetched data (whether today's journal exists, user's onboarding status) as props. The client component handles the time check.
+#### 4.3 Session Chips Component
 
-#### 4.3 Voice Orb Contextual Routing
+**New file:** `components/home/session-chips.tsx`
 
-**File:** `app/(main)/home/page.tsx` or the voice orb component
+Horizontal row of three pill-shaped buttons:
+- `[Sun] Open Day` — links to `/chat?type=open_day` (grayed out / non-functional for M1 — session type doesn't exist yet)
+- `[Mic] Capture` — links to quick capture (non-functional for M1)
+- `[Moon] Close Day` — links to `/chat?type=close_day`
 
-When the voice orb is tapped on the home screen:
-- If `checkin_due` or `checkin_overdue` → route to `/chat?type=weekly_checkin`
-- Else if hour >= 17 and onboarding completed → route to `/chat?type=close_day`
-- Else → route to `/chat?type=ad_hoc` (default)
+Active chip (matching current time state): filled amber background, white text.
+Inactive chips: outline/light gray fill, warm gray text.
+Tapping any chip opens that session — regardless of time of day.
 
-#### 4.4 Session State Awareness
+**Sizing:** ~32-36px tall, centered row. Per the design reference:
+```tsx
+className={`flex items-center gap-1.5 px-3.5 h-[34px] rounded-full text-[13px] font-semibold
+  ${isActive ? 'bg-amber-500 text-white shadow-sm' : 'bg-warm-dark/[0.04] text-warm-gray'}`}
+```
+
+**M1 behavior:** Open Day and Capture chips are visible but route to ad_hoc or show a "coming soon" state. Close Day chip works end-to-end.
+
+#### 4.4 Hero Card Component
+
+**New file:** `components/home/hero-card.tsx`
+
+The primary CTA card. One per screen state. Parameterized by:
+- `icon` — Sun / Mic / Sunset
+- `title` — "Open Your Day" / "Quick Capture" / "Close Your Day"
+- `sageText` — contextual line (see 4.7 for logic)
+- `ctaText` — button label
+- `onCtaClick` — navigation handler
+
+**Visual (from design reference):**
+```tsx
+className="rounded-3xl p-6 bg-gradient-to-br from-amber-100/60 via-amber-50/40 to-orange-50/20
+  border border-amber-200/30 relative overflow-hidden"
+```
+
+CTA button: full-width amber/gold, white text, rounded-xl, 48px height, subtle shadow.
+
+#### 4.5 InfoCard Component (Tier 2 Wrapper)
+
+**New file:** `components/home/info-card.tsx`
+
+Reusable wrapper for all Tier 2 content cards. Left-border accent colored by type:
+- `amber` — calendar, check-in, next event
+- `sage` — captures, breadcrumbs, yesterday's synthesis
+- `blue-gray` — yesterday's intention, morning intention recall
+
+**Visual (from design reference):**
+```tsx
+className={`mx-5 mt-4 bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(61,56,50,0.04)]
+  border border-warm-dark/[0.04] border-l-[4px] ${borderColors[borderColor]}`}
+```
+
+#### 4.6 Evening Card Stack (M1 Primary)
+
+Build the evening-specific cards that render when time state is `evening`:
+
+**Hero: "Close Your Day"**
+- Icon: Sunset
+- Title: "Close Your Day"
+- Contextual line: see 4.8 for cascade logic
+- CTA: "Close your day" → navigates to `/chat?type=close_day`
+
+**Capture Bar** (below hero)
+- Slim tappable strip: mic icon + "Drop a thought"
+- For M1: routes to `/chat?type=ad_hoc` (capture session type not built yet)
+
+**Breadcrumbs Card** (Tier 2, sage green border)
+- Header: "TODAY'S BREADCRUMBS"
+- Content: list of today's quick captures as blockquote-style items
+- **M1 behavior:** Card won't render (no captures directory has content yet). Graceful absence — no empty state.
+
+**Morning Intention Recall** (Tier 2, blue-gray border)
+- Header: "MORNING INTENTION" with sun icon
+- Content: "You set out to: *{intention}*"
+- **M1 behavior:** Card won't render (no day-plans exist yet). Graceful absence.
+
+**"Something to Sit With"** (Tier 3 ambient)
+- Reflective question in italic. Static pool for MVP.
+- Rotating selection from a hardcoded array.
+
+#### 4.7 Morning & Mid-Day Card Stacks (M1 Scaffold)
+
+Build the morning and mid-day states as scaffolds. Most conditional cards won't render yet (no calendar integration, no day plans, no captures). The layout skeleton and hero cards work — content fills in as features land.
+
+**Morning hero:** "Open Your Day" — CTA routes to `/chat?type=ad_hoc` for M1 (open_day session type not built yet). Contextual line uses fallback: "A fresh start. What matters most to you today?"
+
+**Mid-day hero:** "Quick Capture" — CTA routes to `/chat?type=ad_hoc` for M1. Static line: "Got a thought worth holding onto? Drop it here — it'll be waiting tonight."
+
+**Morning conditional cards (won't render in M1):**
+- Yesterday's Synthesis (needs journal data)
+- Calendar (needs Google Calendar integration)
+- Yesterday's Intention (needs day plan data)
+
+**Mid-day conditional cards (won't render in M1):**
+- Check-In (needs day plan data)
+- Next Event (needs calendar integration)
+- Captures Today (needs captures data)
+
+#### 4.8 Hero Contextual Line Logic
+
+**Evening contextual line — priority cascade:**
+1. If quick captures exist today: "You dropped {N} thoughts today. Let's make sense of them before you rest."
+2. If morning intention exists (no captures): "This morning you set out to {intention}. How did it land?"
+3. Fallback: "Take a moment to notice what today held. Even two minutes counts."
+
+**Morning contextual line — priority cascade:**
+1. If yesterday's intention AND journal exist: Reference both.
+2. If yesterday's intention only: Reference intention.
+3. If calendar has events: Reference calendar.
+4. Fallback: "A fresh start. What matters most to you today?"
+
+**For M1:** Most contextual lines will hit fallbacks (no day plans, no captures, no calendar). That's fine — the cascade fills in naturally as features land.
+
+**Implementation:** Template-based for M1 (string interpolation, not LLM call). The data is passed from server to client component as props.
+
+#### 4.9 Tab Bar with Voice Orb
+
+**Modify:** The existing tab bar / bottom navigation to match the design spec.
+
+**Orb spec:**
+- 48-56px diameter, protruding ~20px above tab bar edge
+- Amber/gold radial gradient with subtle idle pulse animation
+- No text label (other tabs have labels)
+- Contextual tap behavior:
+  - Morning → opens "Open the Day" (ad_hoc for M1)
+  - Mid-Day → opens Quick Capture (ad_hoc for M1)
+  - Evening → opens "Close the Day" session
+  - If `checkin_due`/`checkin_overdue` → prioritize weekly check-in
+  - Default/fallback → general chat
+
+**Tab bar background:** Curves gently around the orb. Standard iOS height + orb protrusion. Background mask for blending (per design reference).
+
+**Visual reference (from design reference):**
+```tsx
+<button className="w-[64px] h-[64px] rounded-full flex items-center justify-center
+  shadow-[0_6px_24px_rgba(245,158,11,0.3),0_2px_8px_rgba(245,158,11,0.15)]"
+  style={{ backgroundImage: 'radial-gradient(circle at 35% 30%, #fbbf24 0%, #f59e0b 45%, #d97706 100%)' }}>
+```
+
+#### 4.10 Home Data Fetcher Updates
+
+**File:** `lib/supabase/home-data.ts`
+
+Expand to return data needed by the new home screen:
+
+```typescript
+interface HomeData {
+  // Existing
+  userName: string
+  onboardingCompleted: boolean
+  checkinState: 'due' | 'overdue' | 'upcoming' | 'not_due'
+  // New
+  todayClosed: boolean
+  closeDaySessionId: string | null
+  todayDayPlan: { intention: string } | null   // null for M1
+  yesterdayJournal: { summary: string } | null  // null until user has journal data
+  todayCaptureCount: number                     // 0 for M1
+  yesterdayIntention: string | null             // null for M1
+}
+```
+
+For M1, most new fields return null/0. The home screen gracefully degrades — conditional cards simply don't render.
+
+#### 4.11 Session State Awareness
 
 **File:** `lib/supabase/session-state.ts`
 
@@ -437,26 +603,24 @@ Update `detectSessionState()` to handle active `close_day` sessions:
 - If a `close_day` session is active and <2 hours old → treat as `mid_conversation` with a "Resume evening reflection?" prompt
 - If >2 hours old → auto-abandon and allow a fresh session
 
-#### 4.5 Home Data Fetcher
+#### 4.12 Design Tokens
 
-**File:** `lib/supabase/home-data.ts`
+Ensure the Tailwind config includes the colors from the design spec:
 
-Add a query to check if a `close_day` session exists for today:
-```typescript
-const todayCloseDaySession = await supabase
-  .from('sessions')
-  .select('id, status')
-  .eq('user_id', userId)
-  .eq('session_type', 'close_day')
-  .gte('created_at', todayStart)
-  .maybeSingle()
-```
+| Token | Value |
+|---|---|
+| `warm-bg` | Off-white / warm cream (#FAF8F5) |
+| `warm-dark` | Dark warm gray (for text, borders) |
+| `warm-gray` | Medium warm gray (labels, secondary text) |
+| `sage` | Muted sage green (journal/capture borders) |
+| `blue-gray` | Soft blue-gray (intention borders) |
+| `terracotta` | Earth tone accent |
 
-Return `todayClosed: boolean` and `closeDaySessionId: string | null` in the home data.
+Check `tailwind.config.ts` for existing tokens. Add any missing ones. The design reference file (`inspiration/20260218_Homescreen_design/tailwind.config.js`) has the exact values.
 
 ---
 
-### Phase 5: P0 Reliability Fixes (Days 7-8)
+### Phase 5: P0 Reliability Fixes (Days 9-10)
 
 From the fresh-eyes audit. These prevent embarrassing failures during external testing.
 
@@ -491,7 +655,7 @@ Return 400 with clear error message on validation failure.
 
 ---
 
-### Phase 6: Testing & Verification (Days 9-10)
+### Phase 6: Testing & Verification (Days 11-12)
 
 #### 6.1 Parser Tests
 
@@ -594,7 +758,13 @@ Manual testing checklist (becomes the exit criteria):
 |---|---|
 | `supabase/migrations/011_close_day_session.sql` | DB migration for session type |
 | `components/chat/journal-card.tsx` | JournalCard inline component |
-| `components/home/close-day-cta.tsx` | Evening CTA client component |
+| `components/home/home-screen.tsx` | Time-aware card stack client wrapper |
+| `components/home/greeting.tsx` | Time-aware greeting component |
+| `components/home/session-chips.tsx` | Open Day / Capture / Close Day pills |
+| `components/home/hero-card.tsx` | Primary CTA card (parameterized by time state) |
+| `components/home/info-card.tsx` | Tier 2 content card wrapper with left-border accent |
+| `components/home/capture-bar.tsx` | Quick capture text input strip |
+| `components/home/ambient-card.tsx` | Tier 3 reflective content card |
 
 ### Modified Files (by phase)
 
@@ -625,12 +795,14 @@ Manual testing checklist (becomes the exit criteria):
 | `components/chat/session-complete-card.tsx` | Add `close_day` completion card |
 | `components/chat/chat-view.tsx` | Add `daily-log` detection for session completion trigger |
 
-**Phase 4 — Home Screen:**
+**Phase 4 — Home Screen Redesign:**
 | File | Change |
 |---|---|
-| `app/(main)/home/page.tsx` | Integrate CloseDayCTA component, voice orb routing |
-| `lib/supabase/home-data.ts` | Add today's close_day session query |
+| `app/(main)/home/page.tsx` | Full rewrite: server component fetching data, passing to client wrapper |
+| `lib/supabase/home-data.ts` | Expanded data fetcher (todayClosed, captures, intentions, journal) |
 | `lib/supabase/session-state.ts` | Handle active close_day sessions (2hr timeout) |
+| `tailwind.config.ts` | Add missing design tokens (sage, blue-gray, warm-bg, warm-dark) |
+| Bottom nav / tab bar component | Redesign with centered voice orb, contextual tap routing |
 
 **Phase 5 — Reliability:**
 | File | Change |
@@ -662,6 +834,8 @@ Manual testing checklist (becomes the exit criteria):
 ### Internal References
 - Design doc: `Docs/plans/2026-02-18-milestone1-close-the-day-design.md`
 - Daily rhythm spec: `Docs/feedback/20260218_MeOS_Daily_Rhythm.md`
+- Home screen spec: `Docs/feedback/20260218_Home_page_design.md`
+- Home screen design reference: `inspiration/20260218_Homescreen_design/src/App.tsx`
 - Fresh-eyes audit: `Docs/feedback/20260217_fresh-eyes-project-audit.md`
 - POS strategy: `Docs/plans/2026-02-16-pos-vision-strategy-design.md`
 - Existing session types: `types/chat.ts:5`, `lib/ai/context.ts:146-153`
