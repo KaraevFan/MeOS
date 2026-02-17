@@ -118,8 +118,8 @@ function StateQuickReplies({
   disabled: boolean
   pulseCheckRatings?: PulseCheckRating[] | null
 }) {
-  const buttonClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium bg-bg border border-text-secondary/15 text-text shadow-sm hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
-  const primaryClass = 'flex-shrink-0 px-3 py-1.5 rounded-full text-sm bg-primary/10 border border-primary/30 text-primary font-medium hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
+  const buttonClass = 'flex-shrink-0 px-3 py-1.5 min-h-[44px] rounded-full text-sm font-medium bg-bg-card/50 border border-text-secondary/25 text-text shadow-sm hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
+  const primaryClass = 'flex-shrink-0 px-3 py-1.5 min-h-[44px] rounded-full text-sm bg-primary/10 border border-primary/30 text-primary font-medium hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
 
   switch (state) {
     case 'mapping_in_progress': {

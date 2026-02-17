@@ -1,6 +1,7 @@
 'use client'
 
-import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { RadarChart } from '@/components/ui/radar-chart'
 
 interface SummaryScreenProps {
@@ -12,30 +13,17 @@ interface SummaryScreenProps {
   submitError?: string | null
 }
 
-function getRadarCommentary(ratings: Record<number, number>): string {
-  const values = Object.values(ratings)
-  if (values.length === 0) {
-    return "Ready to explore what's underneath?"
+function getFallbackCommentary(ratings: Record<number, number>, domains: string[]): string {
+  const entries = domains.map((d, i) => ({ domain: d, score: ratings[i] ?? 3 }))
+  const sorted = [...entries].sort((a, b) => a.score - b.score)
+  const lowest = sorted[0]
+  const highest = sorted[sorted.length - 1]
+
+  if (lowest.score === highest.score) {
+    return `You rated everything around ${lowest.score + 1}/5 — a pretty even landscape. Sometimes that means things are stable, sometimes it means nothing's getting enough attention.`
   }
 
-  const mean = values.reduce((a, b) => a + b, 0) / values.length
-  const variance = values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length
-  const stddev = Math.sqrt(variance)
-
-  // High variance takes priority — it's the most interesting pattern
-  if (stddev > 1.0) {
-    return "Interesting — some areas are really strong while others are pulling for attention. Let's explore that."
-  }
-  // Ratings are 0-4 (index-based), so 3.5+ means mostly Good/Thriving
-  if (mean >= 3.5) {
-    return "You're doing well across the board — let's figure out where to focus your energy for the biggest impact."
-  }
-  // Mostly low
-  if (mean <= 1.5) {
-    return "It sounds like things have been tough lately. That's exactly why mapping it out helps — let's find where to start."
-  }
-  // Mid-range
-  return "Looks like things are generally okay but there might be room to dig deeper. Let's find out what's underneath."
+  return `${highest.domain} is where you feel strongest at ${highest.score + 1}/5, while ${lowest.domain} at ${lowest.score + 1}/5 seems to need the most attention. That contrast tells a story.`
 }
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const
@@ -48,7 +36,28 @@ export function SummaryScreen({
   isSubmitting,
   submitError,
 }: SummaryScreenProps) {
-  const commentary = getRadarCommentary(ratings)
+  const [blurb, setBlurb] = useState<string | null>(null)
+  const [blurbLoading, setBlurbLoading] = useState(true)
+
+  useEffect(() => {
+    const domainRatings: Record<string, number> = {}
+    domains.forEach((d, i) => {
+      // ratings are 0-4 index-based, API expects 1-5
+      domainRatings[d] = (ratings[i] ?? 2) + 1
+    })
+
+    fetch('/api/generate-blurb', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ratings: domainRatings, domains }),
+    })
+      .then((res) => res.json())
+      .then((data) => setBlurb(data.blurb))
+      .catch(() => setBlurb(getFallbackCommentary(ratings, domains)))
+      .finally(() => setBlurbLoading(false))
+  }, [domains, ratings])
+
+  const commentary = blurb || getFallbackCommentary(ratings, domains)
 
   return (
     <div className="flex flex-col items-center min-h-[100dvh] px-6 pt-16 pb-12 relative z-10">
@@ -81,15 +90,34 @@ export function SummaryScreen({
         <RadarChart domains={domains} ratings={ratings} maxRating={4} />
       </motion.div>
 
-      {/* Sage observation — now dynamic */}
-      <motion.p
-        className="text-[15px] text-text-secondary italic text-center max-w-[280px] leading-relaxed mb-10"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.8, duration: 0.5 }}
-      >
-        {commentary}
-      </motion.p>
+      {/* Sage observation — AI-generated blurb or fallback */}
+      <div className="h-16 flex items-center justify-center mb-10">
+        <AnimatePresence mode="wait">
+          {blurbLoading ? (
+            <motion.p
+              key="loading"
+              className="text-[15px] text-text-secondary/50 italic text-center max-w-[280px] leading-relaxed"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              Looking at your ratings...
+            </motion.p>
+          ) : (
+            <motion.p
+              key="blurb"
+              className="text-[15px] text-text-secondary italic text-center max-w-[280px] leading-relaxed"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              {commentary}
+            </motion.p>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Error message */}
       {submitError && (

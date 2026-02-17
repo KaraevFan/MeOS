@@ -37,7 +37,7 @@ export function QuickReplyButtons({ domainsExplored, onSelect, disabled, pulseCh
           onClick={() => onSelect("Let's wrap up and synthesize what we've covered.")}
           disabled={disabled}
           className={cn(
-            'flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium',
+            'flex-shrink-0 px-3 py-1.5 min-h-[44px] rounded-full text-sm font-medium',
             'bg-primary border border-primary text-white shadow-sm',
             'hover:bg-primary/90',
             'active:scale-95 transition-all duration-150',
@@ -53,10 +53,10 @@ export function QuickReplyButtons({ domainsExplored, onSelect, disabled, pulseCh
           onClick={() => onSelect(`Let's explore ${domain}`)}
           disabled={disabled}
           className={cn(
-            'flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium',
+            'flex-shrink-0 px-3 py-1.5 min-h-[44px] rounded-full text-sm font-medium',
             suggestWrapUp
-              ? 'bg-bg border border-text-secondary/10 text-text-secondary shadow-sm'
-              : 'bg-bg border border-text-secondary/15 text-text shadow-sm',
+              ? 'bg-bg-card/50 border border-text-secondary/20 text-text-secondary shadow-sm'
+              : 'bg-bg-card/50 border border-text-secondary/25 text-text shadow-sm',
             'hover:bg-primary hover:text-white hover:border-primary',
             'active:scale-95 transition-all duration-150',
             'disabled:opacity-50 disabled:cursor-not-allowed'
@@ -70,7 +70,7 @@ export function QuickReplyButtons({ domainsExplored, onSelect, disabled, pulseCh
           onClick={() => onSelect("Let's wrap up and synthesize what we've covered.")}
           disabled={disabled}
           className={cn(
-            'flex-shrink-0 px-3 py-1.5 rounded-full text-sm',
+            'flex-shrink-0 px-3 py-1.5 min-h-[44px] rounded-full text-sm',
             'bg-primary/10 border border-primary/30 text-primary font-medium',
             'hover:bg-primary hover:text-white hover:border-primary',
             'active:scale-95 transition-all duration-150',
