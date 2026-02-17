@@ -1,15 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
+import { ALL_DOMAINS } from '@/lib/constants'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
-interface BlurbRequest {
-  ratings: Record<string, number>
-  domains: string[]
-}
+const BlurbRequestSchema = z.object({
+  ratings: z.record(z.string(), z.number().min(1).max(5)),
+  domains: z.array(z.string()).min(1).max(10),
+})
 
 /**
  * Generate a 1-2 sentence observation about pulse check ratings using Claude Haiku.
@@ -23,15 +25,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const body: BlurbRequest = await request.json()
-    const { ratings, domains } = body
+    const body = await request.json() as unknown
+    const parsed = BlurbRequestSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
 
-    if (!ratings || !domains || domains.length === 0) {
-      return NextResponse.json({ error: 'Missing ratings or domains' }, { status: 400 })
+    const { ratings, domains } = parsed.data
+
+    // Validate domains against allowlist
+    const validDomains = domains.filter((d) => (ALL_DOMAINS as string[]).includes(d))
+    if (validDomains.length === 0) {
+      return NextResponse.json({ error: 'No valid domains provided' }, { status: 400 })
     }
 
     // Format ratings for the prompt
-    const ratingsText = domains
+    const ratingsText = validDomains
       .map((domain) => {
         const score = ratings[domain] ?? 3
         const label = score <= 1 ? 'in crisis' : score <= 2 ? 'struggling' : score <= 3 ? 'okay' : score <= 4 ? 'good' : 'thriving'
@@ -51,11 +60,12 @@ export async function POST(request: Request) {
         ],
       })
 
-      const blurb = response.content[0].type === 'text' ? response.content[0].text : ''
+      const firstBlock = response.content[0]
+      const blurb = firstBlock?.type === 'text' ? firstBlock.text : ''
       return NextResponse.json({ blurb })
     } catch {
       // Fallback: generate a template-based blurb
-      const blurb = generateFallbackBlurb(ratings, domains)
+      const blurb = generateFallbackBlurb(ratings, validDomains)
       return NextResponse.json({ blurb, fallback: true })
     }
   } catch {

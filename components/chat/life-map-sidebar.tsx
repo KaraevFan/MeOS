@@ -8,8 +8,13 @@ import { useSidebarContext } from './sidebar-context'
 import { ALL_DOMAINS } from '@/lib/constants'
 import { STORAGE_BUCKET } from '@/lib/markdown/constants'
 import { cn } from '@/lib/utils'
-import type { DomainName } from '@/types/chat'
-import type { PulseCheckRating } from '@/types/pulse-check'
+import type { DomainName, DomainStatus } from '@/types/chat'
+
+/** Narrower type — sidebar only needs domain + numeric rating, not the full PulseCheckRating */
+interface SidebarPulseRating {
+  domain: string
+  ratingNumeric: number
+}
 
 interface FileIndexRow {
   file_path: string
@@ -24,13 +29,15 @@ interface DomainSlot {
   domain: DomainName
   state: 'unexplored' | 'active' | 'explored'
   previewLine?: string
-  status?: string
+  status?: DomainStatus
   pulseRating?: number
 }
 
 interface LifeMapSidebarProps {
   userId: string
 }
+
+const supabase = createClient()
 
 const STATUS_DOT_COLORS: Record<string, string> = {
   thriving: 'bg-status-thriving',
@@ -48,7 +55,6 @@ const PULSE_DOT_COLORS: Record<number, string> = {
 }
 
 export function LifeMapSidebar({ userId }: LifeMapSidebarProps) {
-  const supabase = createClient()
   const { activeDomain } = useSidebarContext()
 
   const [collapsed, setCollapsed] = useState(() => {
@@ -59,7 +65,7 @@ export function LifeMapSidebar({ userId }: LifeMapSidebarProps) {
   })
   const [fileIndex, setFileIndex] = useState<FileIndexRow[]>([])
   const [insightsContent, setInsightsContent] = useState<string | null>(null)
-  const [pulseRatings, setPulseRatings] = useState<PulseCheckRating[]>([])
+  const [pulseRatings, setPulseRatings] = useState<SidebarPulseRating[]>([])
 
   // Persist collapsed state
   useEffect(() => {
@@ -78,7 +84,7 @@ export function LifeMapSidebar({ userId }: LifeMapSidebarProps) {
       const bodyMatch = text.match(/^---[\s\S]*?---\s*([\s\S]*)$/)
       setInsightsContent(bodyMatch ? bodyMatch[1].trim() : text.trim())
     }
-  }, [userId, supabase])
+  }, [userId])
 
   // Fetch initial data
   useEffect(() => {
@@ -121,8 +127,6 @@ export function LifeMapSidebar({ userId }: LifeMapSidebarProps) {
           setPulseRatings(
             ratings.map((r) => ({
               domain: r.domain_name as string,
-              domainKey: r.domain_name as string,
-              rating: '' as PulseCheckRating['rating'],
               ratingNumeric: r.rating_numeric as number,
             }))
           )
@@ -131,7 +135,7 @@ export function LifeMapSidebar({ userId }: LifeMapSidebarProps) {
     }
 
     fetchInitialData()
-  }, [userId, supabase, fetchInsightsContent])
+  }, [userId, fetchInsightsContent])
 
   // Supabase Realtime subscription for file_index changes
   useEffect(() => {
@@ -169,7 +173,7 @@ export function LifeMapSidebar({ userId }: LifeMapSidebarProps) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [userId, supabase, fetchInsightsContent])
+  }, [userId, fetchInsightsContent])
 
   // Build domain slot data
   const pulseMap = new Map(pulseRatings.map((r) => [r.domain, r.ratingNumeric]))
@@ -196,7 +200,7 @@ export function LifeMapSidebar({ userId }: LifeMapSidebarProps) {
         domain,
         state: 'explored' as const,
         previewLine: (indexRow.frontmatter?.preview_line as string) || undefined,
-        status: indexRow.status || 'stable',
+        status: (indexRow.status as DomainStatus) || 'stable',
         pulseRating: pulseMap.get(domain),
       }
     }

@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState } from 'react'
 import type { ReactNode } from 'react'
 
 interface SidebarContextValue {
@@ -14,11 +14,7 @@ const SidebarContext = createContext<SidebarContextValue>({
 })
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
-  const [activeDomain, setActiveDomainState] = useState<string | null>(null)
-
-  const setActiveDomain = useCallback((domain: string | null) => {
-    setActiveDomainState(domain)
-  }, [])
+  const [activeDomain, setActiveDomain] = useState<string | null>(null)
 
   return (
     <SidebarContext.Provider value={{ activeDomain, setActiveDomain }}>

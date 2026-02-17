@@ -40,6 +40,8 @@ export function SummaryScreen({
   const [blurbLoading, setBlurbLoading] = useState(true)
 
   useEffect(() => {
+    const controller = new AbortController()
+
     const domainRatings: Record<string, number> = {}
     domains.forEach((d, i) => {
       // ratings are 0-4 index-based, API expects 1-5
@@ -50,11 +52,20 @@ export function SummaryScreen({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ratings: domainRatings, domains }),
+      signal: controller.signal,
     })
       .then((res) => res.json())
       .then((data) => setBlurb(data.blurb))
-      .catch(() => setBlurb(getFallbackCommentary(ratings, domains)))
-      .finally(() => setBlurbLoading(false))
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          setBlurb(getFallbackCommentary(ratings, domains))
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setBlurbLoading(false)
+      })
+
+    return () => controller.abort()
   }, [domains, ratings])
 
   const commentary = blurb || getFallbackCommentary(ratings, domains)

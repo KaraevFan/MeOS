@@ -14,12 +14,13 @@ interface ChatLayoutProps {
 /**
  * Wraps ChatView + LifeMapSidebar in a CSS Grid layout.
  * Sidebar only appears on desktop (lg+) for life_mapping sessions.
+ * SidebarProvider always wraps so useSidebarContext() is safe in all session types.
  */
 export function ChatLayout({ userId, sessionType, children }: ChatLayoutProps) {
   const showSidebar = sessionType === 'life_mapping'
 
   if (!showSidebar) {
-    return <>{children}</>
+    return <SidebarProvider>{children}</SidebarProvider>
   }
 
   return (

@@ -1,3 +1,5 @@
+import type { FileType } from '@/lib/markdown/constants'
+
 export type MessageRole = 'user' | 'assistant'
 
 export type SessionType = 'life_mapping' | 'weekly_checkin' | 'ad_hoc'
@@ -56,7 +58,7 @@ export interface SessionSummary {
 /** Semantic identifier from [FILE_UPDATE] blocks. System resolves to file path. */
 export interface FileUpdateData {
   /** File type: "domain", "overview", "life-plan", "check-in", "sage-context", "sage-patterns", "session-insights" */
-  fileType: string
+  fileType: FileType
   /** Semantic name, e.g., "Career / Work" for domains, or absent for singleton files */
   name?: string
   /** Resolved file path (populated by resolver, not parser) */

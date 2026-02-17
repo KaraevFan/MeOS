@@ -10,8 +10,10 @@ import type {
   DomainName,
 } from '@/types/chat'
 import { FILE_TYPES } from '@/lib/markdown/constants'
+import type { FileType } from '@/lib/markdown/constants'
 
 const VALID_FILE_TYPES: Set<string> = new Set(Object.values(FILE_TYPES))
+const VALID_STATUSES: DomainStatus[] = ['thriving', 'stable', 'needs_attention', 'in_crisis']
 
 // ============================================
 // Legacy block tags (kept for backward compat rendering)
@@ -28,21 +30,34 @@ const LEGACY_BLOCK_TAGS = [
 // ============================================
 
 /**
- * Regex to match [FILE_UPDATE type="..." name="..." preview_line="..." status="..."] opening tags.
- * type is required; name, preview_line, and status are optional.
+ * Two-step FILE_UPDATE parsing: match the full tag, then extract key="value" pairs.
+ * Order-independent — attributes can appear in any order.
  */
-const FILE_UPDATE_OPEN_REGEX = /\[FILE_UPDATE\s+type="([^"]+)"(?:\s+name="([^"]*)")?(?:\s+preview_line="([^"]*)")?(?:\s+status="([^"]*)")?\s*\]/
+const FILE_UPDATE_TAG_REGEX = /\[FILE_UPDATE\s+([^\]]+)\]/
 const FILE_UPDATE_CLOSE = '[/FILE_UPDATE]'
+const ATTR_REGEX = /(\w+)="([^"]*)"/g
+
+function parseFileUpdateAttributes(attrString: string): Record<string, string> {
+  const attrs: Record<string, string> = {}
+  let m: RegExpExecArray | null
+  while ((m = ATTR_REGEX.exec(attrString)) !== null) {
+    attrs[m[1]] = m[2]
+  }
+  return attrs
+}
 
 /** [REFLECTION_PROMPT] block markers */
 const REFLECTION_PROMPT_OPEN = '[REFLECTION_PROMPT]'
 const REFLECTION_PROMPT_CLOSE = '[/REFLECTION_PROMPT]'
 
 function parseFileUpdateBlock(openTag: string, body: string): FileUpdateData | null {
-  const match = openTag.match(FILE_UPDATE_OPEN_REGEX)
-  if (!match) return null
+  const tagMatch = openTag.match(FILE_UPDATE_TAG_REGEX)
+  if (!tagMatch) return null
 
-  const fileType = match[1]
+  const attrs = parseFileUpdateAttributes(tagMatch[1])
+  const fileType = attrs['type']
+
+  if (!fileType) return null
 
   // Reject unknown file types (prevents prompt injection of arbitrary types)
   if (!VALID_FILE_TYPES.has(fileType)) {
@@ -50,18 +65,17 @@ function parseFileUpdateBlock(openTag: string, body: string): FileUpdateData | n
     return null
   }
 
-  const name = match[2] || undefined
-  const previewLine = match[3] || undefined
-  const statusRaw = match[4] || undefined
+  const name = attrs['name'] || undefined
+  const previewLine = attrs['preview_line'] || undefined
+  const statusRaw = attrs['status'] || undefined
 
   // Validate status if present
-  const validStatuses: DomainStatus[] = ['thriving', 'stable', 'needs_attention', 'in_crisis']
-  const status = statusRaw && validStatuses.includes(statusRaw as DomainStatus)
+  const status = statusRaw && VALID_STATUSES.includes(statusRaw as DomainStatus)
     ? (statusRaw as DomainStatus)
     : undefined
 
   return {
-    fileType,
+    fileType: fileType as FileType,
     name,
     content: body.trim(),
     ...(previewLine ? { previewLine } : {}),
@@ -72,8 +86,6 @@ function parseFileUpdateBlock(openTag: string, body: string): FileUpdateData | n
 // ============================================
 // Legacy block parsing (unchanged)
 // ============================================
-
-const VALID_STATUSES: DomainStatus[] = ['thriving', 'stable', 'needs_attention', 'in_crisis']
 
 function parseKeyValueLines(content: string): Record<string, string> {
   const result: Record<string, string> = {}
@@ -175,7 +187,7 @@ export function parseMessage(content: string): ParsedMessage {
     let fileUpdateOpenMatch: RegExpExecArray | null = null
 
     // Check for [FILE_UPDATE ...] opening tag
-    const fuMatch = FILE_UPDATE_OPEN_REGEX.exec(remaining)
+    const fuMatch = FILE_UPDATE_TAG_REGEX.exec(remaining)
     if (fuMatch && fuMatch.index !== undefined) {
       const fuIdx = remaining.indexOf(fuMatch[0])
       if (fuIdx !== -1) {
@@ -314,7 +326,7 @@ export function parseStreamingChunk(accumulated: string): {
   completedBlock: StructuredBlock | null
 } {
   // Check for FILE_UPDATE blocks first
-  const fuMatch = FILE_UPDATE_OPEN_REGEX.exec(accumulated)
+  const fuMatch = FILE_UPDATE_TAG_REGEX.exec(accumulated)
   if (fuMatch) {
     const openIdx = accumulated.indexOf(fuMatch[0])
     const closeIdx = accumulated.indexOf(FILE_UPDATE_CLOSE, openIdx)
