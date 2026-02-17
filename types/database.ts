@@ -34,6 +34,7 @@ export interface LifeMapDomain {
   tensions: string[] | null
   stated_intentions: string[] | null
   status: 'thriving' | 'stable' | 'needs_attention' | 'in_crisis' | null
+  preview_line: string | null
   updated_at: string
 }
 

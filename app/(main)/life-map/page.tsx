@@ -7,6 +7,8 @@ import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { FILE_TO_DOMAIN_MAP, DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { extractMarkdownSection, extractBulletList, extractCommitments } from '@/lib/markdown/extract'
 import { LifeMapTabs } from '@/components/life-map/life-map-tabs'
+import { RadarChart } from '@/components/ui/radar-chart'
+import { PULSE_DOMAINS } from '@/types/pulse-check'
 import type { LifeMap, LifeMapDomain } from '@/types/database'
 import type { OverviewFileFrontmatter, DomainFileFrontmatter } from '@/types/markdown-files'
 
@@ -72,6 +74,7 @@ function domainFileToDomain(
     tensions: keyTension ? [keyTension] : null,
     stated_intentions: statedIntention ? [statedIntention] : null,
     status: frontmatter.status ?? null,
+    preview_line: frontmatter.preview_line ?? null,
     updated_at: frontmatter.last_updated ?? new Date().toISOString(),
   }
 }
@@ -171,9 +174,36 @@ export default async function LifeMapPage() {
 
   const lastUpdated = overviewData?.frontmatter.last_updated
 
+  // Build radar chart data from baseline ratings
+  const radarDomains = PULSE_DOMAINS.map((d) => d.label)
+  const radarRatings: Record<number, number> = {}
+  const exploredDomainNames = domains.map((d) => d.domain_name)
+
+  if (baselineRatingsData.length > 0) {
+    const ratingLookup = new Map(baselineRatingsData.map((r) => [r.domain, r.ratingNumeric]))
+    radarDomains.forEach((label, i) => {
+      const rating = ratingLookup.get(label)
+      if (rating !== undefined) {
+        radarRatings[i] = rating - 1 // RadarChart maxRating=4 expects 0-based
+      }
+    })
+  }
+
   return (
     <div className="px-md pt-lg pb-lg max-w-lg mx-auto space-y-lg">
       <h1 className="text-xl font-bold tracking-tight">Your Life Map</h1>
+
+      {baselineRatingsData.length > 0 && (
+        <div className="mb-2">
+          <RadarChart
+            domains={radarDomains}
+            ratings={radarRatings}
+            maxRating={4}
+            size={280}
+            exploredDomains={exploredDomainNames}
+          />
+        </div>
+      )}
 
       <LifeMapTabs
         lifeMap={lifeMap}
