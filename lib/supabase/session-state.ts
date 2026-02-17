@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ALL_DOMAINS } from '@/lib/constants'
 import type { DomainName } from '@/types/chat'
-import { getDisplayName } from '@/lib/utils'
+import { diffLocalCalendarDays, getDisplayName } from '@/lib/utils'
 
 export type SessionState =
   /**
@@ -120,12 +120,9 @@ export async function detectSessionState(
   const nextCheckinAt = user?.next_checkin_at
 
   if (nextCheckinAt) {
-    const checkinDate = new Date(nextCheckinAt)
-    const now = new Date()
-    const diffMs = checkinDate.getTime() - now.getTime()
-    const diffHours = diffMs / (1000 * 60 * 60)
+    const dayDiff = diffLocalCalendarDays(nextCheckinAt)
 
-    if (diffHours < -24) {
+    if (dayDiff < -1) {
       return {
         state: 'checkin_overdue',
         nextCheckinAt,
@@ -134,7 +131,7 @@ export async function detectSessionState(
       }
     }
 
-    if (diffHours <= 24) {
+    if (dayDiff <= 1) {
       return {
         state: 'checkin_due',
         nextCheckinAt,

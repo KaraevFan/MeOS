@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { captureException } from '@/lib/monitoring/sentry'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
@@ -15,6 +16,7 @@ export async function POST(request: Request) {
     const audioFile = formData.get('audio')
 
     if (!audioFile || !(audioFile instanceof Blob)) {
+      captureException('Missing or invalid audio file in /api/transcribe', { tags: { route: '/api/transcribe' } })
       return NextResponse.json({ error: 'No audio file provided' }, { status: 400 })
     }
 
@@ -38,6 +40,10 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       const errorText = await response.text()
+      captureException(`Whisper API error (${response.status})`, {
+        tags: { route: '/api/transcribe', stage: 'openai_whisper' },
+        extra: { status: response.status, errorText },
+      })
       console.error(`Whisper API error (${response.status}):`, errorText)
       return NextResponse.json(
         { error: `Transcription failed (${response.status})` },
@@ -51,6 +57,7 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ text: result.text })
   } catch (error) {
+    captureException(error, { tags: { route: '/api/transcribe', stage: 'handler' } })
     console.error('Transcription error:', error)
     return NextResponse.json(
       { error: 'Transcription failed' },

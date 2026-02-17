@@ -290,7 +290,7 @@ export class UserFileSystem {
       { domain: domainFilename, ...overrides }
     )
     await this.writeFile(`life-map/${domainFilename}.md`, frontmatter, content)
-    this.updateFileIndex(`life-map/${domainFilename}.md`, FILE_TYPES.DOMAIN, frontmatter, domainFilename)
+    await this.updateFileIndex(`life-map/${domainFilename}.md`, FILE_TYPES.DOMAIN, frontmatter, domainFilename)
   }
 
   async writeOverview(content: string, overrides?: Partial<OverviewFileFrontmatter>, existingFrontmatter?: Partial<OverviewFileFrontmatter> | null): Promise<void> {
@@ -300,7 +300,7 @@ export class UserFileSystem {
       { user_id: this.userId, ...overrides }
     )
     await this.writeFile('life-map/_overview.md', frontmatter, content)
-    this.updateFileIndex('life-map/_overview.md', FILE_TYPES.OVERVIEW, frontmatter)
+    await this.updateFileIndex('life-map/_overview.md', FILE_TYPES.OVERVIEW, frontmatter)
   }
 
   async writeLifePlan(content: string, overrides?: Partial<LifePlanFileFrontmatter>, existingFrontmatter?: Partial<LifePlanFileFrontmatter> | null): Promise<void> {
@@ -310,7 +310,7 @@ export class UserFileSystem {
       overrides ?? {}
     )
     await this.writeFile('life-plan/current.md', frontmatter, content)
-    this.updateFileIndex('life-plan/current.md', FILE_TYPES.LIFE_PLAN, frontmatter)
+    await this.updateFileIndex('life-plan/current.md', FILE_TYPES.LIFE_PLAN, frontmatter)
   }
 
   async writeCheckIn(date: string, content: string, metadata: Partial<CheckInFileFrontmatter>): Promise<void> {
@@ -318,7 +318,7 @@ export class UserFileSystem {
     const sessionType = metadata.type === 'weekly-check-in' ? 'weekly' : metadata.type ?? 'weekly'
     const filename = `${date}-${sessionType}.md`
     await this.writeFile(`check-ins/${filename}`, frontmatter, content)
-    this.updateFileIndex(`check-ins/${filename}`, FILE_TYPES.CHECK_IN, frontmatter)
+    await this.updateFileIndex(`check-ins/${filename}`, FILE_TYPES.CHECK_IN, frontmatter)
   }
 
   async writeSageContext(content: string, overrides?: Partial<SageContextFrontmatter>, existingFrontmatter?: Partial<SageContextFrontmatter> | null): Promise<void> {
@@ -328,7 +328,7 @@ export class UserFileSystem {
       overrides ?? {}
     )
     await this.writeFile('sage/context.md', frontmatter, content)
-    this.updateFileIndex('sage/context.md', FILE_TYPES.SAGE_CONTEXT, frontmatter)
+    await this.updateFileIndex('sage/context.md', FILE_TYPES.SAGE_CONTEXT, frontmatter)
   }
 
   async writePatterns(content: string, overrides?: Partial<PatternsFrontmatter>, existingFrontmatter?: Partial<PatternsFrontmatter> | null): Promise<void> {
@@ -338,7 +338,7 @@ export class UserFileSystem {
       overrides ?? {}
     )
     await this.writeFile('sage/patterns.md', frontmatter, content)
-    this.updateFileIndex('sage/patterns.md', FILE_TYPES.SAGE_PATTERNS, frontmatter)
+    await this.updateFileIndex('sage/patterns.md', FILE_TYPES.SAGE_PATTERNS, frontmatter)
   }
 
   /**
@@ -348,7 +348,7 @@ export class UserFileSystem {
   async writeSessionInsights(content: string): Promise<void> {
     const metadata = { last_updated: new Date().toISOString() }
     await this.writeFile('sage/session-insights.md', metadata, content)
-    this.updateFileIndex('sage/session-insights.md', FILE_TYPES.SESSION_INSIGHTS, metadata)
+    await this.updateFileIndex('sage/session-insights.md', FILE_TYPES.SESSION_INSIGHTS, metadata)
   }
 
   // ============================================

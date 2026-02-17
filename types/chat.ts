@@ -4,6 +4,8 @@ export type MessageRole = 'user' | 'assistant'
 
 export type SessionType = 'life_mapping' | 'weekly_checkin' | 'ad_hoc'
 
+export type PulseContextMode = 'none' | 'onboarding_baseline' | 'checkin_after_rerate' | 'checkin_after_skip'
+
 export type SessionStatus = 'active' | 'completed' | 'abandoned'
 
 export type DomainStatus = 'thriving' | 'stable' | 'needs_attention' | 'in_crisis'

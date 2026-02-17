@@ -11,7 +11,7 @@ import type { SessionType } from '@/types/chat'
 export default async function ChatPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; explore?: string; nudge?: string; session_context?: string; session?: string }>
+  searchParams: Promise<{ type?: string; explore?: string; nudge?: string; session_context?: string; session?: string; precheckin?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -152,6 +152,9 @@ export default async function ChatPage({
     }
   }
 
+  // Pre-checkin warmup flag — instruction is defined server-side in the API route
+  const precheckin = params.precheckin === '1' && sessionType === 'ad_hoc'
+
   return (
     <div className="fixed inset-0 bottom-16 pb-[env(safe-area-inset-bottom)]">
       <ChatLayout userId={user.id} sessionType={sessionType}>
@@ -163,6 +166,7 @@ export default async function ChatPage({
           exploreDomain={params.explore}
           nudgeContext={nudgeContext}
           sessionContext={sessionContext}
+          precheckin={precheckin}
         />
       </ChatLayout>
     </div>
