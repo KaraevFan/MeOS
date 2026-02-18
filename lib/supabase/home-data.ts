@@ -86,9 +86,10 @@ export async function getHomeData(
     ] = await Promise.allSettled([
       supabase
         .from('sessions')
-        .select('id, session_type')
+        .select('id, session_type, messages!inner(id)')
         .eq('user_id', userId)
         .eq('status', 'active')
+        .eq('messages.role', 'user')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
