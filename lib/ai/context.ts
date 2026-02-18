@@ -146,17 +146,24 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
       // Calendar not connected or error — graceful degradation
     }
 
-    // Yesterday's day plan (for carry-forward)
+    // Yesterday's day plan + journal cross-reference (for carry-forward)
     try {
       const yesterday = new Date()
       yesterday.setDate(yesterday.getDate() - 1)
       const yesterdayStr = yesterday.toLocaleDateString('en-CA')
-      const yesterdayDayPlan = await ufs.readDayPlan(yesterdayStr)
+      const [yesterdayDayPlan, yesterdayLog] = await Promise.all([
+        ufs.readDayPlan(yesterdayStr).catch(() => null),
+        ufs.readDailyLog(yesterdayStr).catch(() => null),
+      ])
       if (yesterdayDayPlan) {
         parts.push(`\n=== YESTERDAY'S DAY PLAN (${yesterdayStr}) ===`)
         if (yesterdayDayPlan.frontmatter.intention) {
           parts.push(`Intention: "${yesterdayDayPlan.frontmatter.intention}"`)
           parts.push(`Status: ${yesterdayDayPlan.frontmatter.status ?? 'unknown'}`)
+          // Check journal for intention fulfillment signal
+          if (yesterdayLog?.frontmatter.intention_fulfilled) {
+            parts.push(`Intention fulfilled: ${yesterdayLog.frontmatter.intention_fulfilled}`)
+          }
         }
         parts.push(yesterdayDayPlan.content)
       }
@@ -165,7 +172,24 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
     }
   }
 
-  // 8b. Daily journal context (session-type dependent)
+  // 8b. Today's day plan (close_day: reference the morning intention)
+  if (sessionType === 'close_day') {
+    try {
+      const todayStr = new Date().toLocaleDateString('en-CA')
+      const todayDayPlan = await ufs.readDayPlan(todayStr)
+      if (todayDayPlan) {
+        parts.push(`\n=== TODAY'S DAY PLAN (${todayStr}) ===`)
+        if (todayDayPlan.frontmatter.intention) {
+          parts.push(`Morning intention: "${todayDayPlan.frontmatter.intention}"`)
+        }
+        parts.push(todayDayPlan.content)
+      }
+    } catch {
+      // No day plan today — user may not have done open_day
+    }
+  }
+
+  // 8c. Daily journal context (session-type dependent)
   if (dailyLogFilenames.status === 'fulfilled' && dailyLogFilenames.value.length > 0) {
     const logFilenames = dailyLogFilenames.value
 
@@ -262,6 +286,19 @@ export async function buildConversationContext(
   // Add FILE_UPDATE format instructions if not already in skill prompt
   if (skill) {
     basePrompt += getFileUpdateFormatInstructions()
+  }
+
+  // Expire stale open_day sessions when starting close_day
+  if (sessionType === 'close_day') {
+    const supabase = await createClient()
+    const todayStr = new Date().toLocaleDateString('en-CA')
+    await supabase
+      .from('sessions')
+      .update({ status: 'expired' })
+      .eq('user_id', userId)
+      .eq('session_type', 'open_day')
+      .eq('status', 'active')
+      .lt('created_at', `${todayStr}T23:59:59Z`)
   }
 
   const fileContext = await fetchAndInjectFileContext(userId, options?.exploreDomain, sessionType)

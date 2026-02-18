@@ -56,9 +56,9 @@ export async function getHomeData(
   let activeSessionType: SessionType | null = null
   let todayClosed = false
   let yesterdayJournalSummary: string | null = null
-  const todayCaptureCount = 0 // M1: captures not implemented yet
-  const todayIntention: string | null = null // M1: day plans not implemented yet
-  const yesterdayIntention: string | null = null // M1: day plans not implemented yet
+  const todayCaptureCount = 0 // TODO: captures not implemented yet
+  let todayIntention: string | null = null
+  let yesterdayIntention: string | null = null
 
   if (onboardingCompleted) {
     const ufs = new UserFileSystem(supabase, userId)
@@ -69,7 +69,7 @@ export async function getHomeData(
     yesterdayDate.setDate(yesterdayDate.getDate() - 1)
     const yesterday = yesterdayDate.toISOString().split('T')[0]
 
-    const [activeSessionResult, todayCloseDayResult, yesterdayJournalResult] = await Promise.allSettled([
+    const [activeSessionResult, todayCloseDayResult, yesterdayJournalResult, todayDayPlanResult, yesterdayDayPlanResult] = await Promise.allSettled([
       supabase
         .from('sessions')
         .select('id, session_type')
@@ -88,6 +88,8 @@ export async function getHomeData(
         .limit(1)
         .maybeSingle(),
       ufs.readDailyLog(yesterday),
+      ufs.readDayPlan(todayStr),
+      ufs.readDayPlan(yesterday),
     ])
 
     // Extract active session from parallel result
@@ -110,6 +112,16 @@ export async function getHomeData(
         .split('\n')
         .filter((l: string) => l.trim() && !l.startsWith('#'))
       yesterdayJournalSummary = lines[0]?.trim() || null
+    }
+
+    // Extract today's intention from day plan
+    if (todayDayPlanResult.status === 'fulfilled' && todayDayPlanResult.value) {
+      todayIntention = todayDayPlanResult.value.frontmatter.intention ?? null
+    }
+
+    // Extract yesterday's intention for carry-forward
+    if (yesterdayDayPlanResult.status === 'fulfilled' && yesterdayDayPlanResult.value) {
+      yesterdayIntention = yesterdayDayPlanResult.value.frontmatter.intention ?? null
     }
   }
 
