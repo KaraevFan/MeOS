@@ -239,7 +239,7 @@ export async function POST(request: Request) {
   }
 
   // Validate session type
-  const VALID_SESSION_TYPES: ReadonlySet<SessionType> = new Set<SessionType>(['life_mapping', 'weekly_checkin', 'ad_hoc'])
+  const VALID_SESSION_TYPES: ReadonlySet<SessionType> = new Set<SessionType>(['life_mapping', 'weekly_checkin', 'ad_hoc', 'close_day'])
   if (!VALID_SESSION_TYPES.has(sessionType)) {
     return new Response(JSON.stringify({ error: 'Invalid session type' }), {
       status: 400,

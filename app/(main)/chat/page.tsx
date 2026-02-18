@@ -77,6 +77,8 @@ export default async function ChatPage({
   let sessionType: SessionType = 'life_mapping'
   if (requestedType === 'weekly_checkin') {
     sessionType = 'weekly_checkin'
+  } else if (requestedType === 'close_day') {
+    sessionType = 'close_day'
   } else if (requestedType === 'ad_hoc' || params.explore) {
     // Explicit ad-hoc OR domain exploration from Life Map
     sessionType = 'ad_hoc'
