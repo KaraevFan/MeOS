@@ -139,7 +139,8 @@ export async function handleFileUpdate(
       case FILE_TYPES.DAILY_LOG: {
         const date = update.name ?? new Date().toISOString().split('T')[0]
         const overrides: Partial<DailyLogFrontmatter> = {}
-        if (update.attributes?.energy) {
+        const VALID_ENERGY = new Set<DailyLogFrontmatter['energy']>(['high', 'moderate', 'low'])
+        if (update.attributes?.energy && VALID_ENERGY.has(update.attributes.energy as DailyLogFrontmatter['energy'])) {
           overrides.energy = update.attributes.energy as DailyLogFrontmatter['energy']
         }
         if (update.attributes?.mood_signal) {

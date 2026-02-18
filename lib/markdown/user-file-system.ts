@@ -270,8 +270,15 @@ export class UserFileSystem {
     if (!file) return null
 
     const parsed = DailyLogFrontmatterSchema.safeParse(file.frontmatter)
+    if (!parsed.success) {
+      console.warn('[UserFileSystem] Daily log frontmatter parse failed:', parsed.error.issues)
+      return {
+        frontmatter: { date, type: 'daily-journal' as const },
+        content: file.content,
+      }
+    }
     return {
-      frontmatter: parsed.success ? parsed.data : file.frontmatter as DailyLogFrontmatter,
+      frontmatter: parsed.data,
       content: file.content,
     }
   }
@@ -281,9 +288,9 @@ export class UserFileSystem {
    */
   async listDailyLogs(limit?: number): Promise<string[]> {
     const files = await this.listFiles('daily-logs/')
+    // listFiles already returns sorted desc by name from storage API
     const filenames = files.map((f) => f.replace('daily-logs/', ''))
-    const sorted = filenames.sort().reverse()
-    return limit ? sorted.slice(0, limit) : sorted
+    return limit ? filenames.slice(0, limit) : filenames
   }
 
   /**
@@ -291,11 +298,10 @@ export class UserFileSystem {
    */
   async listCheckIns(limit?: number): Promise<string[]> {
     const files = await this.listFiles('check-ins/')
-    // listFiles returns full paths like 'check-ins/2026-02-14-weekly.md'
+    // listFiles already returns sorted desc by name from storage API
     // Strip the prefix so results can be passed directly to readCheckIn()
     const filenames = files.map((f) => f.replace('check-ins/', ''))
-    const sorted = filenames.sort().reverse()
-    return limit ? sorted.slice(0, limit) : sorted
+    return limit ? filenames.slice(0, limit) : filenames
   }
 
   // ============================================

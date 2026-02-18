@@ -33,6 +33,18 @@ function checkRateLimit(userId: string): boolean {
   return true
 }
 
+const ChatRequestSchema = z.object({
+  sessionId: z.string().uuid(),
+  sessionType: z.enum(['life_mapping', 'weekly_checkin', 'ad_hoc', 'close_day']),
+  messages: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string().max(10_000),
+  })).min(1).max(100),
+  pulseContextMode: z.enum(['none', 'onboarding_baseline', 'checkin_after_rerate', 'checkin_after_skip']).optional(),
+  precheckin: z.boolean().optional(),
+  exploreDomain: z.string().optional(),
+})
+
 const PRE_CHECKIN_WARMUP_INSTRUCTION = `The user is doing a quick pre-checkin warmup before their weekly reflection.
 Guide a 2-minute prep with exactly two short reflective questions:
 1) "What's felt most true this week?"
@@ -203,18 +215,6 @@ export async function POST(request: Request) {
   }
 
   // Parse and validate request body
-  const ChatRequestSchema = z.object({
-    sessionId: z.string().uuid(),
-    sessionType: z.enum(['life_mapping', 'weekly_checkin', 'ad_hoc', 'close_day']),
-    messages: z.array(z.object({
-      role: z.enum(['user', 'assistant']),
-      content: z.string(),
-    })).min(1),
-    pulseContextMode: z.enum(['none', 'onboarding_baseline', 'checkin_after_rerate', 'checkin_after_skip']).optional(),
-    precheckin: z.boolean().optional(),
-    exploreDomain: z.string().optional(),
-  })
-
   let body: z.infer<typeof ChatRequestSchema>
 
   try {
@@ -222,7 +222,7 @@ export async function POST(request: Request) {
     body = ChatRequestSchema.parse(raw)
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return new Response(JSON.stringify({ error: 'Invalid request', details: err.issues }), {
+      return new Response(JSON.stringify({ error: 'Invalid request' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       })

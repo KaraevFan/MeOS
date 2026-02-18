@@ -113,38 +113,6 @@ export const DailyLogFrontmatterSchema = z.object({
 export type DailyLogFrontmatter = z.infer<typeof DailyLogFrontmatterSchema>
 
 // ============================================
-// Day plan file frontmatter (Phase 2: Open the Day)
-// ============================================
-
-export const DayPlanFrontmatterSchema = z.object({
-  date: z.string(),
-  type: z.literal('day-plan'),
-  intention: z.string().optional(),
-  energy_morning: z.enum(['high', 'moderate', 'low']).optional(),
-  calendar_events: z.number().optional(),
-  key_commitments: z.array(z.string()).optional(),
-  created_at: z.string().optional(),
-})
-
-export type DayPlanFrontmatter = z.infer<typeof DayPlanFrontmatterSchema>
-
-// ============================================
-// Capture file frontmatter (Phase 3: Quick Capture)
-// ============================================
-
-export const CaptureFrontmatterSchema = z.object({
-  date: z.string(),
-  type: z.literal('capture'),
-  timestamp: z.string(),
-  input_mode: z.enum(['voice', 'text']).optional(),
-  classification: z.enum(['thought', 'task', 'idea', 'tension']).optional(),
-  auto_tags: z.array(z.string()).optional(),
-  folded_into_journal: z.boolean().optional(),
-})
-
-export type CaptureFrontmatter = z.infer<typeof CaptureFrontmatterSchema>
-
-// ============================================
 // Union type for all frontmatter
 // ============================================
 
@@ -156,8 +124,6 @@ export type AnyFrontmatter =
   | SageContextFrontmatter
   | PatternsFrontmatter
   | DailyLogFrontmatter
-  | DayPlanFrontmatter
-  | CaptureFrontmatter
 
 // ============================================
 // Parsed file structure

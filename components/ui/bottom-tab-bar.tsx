@@ -1,14 +1,20 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
-function getOrbHref(): string {
-  const hour = new Date().getHours()
+function getOrbHref(hour: number): string {
   if (hour < 11) return '/chat?type=ad_hoc' // Morning → Open Day (ad_hoc for M1)
   if (hour < 18) return '/chat?type=ad_hoc' // Mid-Day → Capture (ad_hoc for M1)
   return '/chat?type=close_day' // Evening → Close Day
+}
+
+function getOrbLabel(hour: number): string {
+  if (hour < 11) return 'Open your day'
+  if (hour < 18) return 'Quick capture'
+  return 'Close your day'
 }
 
 const leftTabs = [
@@ -80,6 +86,12 @@ function TabLink({ tab }: { tab: { label: string; href: string; icon: (active: b
 }
 
 export function BottomTabBar() {
+  const [hour, setHour] = useState(12) // Default to midday for SSR
+
+  useEffect(() => {
+    setHour(new Date().getHours())
+  }, [])
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50">
       {/* Orb — protruding above the bar */}
@@ -87,7 +99,8 @@ export function BottomTabBar() {
         {/* Background mask to blend orb into bar */}
         <div className="absolute top-5 left-1/2 -translate-x-1/2 w-[84px] h-[44px] bg-warm-bg/95 rounded-t-full backdrop-blur-xl" />
         <Link
-          href={getOrbHref()}
+          href={getOrbHref(hour)}
+          aria-label={getOrbLabel(hour)}
           className="relative w-[64px] h-[64px] rounded-full flex items-center justify-center shadow-[0_6px_24px_rgba(245,158,11,0.3),0_2px_8px_rgba(245,158,11,0.15)] transition-transform active:scale-95 animate-orb-breathe z-10"
           style={{
             backgroundImage:

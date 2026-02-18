@@ -132,10 +132,14 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
     const logFilenames = dailyLogFilenames.value
 
     if (sessionType === 'close_day') {
-      // For close_day: inject yesterday's journal (most recent) for continuity
-      const lastLog = logFilenames[0] // Already sorted newest-first
-      if (lastLog) {
-        const dateFromFilename = lastLog.replace('-journal.md', '')
+      // For close_day: inject yesterday's journal for continuity (skip today's log)
+      const todayStr = new Date().toISOString().split('T')[0]
+      const yesterdayLog = logFilenames.find((f) => {
+        const dateFromFile = f.replace('-journal.md', '')
+        return dateFromFile !== todayStr
+      })
+      if (yesterdayLog) {
+        const dateFromFilename = yesterdayLog.replace('-journal.md', '')
         const logFile = await ufs.readDailyLog(dateFromFilename)
         if (logFile) {
           parts.push(`\n=== YESTERDAY'S JOURNAL (${dateFromFilename}) ===`)

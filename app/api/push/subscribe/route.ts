@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     body = PushSubscribeSchema.parse(raw)
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid subscription data', details: err.issues }, { status: 400 })
+      return NextResponse.json({ error: 'Invalid subscription data' }, { status: 400 })
     }
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }

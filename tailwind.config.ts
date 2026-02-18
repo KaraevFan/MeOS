@@ -25,7 +25,7 @@ const config: Config = {
         'status-stable': '#D4A574',
         'status-attention': '#C17B5D',
         'status-crisis': '#B05A5A',
-        // Home screen design tokens
+        // Aliases used by home screen components (same values as bg/text/text-secondary/accent-sage)
         'warm-bg': '#FDFCF8',
         'warm-dark': '#3D3832',
         'warm-gray': '#8A7E74',
