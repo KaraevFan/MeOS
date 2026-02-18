@@ -445,6 +445,70 @@ Status: stable
     if (blocks[1].type === 'block') expect(blocks[1].blockType).toBe('domain_summary')
   })
 
+  // --- daily-log FILE_UPDATE tests ---
+
+  it('parses a daily-log FILE_UPDATE with all attributes', () => {
+    const content = `Sleep well.
+
+[FILE_UPDATE type="daily-log" name="2026-02-18" energy="moderate" mood_signal="productive-but-grinding" domains_touched="career,health"]
+# Evening Reflection
+
+Today was about pushing the prototype forward. Got into a good flow state in the afternoon but skipped lunch again.
+[/FILE_UPDATE]`
+
+    const result = parseMessage(content)
+    expect(result.segments).toHaveLength(2)
+    expect(result.segments[0]).toEqual({ type: 'text', content: 'Sleep well.' })
+
+    const block = result.segments[1]
+    expect(block.type).toBe('block')
+    if (block.type === 'block' && block.blockType === 'file_update') {
+      expect(block.data.fileType).toBe('daily-log')
+      expect(block.data.name).toBe('2026-02-18')
+      expect(block.data.content).toContain('Evening Reflection')
+      expect(block.data.content).toContain('good flow state')
+      expect(block.data.attributes).toEqual({
+        energy: 'moderate',
+        mood_signal: 'productive-but-grinding',
+        domains_touched: 'career,health',
+      })
+    }
+  })
+
+  it('parses a daily-log FILE_UPDATE with only energy attribute', () => {
+    const content = `[FILE_UPDATE type="daily-log" name="2026-02-18" energy="high"]
+# Evening Reflection
+Great day.
+[/FILE_UPDATE]`
+
+    const result = parseMessage(content)
+    expect(result.segments).toHaveLength(1)
+
+    const block = result.segments[0]
+    if (block.type === 'block' && block.blockType === 'file_update') {
+      expect(block.data.fileType).toBe('daily-log')
+      expect(block.data.name).toBe('2026-02-18')
+      expect(block.data.attributes).toEqual({ energy: 'high' })
+    }
+  })
+
+  it('parses a daily-log FILE_UPDATE with no extra attributes', () => {
+    const content = `[FILE_UPDATE type="daily-log" name="2026-02-18"]
+# Evening Reflection
+Just a quick note.
+[/FILE_UPDATE]`
+
+    const result = parseMessage(content)
+    expect(result.segments).toHaveLength(1)
+
+    const block = result.segments[0]
+    if (block.type === 'block' && block.blockType === 'file_update') {
+      expect(block.data.fileType).toBe('daily-log')
+      expect(block.data.name).toBe('2026-02-18')
+      expect(block.data.attributes).toBeUndefined()
+    }
+  })
+
   it('parses FILE_UPDATE with life-plan type', () => {
     const content = `[FILE_UPDATE type="life-plan"]
 # Life Plan -- Q1 2026

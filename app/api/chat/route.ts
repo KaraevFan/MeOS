@@ -5,7 +5,7 @@ import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
 import { captureException } from '@/lib/monitoring/sentry'
 import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
-import type { SessionType, PulseContextMode } from '@/types/chat'
+import type { PulseContextMode } from '@/types/chat'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
