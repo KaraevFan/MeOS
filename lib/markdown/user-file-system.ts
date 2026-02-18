@@ -396,24 +396,41 @@ export class UserFileSystem {
     frontmatter: Record<string, unknown>,
     domainName?: string
   ): Promise<void> {
-    try {
-      await this.supabase.from('file_index').upsert(
-        {
-          user_id: this.userId,
-          file_path: filePath,
-          file_type: fileType,
-          domain_name: domainName ?? null,
-          status: (frontmatter.status as string) ?? null,
-          quarter: (frontmatter.quarter as string) ?? null,
-          last_updated: new Date().toISOString(),
-          version: (frontmatter.version as number) ?? 1,
-          frontmatter,
-        },
-        { onConflict: 'user_id,file_path' }
-      )
-    } catch (err) {
-      // Index update is best-effort — don't fail the write
-      console.error('[UserFileSystem] Index update failed:', err)
+    const MAX_RETRIES = 2
+    const payload = {
+      user_id: this.userId,
+      file_path: filePath,
+      file_type: fileType,
+      domain_name: domainName ?? null,
+      status: (frontmatter.status as string) ?? null,
+      quarter: (frontmatter.quarter as string) ?? null,
+      last_updated: new Date().toISOString(),
+      version: (frontmatter.version as number) ?? 1,
+      frontmatter,
+    }
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const { error } = await this.supabase
+          .from('file_index')
+          .upsert(payload, { onConflict: 'user_id,file_path' })
+
+        if (error) throw error
+        return
+      } catch (err) {
+        if (attempt < MAX_RETRIES) {
+          // Exponential backoff: 200ms, 400ms
+          await new Promise((r) => setTimeout(r, 200 * Math.pow(2, attempt)))
+          continue
+        }
+        // Final attempt failed — log structured error but don't crash
+        console.error('[UserFileSystem] Index update failed after retries:', {
+          filePath,
+          fileType,
+          userId: this.userId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
     }
   }
 

@@ -1,5 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { z } from 'zod'
+
+const PushSubscribeSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({
+    p256dh: z.string(),
+    auth: z.string(),
+  }),
+})
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -9,12 +18,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = await request.json()
-  const { endpoint, keys } = body
-
-  if (!endpoint || !keys) {
-    return NextResponse.json({ error: 'Missing subscription data' }, { status: 400 })
+  let body: z.infer<typeof PushSubscribeSchema>
+  try {
+    const raw = await request.json()
+    body = PushSubscribeSchema.parse(raw)
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: 'Invalid subscription data', details: err.issues }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
+
+  const { endpoint, keys } = body
 
   // Upsert push subscription (replace existing for this user + endpoint)
   const { error } = await supabase

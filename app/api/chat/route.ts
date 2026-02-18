@@ -4,6 +4,7 @@ import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
 import { captureException } from '@/lib/monitoring/sentry'
 import Anthropic from '@anthropic-ai/sdk'
+import { z } from 'zod'
 import type { SessionType, PulseContextMode } from '@/types/chat'
 
 const anthropic = new Anthropic({
@@ -201,19 +202,31 @@ export async function POST(request: Request) {
     })
   }
 
-  // Parse request body
-  let body: {
-    sessionId: string
-    sessionType: SessionType
-    messages: { role: 'user' | 'assistant'; content: string }[]
-    pulseContextMode?: PulseContextMode
-    precheckin?: boolean
-    exploreDomain?: string
-  }
+  // Parse and validate request body
+  const ChatRequestSchema = z.object({
+    sessionId: z.string().uuid(),
+    sessionType: z.enum(['life_mapping', 'weekly_checkin', 'ad_hoc', 'close_day']),
+    messages: z.array(z.object({
+      role: z.enum(['user', 'assistant']),
+      content: z.string(),
+    })).min(1),
+    pulseContextMode: z.enum(['none', 'onboarding_baseline', 'checkin_after_rerate', 'checkin_after_skip']).optional(),
+    precheckin: z.boolean().optional(),
+    exploreDomain: z.string().optional(),
+  })
+
+  let body: z.infer<typeof ChatRequestSchema>
 
   try {
-    body = await request.json()
-  } catch {
+    const raw = await request.json()
+    body = ChatRequestSchema.parse(raw)
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return new Response(JSON.stringify({ error: 'Invalid request', details: err.issues }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
     captureException('Invalid JSON body in /api/chat', { tags: { route: '/api/chat' } })
     return new Response(JSON.stringify({ error: 'Invalid request body' }), {
       status: 400,
@@ -238,16 +251,7 @@ export async function POST(request: Request) {
     })
   }
 
-  // Validate session type
-  const VALID_SESSION_TYPES: ReadonlySet<SessionType> = new Set<SessionType>(['life_mapping', 'weekly_checkin', 'ad_hoc', 'close_day'])
-  if (!VALID_SESSION_TYPES.has(sessionType)) {
-    return new Response(JSON.stringify({ error: 'Invalid session type' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-
-  // Build system prompt with context
+  // Build system prompt with context (session type already validated by Zod schema)
   let systemPrompt: string
   try {
     const validatedExploreDomain = exploreDomain && typeof exploreDomain === 'string'
