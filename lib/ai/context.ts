@@ -189,6 +189,39 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
     }
   }
 
+  // 8b2. Today's captures (close_day: fold into evening synthesis)
+  if (sessionType === 'close_day') {
+    try {
+      const todayStr = new Date().toLocaleDateString('en-CA')
+      const captureFilenames = await ufs.listCaptures(todayStr, 10) // max 10 for token budget
+      if (captureFilenames.length > 0) {
+        const captureResults = await Promise.allSettled(
+          captureFilenames.map((filename) => ufs.readCapture(filename))
+        )
+        const validCaptures = captureResults
+          .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof ufs.readCapture>>> =>
+            r.status === 'fulfilled' && r.value !== null
+          )
+          .map((r) => r.value!)
+
+        if (validCaptures.length > 0) {
+          const totalCount = await ufs.listCaptures(todayStr).then((f) => f.length).catch(() => validCaptures.length)
+          parts.push(`\n=== TODAY'S QUICK CAPTURES (${totalCount} total) ===`)
+          for (const capture of validCaptures) {
+            const time = new Date(capture.frontmatter.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+            const mode = capture.frontmatter.input_mode === 'voice' ? ' [voice]' : ''
+            parts.push(`- ${time}${mode}: "${capture.content}"`)
+          }
+          if (totalCount > validCaptures.length) {
+            parts.push(`...and ${totalCount - validCaptures.length} more earlier captures`)
+          }
+        }
+      }
+    } catch {
+      // No captures — that's fine
+    }
+  }
+
   // 8c. Daily journal context (session-type dependent)
   if (dailyLogFilenames.status === 'fulfilled' && dailyLogFilenames.value.length > 0) {
     const logFilenames = dailyLogFilenames.value

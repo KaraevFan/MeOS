@@ -1,7 +1,7 @@
 ---
 session_type: close_day
 tools: [read_file, write_file, list_files, update_context]
-write_paths: [daily-logs/, sage/context.md]
+write_paths: [daily-logs/, sage/context.md, captures/]
 read_context:
   - life-plan/current.md
   - daily-logs/yesterday

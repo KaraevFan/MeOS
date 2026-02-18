@@ -206,7 +206,7 @@ export async function handleAllFileUpdates(
     updates.map((update) => handleFileUpdate(ufs, update, sessionType))
   )
 
-  return results.map((result, i) => {
+  const writeResults = results.map((result, i) => {
     if (result.status === 'fulfilled') {
       return result.value
     }
@@ -216,4 +216,35 @@ export async function handleAllFileUpdates(
       error: String(result.reason),
     }
   })
+
+  // Post-processing: after close_day writes a journal, mark today's captures as folded
+  if (sessionType === 'close_day') {
+    const journalWritten = writeResults.some(
+      (r) => r.success && r.path.startsWith('daily-logs/')
+    )
+    if (journalWritten) {
+      // Fire-and-forget: don't block the response for capture fold updates
+      markCapturesFolded(ufs).catch((err) => {
+        console.warn('[FileWriteHandler] Capture fold marking failed:', err instanceof Error ? err.message : String(err))
+      })
+    }
+  }
+
+  return writeResults
+}
+
+/**
+ * Mark all of today's captures as folded into the journal.
+ * Fire-and-forget — failures are logged, not thrown to the caller.
+ */
+async function markCapturesFolded(ufs: UserFileSystem): Promise<void> {
+  const today = new Date().toLocaleDateString('en-CA')
+  const filenames = await ufs.listCaptures(today)
+  if (filenames.length === 0) return
+
+  await Promise.allSettled(
+    filenames.map((filename) =>
+      ufs.updateCaptureFrontmatter(filename, { folded_into_journal: true })
+    )
+  )
 }
