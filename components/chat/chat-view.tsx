@@ -20,6 +20,8 @@ import { isPushSupported, requestPushPermission } from '@/lib/notifications/push
 import { PinnedContextCard } from './pinned-context-card'
 import { SessionCompleteCard } from './session-complete-card'
 import { SessionHeader } from './session-header'
+import { SuggestedReplyButtons } from './suggested-reply-buttons'
+import { IntentionCard } from './intention-card'
 import { PulseRatingCard } from './pulse-rating-card'
 import type { ChatMessage, SessionType, DomainName, PulseContextMode } from '@/types/chat'
 import { PULSE_DOMAINS } from '@/types/pulse-check'
@@ -934,10 +936,21 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           )
           const showDomainQuickReplies = isLastMessage && hasDomainCard && sessionType === 'life_mapping' && !isStreaming
 
+          // Check for AI-driven suggested replies and intention cards
+          const suggestedReplies = parsed.segments.find(
+            (s) => s.type === 'block' && s.blockType === 'suggested_replies'
+          )
+          const intentionCard = parsed.segments.find(
+            (s) => s.type === 'block' && s.blockType === 'intention_card'
+          )
+          const hasSuggestedReplies = isLastMessage && suggestedReplies && !isStreaming
+          const hasIntentionCard = isLastMessage && intentionCard && !isStreaming
+
           // Show state-aware quick replies after opening message (first assistant msg, no user messages yet)
+          // But only if there are no AI-driven suggested replies
           const hasNoUserMessages = !messages.some((m) => m.role === 'user')
           const isOpeningMessage = index === 0 && message.role === 'assistant'
-          const showStateQuickReplies = isLastMessage && isOpeningMessage && hasNoUserMessages && !isStreaming && !showPulseCheck
+          const showStateQuickReplies = isLastMessage && isOpeningMessage && hasNoUserMessages && !isStreaming && !showPulseCheck && !hasSuggestedReplies
 
           return (
             <div key={message.id}>
@@ -946,6 +959,25 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
                 parsedContent={parsed}
                 onCorrectDomain={handleCorrectDomain}
               />
+              {hasIntentionCard && intentionCard.type === 'block' && intentionCard.blockType === 'intention_card' && (
+                <div className="mt-2 flex justify-start">
+                  <IntentionCard
+                    data={intentionCard.data}
+                    onKeep={() => handleSend("I'll keep that focus")}
+                    onChange={() => handleSend('I want to change my focus')}
+                    disabled={isStreaming}
+                  />
+                </div>
+              )}
+              {hasSuggestedReplies && suggestedReplies.type === 'block' && suggestedReplies.blockType === 'suggested_replies' && (
+                <div className="mt-2">
+                  <SuggestedReplyButtons
+                    data={suggestedReplies.data}
+                    onSelect={handleSend}
+                    disabled={isStreaming}
+                  />
+                </div>
+              )}
               {showDomainQuickReplies && (
                 <div className="mt-2">
                   <QuickReplyButtons

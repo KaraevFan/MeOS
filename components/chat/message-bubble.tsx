@@ -6,6 +6,7 @@ import { SynthesisCard } from './synthesis-card'
 import { MarkdownDomainCard } from './markdown-domain-card'
 import { MarkdownSynthesisCard } from './markdown-synthesis-card'
 import { JournalCard } from './journal-card'
+import { InlineCard } from './inline-card'
 import type { ChatMessage, ParsedMessage, ParsedSegment, DomainName } from '@/types/chat'
 
 interface MessageBubbleProps {
@@ -87,7 +88,15 @@ function SegmentRenderer({
     return null
   }
 
-  // session_summary blocks are not displayed — backend processing only
+  if (segment.blockType === 'inline_card') {
+    return (
+      <div className="w-full max-w-[95%]">
+        <InlineCard data={segment.data} />
+      </div>
+    )
+  }
+
+  // suggested_replies, intention_card, and session_summary blocks are handled outside MessageBubble
   return null
 }
 
