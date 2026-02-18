@@ -5,6 +5,7 @@ import { ChatLayout } from '@/components/chat/chat-layout'
 import { detectSessionState } from '@/lib/supabase/session-state'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { extractCommitments } from '@/lib/markdown/extract'
+import { getDisplayName } from '@/lib/utils'
 import type { Commitment } from '@/lib/markdown/extract'
 import type { SessionType } from '@/types/chat'
 
@@ -161,6 +162,32 @@ export default async function ChatPage({
   // Pre-checkin warmup flag — instruction is defined server-side in the API route
   const precheckin = params.precheckin === '1' && sessionType === 'ad_hoc'
 
+  // Fetch briefing data for open_day sessions
+  let briefingData: { firstName: string | null; todayIntention: string | null; yesterdayIntention: string | null } | undefined
+  if (sessionType === 'open_day') {
+    const ufs = new UserFileSystem(supabase, user.id)
+    const todayStr = new Date().toISOString().split('T')[0]
+    const yesterdayDate = new Date()
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1)
+    const yesterday = yesterdayDate.toISOString().split('T')[0]
+
+    const [userResult, todayPlan, yesterdayPlan] = await Promise.allSettled([
+      supabase.from('users').select('email, display_name').eq('id', user.id).single(),
+      ufs.readDayPlan(todayStr),
+      ufs.readDayPlan(yesterday),
+    ])
+
+    const firstName = userResult.status === 'fulfilled'
+      ? getDisplayName({ display_name: userResult.value.data?.display_name, email: userResult.value.data?.email })
+      : null
+
+    briefingData = {
+      firstName,
+      todayIntention: todayPlan.status === 'fulfilled' ? todayPlan.value?.frontmatter.intention ?? null : null,
+      yesterdayIntention: yesterdayPlan.status === 'fulfilled' ? yesterdayPlan.value?.frontmatter.intention ?? null : null,
+    }
+  }
+
   return (
     <div className="fixed inset-0 bottom-16 pb-[env(safe-area-inset-bottom)]">
       <ChatLayout userId={user.id} sessionType={sessionType}>
@@ -173,6 +200,7 @@ export default async function ChatPage({
           nudgeContext={nudgeContext}
           sessionContext={sessionContext}
           precheckin={precheckin}
+          briefingData={briefingData}
         />
       </ChatLayout>
     </div>

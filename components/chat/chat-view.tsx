@@ -22,6 +22,7 @@ import { SessionCompleteCard } from './session-complete-card'
 import { SessionHeader } from './session-header'
 import { SuggestedReplyButtons } from './suggested-reply-buttons'
 import { IntentionCard } from './intention-card'
+import { BriefingCard } from './briefing-card'
 import { PulseRatingCard } from './pulse-rating-card'
 import type { ChatMessage, SessionType, DomainName, PulseContextMode } from '@/types/chat'
 import { PULSE_DOMAINS } from '@/types/pulse-check'
@@ -33,6 +34,12 @@ import { ALL_DOMAINS } from '@/lib/constants'
 import { addDaysIso } from '@/lib/utils'
 import { captureException } from '@/lib/monitoring/sentry'
 
+interface BriefingData {
+  firstName: string | null
+  todayIntention: string | null
+  yesterdayIntention: string | null
+}
+
 interface ChatViewProps {
   userId: string
   sessionType?: SessionType
@@ -43,6 +50,7 @@ interface ChatViewProps {
   sessionContext?: string
   precheckin?: boolean
   resumeSessionId?: string
+  briefingData?: BriefingData
 }
 
 function StateQuickReplies({
@@ -134,7 +142,7 @@ function getSageOpening(state: string, userName?: string, hasOnboardingPulse?: b
   }
 }
 
-export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain, nudgeContext, sessionContext, precheckin, resumeSessionId }: ChatViewProps) {
+export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain, nudgeContext, sessionContext, precheckin, resumeSessionId, briefingData }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -154,6 +162,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [showCheckinPulse, setShowCheckinPulse] = useState(false)
   const [checkinPulseSubmitting, setCheckinPulseSubmitting] = useState(false)
   const [previousRatings, setPreviousRatings] = useState<PulseCheckRating[]>([])
+  const [showBriefing, setShowBriefing] = useState(sessionType === 'open_day' && !!briefingData)
 
   const { setActiveDomain } = useSidebarContext()
 
@@ -925,6 +934,20 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
         <div className="min-h-full flex flex-col justify-end space-y-4">
         <SessionHeader sessionType={sessionType} exploreDomain={exploreDomain} nudgeContext={nudgeContext} />
+
+        {/* Morning briefing card (open_day only, before first message) */}
+        {showBriefing && briefingData && messages.length === 0 && !isStreaming && (
+          <BriefingCard
+            firstName={briefingData.firstName}
+            todayIntention={briefingData.todayIntention}
+            yesterdayIntention={briefingData.yesterdayIntention}
+            onStart={() => {
+              setShowBriefing(false)
+              handleSend("Let's open the day")
+            }}
+          />
+        )}
+
         {messages.map((message, index) => {
           const parsed = parseMessage(message.content)
           const isLastMessage = index === messages.length - 1
