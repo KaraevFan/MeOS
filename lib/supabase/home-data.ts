@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { diffLocalCalendarDays, getDisplayName } from '@/lib/utils'
+import { getCalendarEvents } from '@/lib/calendar/google-calendar'
+import type { CalendarEvent } from '@/lib/calendar/types'
 import type { SessionType } from '@/types/chat'
 
 export interface HomeData {
@@ -12,10 +14,13 @@ export interface HomeData {
   activeSessionId: string | null
   activeSessionType: SessionType | null
   todayClosed: boolean
+  openDayCompleted: boolean
   yesterdayJournalSummary: string | null
   todayCaptureCount: number
   todayIntention: string | null
   yesterdayIntention: string | null
+  calendarEvents: CalendarEvent[]
+  calendarSummary: string | null
 }
 
 function getTimeGreeting(): string {
@@ -55,10 +60,13 @@ export async function getHomeData(
   let activeSessionId: string | null = null
   let activeSessionType: SessionType | null = null
   let todayClosed = false
+  let openDayCompleted = false
   let yesterdayJournalSummary: string | null = null
   const todayCaptureCount = 0 // TODO: captures not implemented yet
   let todayIntention: string | null = null
   let yesterdayIntention: string | null = null
+  let calendarEvents: CalendarEvent[] = []
+  let calendarSummary: string | null = null
 
   if (onboardingCompleted) {
     const ufs = new UserFileSystem(supabase, userId)
@@ -69,7 +77,15 @@ export async function getHomeData(
     yesterdayDate.setDate(yesterdayDate.getDate() - 1)
     const yesterday = yesterdayDate.toISOString().split('T')[0]
 
-    const [activeSessionResult, todayCloseDayResult, yesterdayJournalResult, todayDayPlanResult, yesterdayDayPlanResult] = await Promise.allSettled([
+    const [
+      activeSessionResult,
+      todayCloseDayResult,
+      todayOpenDayResult,
+      yesterdayJournalResult,
+      todayDayPlanResult,
+      yesterdayDayPlanResult,
+      calendarResult,
+    ] = await Promise.allSettled([
       supabase
         .from('sessions')
         .select('id, session_type')
@@ -87,9 +103,19 @@ export async function getHomeData(
         .gte('completed_at', `${todayStr}T00:00:00`)
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from('sessions')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('session_type', 'open_day')
+        .eq('status', 'completed')
+        .gte('completed_at', `${todayStr}T00:00:00`)
+        .limit(1)
+        .maybeSingle(),
       ufs.readDailyLog(yesterday),
       ufs.readDayPlan(todayStr),
       ufs.readDayPlan(yesterday),
+      getCalendarEvents(userId, todayStr),
     ])
 
     // Extract active session from parallel result
@@ -104,6 +130,11 @@ export async function getHomeData(
     // Check if today's close_day session exists
     if (todayCloseDayResult.status === 'fulfilled') {
       todayClosed = !!todayCloseDayResult.value.data
+    }
+
+    // Check if today's open_day session completed
+    if (todayOpenDayResult.status === 'fulfilled') {
+      openDayCompleted = !!todayOpenDayResult.value.data
     }
 
     // Extract yesterday's journal summary
@@ -123,6 +154,22 @@ export async function getHomeData(
     if (yesterdayDayPlanResult.status === 'fulfilled' && yesterdayDayPlanResult.value) {
       yesterdayIntention = yesterdayDayPlanResult.value.frontmatter.intention ?? null
     }
+
+    // Extract calendar events
+    if (calendarResult.status === 'fulfilled') {
+      calendarEvents = calendarResult.value
+      if (calendarEvents.length > 0) {
+        const firstEvent = calendarEvents[0]
+        const firstTime = firstEvent.allDay
+          ? 'all day'
+          : new Date(firstEvent.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+        const afternoon = calendarEvents.filter((e) => {
+          const h = new Date(e.startTime).getHours()
+          return h >= 12
+        })
+        calendarSummary = `${calendarEvents.length} meeting${calendarEvents.length === 1 ? '' : 's'} today · First at ${firstTime}${afternoon.length === 0 ? ' · Afternoon clear' : ''}`
+      }
+    }
   }
 
   return {
@@ -134,9 +181,12 @@ export async function getHomeData(
     activeSessionId,
     activeSessionType,
     todayClosed,
+    openDayCompleted,
     yesterdayJournalSummary,
     todayCaptureCount,
     todayIntention,
     yesterdayIntention,
+    calendarEvents,
+    calendarSummary,
   }
 }
