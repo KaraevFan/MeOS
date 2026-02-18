@@ -205,15 +205,13 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
           .map((r) => r.value!)
 
         if (validCaptures.length > 0) {
-          const totalCount = await ufs.listCaptures(todayStr).then((f) => f.length).catch(() => validCaptures.length)
-          parts.push(`\n=== TODAY'S QUICK CAPTURES (${totalCount} total) ===`)
+          parts.push(`\n=== TODAY'S QUICK CAPTURES (${validCaptures.length} shown) ===`)
           for (const capture of validCaptures) {
             const time = new Date(capture.frontmatter.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
             const mode = capture.frontmatter.input_mode === 'voice' ? ' [voice]' : ''
-            parts.push(`- ${time}${mode}: "${capture.content}"`)
-          }
-          if (totalCount > validCaptures.length) {
-            parts.push(`...and ${totalCount - validCaptures.length} more earlier captures`)
+            // Strip block tags to prevent prompt injection from user content
+            const sanitized = capture.content.replace(/\[\/?(FILE_UPDATE|DOMAIN_SUMMARY|LIFE_MAP_SYNTHESIS|SESSION_SUMMARY)[^\]]*\]/g, '')
+            parts.push(`- ${time}${mode}: "${sanitized}"`)
           }
         }
       }

@@ -34,7 +34,7 @@ export interface HomeScreenData {
   calendarSummary: string | null
   activeSessionId: string | null
   activeSessionType: SessionType | null
-  checkinResponse: string | null
+  checkinResponse: 'yes' | 'not-yet' | 'snooze' | null
 }
 
 function detectTimeState(): TimeState {
@@ -263,7 +263,7 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
           {data.openDayCompleted && data.todayIntention && (
             <CheckinCard
               intention={data.todayIntention}
-              initialResponse={data.checkinResponse as 'yes' | 'not-yet' | 'snooze' | null}
+              initialResponse={data.checkinResponse}
             />
           )}
 

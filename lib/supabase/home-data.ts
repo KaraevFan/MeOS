@@ -22,7 +22,7 @@ export interface HomeData {
   yesterdayIntention: string | null
   calendarEvents: CalendarEvent[]
   calendarSummary: string | null
-  checkinResponse: string | null
+  checkinResponse: 'yes' | 'not-yet' | 'snooze' | null
 }
 
 export async function getHomeData(
@@ -63,7 +63,7 @@ export async function getHomeData(
   let yesterdayIntention: string | null = null
   let calendarEvents: CalendarEvent[] = []
   let calendarSummary: string | null = null
-  let checkinResponse: string | null = null
+  let checkinResponse: 'yes' | 'not-yet' | 'snooze' | null = null
 
   if (onboardingCompleted) {
     const ufs = new UserFileSystem(supabase, userId)
@@ -114,7 +114,7 @@ export async function getHomeData(
       ufs.readDayPlan(todayStr),
       ufs.readDayPlan(yesterday),
       getCalendarEvents(userId, todayStr),
-      ufs.listCaptures(todayStr, 5),
+      ufs.listCaptures(todayStr),
     ])
 
     // Extract active session from parallel result
@@ -147,7 +147,8 @@ export async function getHomeData(
     // Extract today's intention and checkin response from day plan
     if (todayDayPlanResult.status === 'fulfilled' && todayDayPlanResult.value) {
       todayIntention = todayDayPlanResult.value.frontmatter.intention ?? null
-      checkinResponse = todayDayPlanResult.value.frontmatter.checkin_response ?? null
+      const rawCheckin = todayDayPlanResult.value.frontmatter.checkin_response
+      checkinResponse = rawCheckin === 'yes' || rawCheckin === 'not-yet' || rawCheckin === 'snooze' ? rawCheckin : null
     }
 
     // Extract yesterday's intention for carry-forward
@@ -175,8 +176,9 @@ export async function getHomeData(
     if (captureFilenamesResult.status === 'fulfilled' && captureFilenamesResult.value.length > 0) {
       const captureFilenames = captureFilenamesResult.value
       todayCaptureCount = captureFilenames.length
+      // Only read first 5 for display — count reflects total
       const captureResults = await Promise.allSettled(
-        captureFilenames.map((filename) => ufs.readCapture(filename))
+        captureFilenames.slice(0, 5).map((filename) => ufs.readCapture(filename))
       )
       todayCaptures = captureResults
         .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof ufs.readCapture>>> =>

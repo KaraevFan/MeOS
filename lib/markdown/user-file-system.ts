@@ -426,9 +426,9 @@ export class UserFileSystem {
     await this.updateFileIndex(`day-plans/${filename}`, FILE_TYPES.DAY_PLAN, frontmatter)
   }
 
-  async writeCapture(date: string, timestamp: string, content: string, overrides?: Partial<CaptureFrontmatter>): Promise<string> {
-    const frontmatter = generateCaptureFrontmatter(date, { ...overrides, timestamp })
-    const filename = `${date}-${timestamp}.md`
+  async writeCapture(date: string, timeCode: string, content: string, overrides?: Partial<CaptureFrontmatter>): Promise<string> {
+    const frontmatter = generateCaptureFrontmatter(date, overrides)
+    const filename = `${date}-${timeCode}.md`
     await this.writeFile(`captures/${filename}`, frontmatter, content)
     await this.updateFileIndex(`captures/${filename}`, FILE_TYPES.CAPTURE, frontmatter)
     return filename
