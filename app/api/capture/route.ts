@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
+import { classifyCapture } from '@/lib/ai/classify-capture'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -38,8 +39,8 @@ export async function POST(request: Request) {
       timestamp: now.toISOString(),
     })
 
-    // Fire-and-forget: classify capture (Task 17 will implement this)
-    // classifyCapture(user.id, filename, text).catch(() => {})
+    // Fire-and-forget: classify capture asynchronously
+    classifyCapture(user.id, filename, text).catch(() => {})
 
     return NextResponse.json({ filename, path: `captures/${filename}` })
   } catch (error) {
