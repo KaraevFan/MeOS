@@ -28,6 +28,12 @@ export interface HomeData {
   reflectionNudge: ReflectionNudge | null
   activeSessionId: string | null
   activeSessionType: SessionType | null
+  // New fields for time-aware home screen
+  todayClosed: boolean
+  yesterdayJournalSummary: string | null
+  todayCaptureCount: number
+  todayIntention: string | null
+  yesterdayIntention: string | null
 }
 
 function getTimeGreeting(): string {
@@ -133,12 +139,20 @@ export async function getHomeData(
   let quarterTheme: string | null = null
   let daysSinceMapping: number | null = null
   let daysSinceCheckin: number | null = null
+  let todayClosed = false
+  let yesterdayJournalSummary: string | null = null
+  const todayCaptureCount = 0 // M1: captures not implemented yet
+  const todayIntention: string | null = null // M1: day plans not implemented yet
+  const yesterdayIntention: string | null = null // M1: day plans not implemented yet
 
   if (onboardingCompleted) {
     const ufs = new UserFileSystem(supabase, userId)
 
-    // Read overview + life plan + last check-in + active session all in parallel
-    const [overview, lifePlan, lastCheckinResult, activeSessionResult] = await Promise.allSettled([
+    const todayStr = new Date().toISOString().split('T')[0]
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+
+    // Read overview + life plan + last check-in + active session + today's close_day + yesterday's journal all in parallel
+    const [overview, lifePlan, lastCheckinResult, activeSessionResult, todayCloseDayResult, yesterdayJournalResult] = await Promise.allSettled([
       ufs.readOverview(),
       ufs.readLifePlan(),
       supabase
@@ -158,6 +172,16 @@ export async function getHomeData(
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from('sessions')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('session_type', 'close_day')
+        .eq('status', 'completed')
+        .gte('completed_at', `${todayStr}T00:00:00`)
+        .limit(1)
+        .maybeSingle(),
+      ufs.readDailyLog(yesterday),
     ])
 
     // Extract from overview
@@ -209,6 +233,19 @@ export async function getHomeData(
         activeSessionId = activeSession.id
         activeSessionType = activeSession.session_type
       }
+    }
+
+    // Check if today's close_day session exists
+    if (todayCloseDayResult.status === 'fulfilled') {
+      todayClosed = !!todayCloseDayResult.value.data
+    }
+
+    // Extract yesterday's journal summary
+    if (yesterdayJournalResult.status === 'fulfilled' && yesterdayJournalResult.value) {
+      const lines = yesterdayJournalResult.value.content
+        .split('\n')
+        .filter((l: string) => l.trim() && !l.startsWith('#'))
+      yesterdayJournalSummary = lines[0]?.trim() || null
     }
   }
 
@@ -277,5 +314,10 @@ export async function getHomeData(
     reflectionNudge,
     activeSessionId,
     activeSessionType,
+    todayClosed,
+    yesterdayJournalSummary,
+    todayCaptureCount,
+    todayIntention,
+    yesterdayIntention,
   }
 }

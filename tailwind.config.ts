@@ -25,6 +25,13 @@ const config: Config = {
         'status-stable': '#D4A574',
         'status-attention': '#C17B5D',
         'status-crisis': '#B05A5A',
+        // Home screen design tokens
+        'warm-bg': '#FDFCF8',
+        'warm-dark': '#3D3832',
+        'warm-gray': '#8A7E74',
+        sage: '#7D8E7B',
+        terracotta: '#CCA59E',
+        'blue-gray': '#98A2B3',
       },
       spacing: {
         xs: '4px',
@@ -65,10 +72,20 @@ const config: Config = {
           '0%': { opacity: '0', transform: 'translateY(8px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
+        'orb-breathe': {
+          '0%, 100%': { transform: 'scale(0.97)' },
+          '50%': { transform: 'scale(1.03)' },
+        },
+        'orb-inner-glow': {
+          '0%, 100%': { opacity: '0.7', transform: 'translateY(0px)' },
+          '50%': { opacity: '1', transform: 'translateY(-2px)' },
+        },
       },
       animation: {
         pulse: 'pulse 3s ease-in-out infinite',
         'fade-up': 'fade-up 200ms ease-out',
+        'orb-breathe': 'orb-breathe 7s ease-in-out infinite',
+        'orb-inner-glow': 'orb-inner-glow 7s ease-in-out 0.3s infinite',
       },
     },
   },
