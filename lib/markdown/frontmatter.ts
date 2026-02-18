@@ -7,6 +7,7 @@ import type {
   PatternsFrontmatter,
   DailyLogFrontmatter,
   DayPlanFrontmatter,
+  CaptureFrontmatter,
 } from '@/types/markdown-files'
 
 function now(): string {
@@ -139,7 +140,23 @@ export function generateDayPlanFrontmatter(
     intention: sanitizeYamlValue(overrides?.intention),
     status: overrides?.status ?? 'active',
     carried_forward_from: overrides?.carried_forward_from,
+    checkin_response: overrides?.checkin_response,
     created_at: now(),
+  }
+}
+
+export function generateCaptureFrontmatter(
+  date: string,
+  overrides?: Partial<CaptureFrontmatter>
+): CaptureFrontmatter {
+  return {
+    date,
+    type: 'capture',
+    timestamp: overrides?.timestamp ?? now(),
+    input_mode: overrides?.input_mode ?? 'text',
+    classification: overrides?.classification ?? null,
+    auto_tags: overrides?.auto_tags ?? [],
+    folded_into_journal: overrides?.folded_into_journal ?? false,
   }
 }
 

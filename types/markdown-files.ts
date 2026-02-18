@@ -122,10 +122,27 @@ export const DayPlanFrontmatterSchema = z.object({
   intention: z.string().optional(),
   status: z.enum(['active', 'completed', 'abandoned']).default('active'),
   carried_forward_from: z.string().optional(),
+  checkin_response: z.enum(['yes', 'not-yet', 'snooze']).optional(),
   created_at: z.string().optional(),
 })
 
 export type DayPlanFrontmatter = z.infer<typeof DayPlanFrontmatterSchema>
+
+// ============================================
+// Capture file frontmatter
+// ============================================
+
+export const CaptureFrontmatterSchema = z.object({
+  date: z.string(),
+  type: z.literal('capture'),
+  timestamp: z.string(),
+  input_mode: z.enum(['text', 'voice']).default('text'),
+  classification: z.enum(['thought', 'task', 'idea', 'tension']).nullable().default(null),
+  auto_tags: z.array(z.string()).default([]),
+  folded_into_journal: z.boolean().default(false),
+})
+
+export type CaptureFrontmatter = z.infer<typeof CaptureFrontmatterSchema>
 
 // ============================================
 // Union type for all frontmatter
@@ -140,6 +157,7 @@ export type AnyFrontmatter =
   | PatternsFrontmatter
   | DailyLogFrontmatter
   | DayPlanFrontmatter
+  | CaptureFrontmatter
 
 // ============================================
 // Parsed file structure
