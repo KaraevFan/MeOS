@@ -44,6 +44,8 @@ export const FILE_TYPES = {
   SAGE_PATTERNS: 'sage-patterns',
   SESSION_INSIGHTS: 'session-insights',
   DAILY_LOG: 'daily-log',
+  DAY_PLAN: 'day-plan',
+  CAPTURE: 'capture',
 } as const
 
 export type FileType = (typeof FILE_TYPES)[keyof typeof FILE_TYPES]
@@ -72,6 +74,13 @@ export const SESSION_WRITE_PERMISSIONS: Record<string, string[]> = {
   close_day: [
     'daily-logs/',
     'sage/context.md',
+  ],
+  open_day: [
+    'day-plans/',
+    'sage/context.md',
+  ],
+  quick_capture: [
+    'captures/',
   ],
 }
 

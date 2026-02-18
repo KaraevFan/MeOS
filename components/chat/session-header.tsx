@@ -5,12 +5,15 @@ const SESSION_LABELS: Record<SessionType, string> = {
   weekly_checkin: 'Weekly Check-In',
   ad_hoc: 'Open Conversation',
   close_day: 'Close the Day',
+  open_day: 'Open the Day',
+  quick_capture: 'Quick Capture',
 }
 
 const SESSION_DURATIONS: Partial<Record<SessionType, string>> = {
   life_mapping: '~ 25 min',
   weekly_checkin: '~ 10 min',
   close_day: '~ 3 min',
+  open_day: '~ 3 min',
 }
 
 interface SessionHeaderProps {

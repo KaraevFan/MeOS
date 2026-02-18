@@ -79,6 +79,10 @@ export default async function ChatPage({
     sessionType = 'weekly_checkin'
   } else if (requestedType === 'close_day') {
     sessionType = 'close_day'
+  } else if (requestedType === 'open_day') {
+    sessionType = 'open_day'
+  } else if (requestedType === 'quick_capture') {
+    sessionType = 'quick_capture'
   } else if (requestedType === 'ad_hoc' || params.explore) {
     // Explicit ad-hoc OR domain exploration from Life Map
     sessionType = 'ad_hoc'

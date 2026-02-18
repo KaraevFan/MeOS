@@ -7,7 +7,7 @@ import {
   FILE_TYPES,
 } from './constants'
 import type { DomainName } from '@/types/chat'
-import type { DailyLogFrontmatter } from '@/types/markdown-files'
+import type { DailyLogFrontmatter, DayPlanFrontmatter } from '@/types/markdown-files'
 
 export interface FileWriteResult {
   success: boolean
@@ -49,6 +49,10 @@ export function resolveFileUpdatePath(update: FileUpdateData): string | null {
     case FILE_TYPES.DAILY_LOG: {
       const date = update.name ?? new Date().toISOString().split('T')[0]
       return `daily-logs/${date}-journal.md`
+    }
+    case FILE_TYPES.DAY_PLAN: {
+      const date = update.name ?? new Date().toISOString().split('T')[0]
+      return `day-plans/${date}.md`
     }
     default:
       console.warn(`[FileWriteHandler] Unknown file type: ${update.fileType}`)
@@ -150,6 +154,18 @@ export async function handleFileUpdate(
           overrides.domains_touched = update.attributes.domains_touched.split(',').map(s => s.trim())
         }
         await ufs.writeDailyLog(date, update.content, overrides)
+        break
+      }
+      case FILE_TYPES.DAY_PLAN: {
+        const date = update.name ?? new Date().toISOString().split('T')[0]
+        const planOverrides: Partial<DayPlanFrontmatter> = {}
+        if (update.attributes?.intention) {
+          planOverrides.intention = update.attributes.intention
+        }
+        if (update.attributes?.carried_forward_from) {
+          planOverrides.carried_forward_from = update.attributes.carried_forward_from
+        }
+        await ufs.writeDayPlan(date, update.content, planOverrides)
         break
       }
       default:

@@ -35,7 +35,7 @@ function checkRateLimit(userId: string): boolean {
 
 const ChatRequestSchema = z.object({
   sessionId: z.string().uuid(),
-  sessionType: z.enum(['life_mapping', 'weekly_checkin', 'ad_hoc', 'close_day']),
+  sessionType: z.enum(['life_mapping', 'weekly_checkin', 'ad_hoc', 'close_day', 'open_day', 'quick_capture']),
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string().max(10_000),

@@ -2,11 +2,11 @@ import type { FileType } from '@/lib/markdown/constants'
 
 export type MessageRole = 'user' | 'assistant'
 
-export type SessionType = 'life_mapping' | 'weekly_checkin' | 'ad_hoc' | 'close_day'
+export type SessionType = 'life_mapping' | 'weekly_checkin' | 'ad_hoc' | 'close_day' | 'open_day' | 'quick_capture'
 
 export type PulseContextMode = 'none' | 'onboarding_baseline' | 'checkin_after_rerate' | 'checkin_after_skip'
 
-export type SessionStatus = 'active' | 'completed' | 'abandoned'
+export type SessionStatus = 'active' | 'completed' | 'abandoned' | 'expired'
 
 export type DomainStatus = 'thriving' | 'stable' | 'needs_attention' | 'in_crisis'
 

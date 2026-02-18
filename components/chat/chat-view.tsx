@@ -816,12 +816,21 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           const hasOverview = updates.some((u) => u.fileType === 'overview')
           const hasCheckIn = updates.some((u) => u.fileType === 'check-in')
           const hasDailyLog = updates.some((u) => u.fileType === 'daily-log')
+          const hasDayPlan = updates.some((u) => u.fileType === 'day-plan')
 
           if (hasDailyLog) {
             completeSession(supabase, sessionId).then(() => {
               setSessionCompleted(true)
             }).catch(() => {
               console.error('Failed to complete close_day session')
+            })
+          }
+
+          if (hasDayPlan) {
+            completeSession(supabase, sessionId).then(() => {
+              setSessionCompleted(true)
+            }).catch(() => {
+              console.error('Failed to complete open_day session')
             })
           }
 

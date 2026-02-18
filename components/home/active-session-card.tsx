@@ -14,6 +14,8 @@ const SESSION_TYPE_LABELS: Record<SessionType, string> = {
   weekly_checkin: 'weekly check-in',
   ad_hoc: 'conversation',
   close_day: 'evening reflection',
+  open_day: 'morning session',
+  quick_capture: 'quick capture',
 }
 
 export function ActiveSessionCard({ sessionId, sessionType }: ActiveSessionCardProps) {
