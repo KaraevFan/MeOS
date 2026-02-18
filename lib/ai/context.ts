@@ -1,8 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { getLifeMappingPrompt, getWeeklyCheckinBasePrompt, getAdHocPrompt, getCloseDayPrompt } from './prompts'
+import { loadSkill } from './skill-loader'
 import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
+import { getCalendarEvents } from '@/lib/calendar/google-calendar'
 import type { SessionType, DomainName } from '@/types/chat'
 
 /**
@@ -127,7 +129,43 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
     parts.push(patterns.value.content)
   }
 
-  // 8. Daily journal context (session-type dependent)
+  // 8. Calendar events (open_day only)
+  if (sessionType === 'open_day') {
+    try {
+      const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD in local time
+      const events = await getCalendarEvents(userId, today)
+      if (events.length > 0) {
+        parts.push('\nTODAY\'S CALENDAR:')
+        for (const event of events) {
+          const start = event.allDay ? 'All day' : new Date(event.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+          const end = event.allDay ? '' : ` – ${new Date(event.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+          parts.push(`- ${start}${end}  ${event.title}`)
+        }
+      }
+    } catch {
+      // Calendar not connected or error — graceful degradation
+    }
+
+    // Yesterday's day plan (for carry-forward)
+    try {
+      const yesterday = new Date()
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yesterdayStr = yesterday.toLocaleDateString('en-CA')
+      const yesterdayDayPlan = await ufs.readDayPlan(yesterdayStr)
+      if (yesterdayDayPlan) {
+        parts.push(`\n=== YESTERDAY'S DAY PLAN (${yesterdayStr}) ===`)
+        if (yesterdayDayPlan.frontmatter.intention) {
+          parts.push(`Intention: "${yesterdayDayPlan.frontmatter.intention}"`)
+          parts.push(`Status: ${yesterdayDayPlan.frontmatter.status ?? 'unknown'}`)
+        }
+        parts.push(yesterdayDayPlan.content)
+      }
+    } catch {
+      // No yesterday day plan — that's fine
+    }
+  }
+
+  // 8b. Daily journal context (session-type dependent)
   if (dailyLogFilenames.status === 'fulfilled' && dailyLogFilenames.value.length > 0) {
     const logFilenames = dailyLogFilenames.value
 
@@ -194,6 +232,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
 
 /**
  * Build the full system prompt for a conversation.
+ * Tries skill file first (skills/{session-type}.md), falls back to prompts.ts.
  * Injects life context from markdown files for all session types.
  */
 export async function buildConversationContext(
@@ -201,15 +240,28 @@ export async function buildConversationContext(
   userId: string,
   options?: { exploreDomain?: string }
 ): Promise<string> {
+  // Try skill file first, fall back to prompts.ts
+  const skill = loadSkill(sessionType)
   let basePrompt: string
-  if (sessionType === 'life_mapping') {
+
+  if (skill) {
+    basePrompt = skill.prompt
+  } else if (sessionType === 'life_mapping') {
     basePrompt = getLifeMappingPrompt()
   } else if (sessionType === 'close_day') {
     basePrompt = getCloseDayPrompt()
+  } else if (sessionType === 'open_day') {
+    // Shouldn't reach here if skill file exists, but safety fallback
+    basePrompt = 'You are Sage, conducting a morning "Open the Day" session. Help the user commit to one clear intention for the day.'
   } else if (sessionType === 'ad_hoc') {
     basePrompt = getAdHocPrompt(options?.exploreDomain)
   } else {
     basePrompt = getWeeklyCheckinBasePrompt()
+  }
+
+  // Add FILE_UPDATE format instructions if not already in skill prompt
+  if (skill) {
+    basePrompt += getFileUpdateFormatInstructions()
   }
 
   const fileContext = await fetchAndInjectFileContext(userId, options?.exploreDomain, sessionType)
@@ -226,4 +278,34 @@ export async function buildConversationContext(
   }
 
   return prompt
+}
+
+/**
+ * FILE_UPDATE format instructions appended to skill-based prompts.
+ */
+function getFileUpdateFormatInstructions(): string {
+  return `
+
+Output format — [FILE_UPDATE] blocks:
+When you create or update user data, output it as [FILE_UPDATE] blocks. The system handles file storage and metadata (YAML frontmatter) — you write only the markdown body.
+
+Block syntax:
+[FILE_UPDATE type="<file_type>" name="<optional_name>"]
+<markdown body content — no YAML frontmatter>
+[/FILE_UPDATE]
+
+Available file types:
+- type="domain" name="<Domain Name>" — Update a life domain
+- type="overview" — Update the life map overview
+- type="life-plan" — Update the life plan
+- type="check-in" — Create a check-in summary
+- type="daily-log" name="{YYYY-MM-DD}" — Create a daily journal entry (supports energy, mood_signal, domains_touched attributes)
+- type="day-plan" name="{YYYY-MM-DD}" — Create or update a day plan
+- type="sage-context" — Update your working model of the user
+- type="sage-patterns" — Update observed patterns
+
+Critical rules:
+- Do NOT include YAML frontmatter. The system adds metadata automatically.
+- Write the FULL file content, not a partial update. Each block replaces the entire file body.
+- Emit each [FILE_UPDATE] block as its own section.`
 }
