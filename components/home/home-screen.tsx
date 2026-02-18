@@ -190,11 +190,15 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
         <>
           <HeroCard
             icon={SunIcon}
-            title="Open Your Day"
-            sageText={getMorningSageText(data)}
-            ctaText="Begin morning session"
-            ctaHref="/chat?type=open_day"
-            contextualLinePayload={morningLinePayload}
+            title={data.openDayCompleted ? 'Day Plan Set' : 'Open Your Day'}
+            sageText={
+              data.openDayCompleted && data.todayIntention
+                ? `Your intention: "${data.todayIntention}"`
+                : getMorningSageText(data)
+            }
+            ctaText={data.openDayCompleted ? 'View day plan' : 'Begin morning session'}
+            ctaHref={data.openDayCompleted ? '/life-map' : '/chat?type=open_day'}
+            contextualLinePayload={data.openDayCompleted ? undefined : morningLinePayload}
           />
           <CaptureBar />
 
