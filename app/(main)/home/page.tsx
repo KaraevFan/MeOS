@@ -38,10 +38,13 @@ export default async function HomePage() {
           checkinOverdue: homeData.checkinOverdue,
           nextCheckinDate: homeData.nextCheckinDate,
           todayClosed: homeData.todayClosed,
+          openDayCompleted: homeData.openDayCompleted,
           yesterdayJournalSummary: homeData.yesterdayJournalSummary,
           todayCaptureCount: homeData.todayCaptureCount,
           todayIntention: homeData.todayIntention,
           yesterdayIntention: homeData.yesterdayIntention,
+          calendarEvents: homeData.calendarEvents,
+          calendarSummary: homeData.calendarSummary,
           activeSessionId: homeData.activeSessionId,
           activeSessionType: homeData.activeSessionType,
         }}

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 
 interface HeroCardProps {
@@ -8,9 +9,43 @@ interface HeroCardProps {
   sageText: string
   ctaText: string
   ctaHref: string
+  /** When provided, fetches a contextual line from the LLM API to replace sageText */
+  contextualLinePayload?: Record<string, unknown>
 }
 
-export function HeroCard({ icon, title, sageText, ctaText, ctaHref }: HeroCardProps) {
+export function HeroCard({ icon, title, sageText, ctaText, ctaHref, contextualLinePayload }: HeroCardProps) {
+  const [displayText, setDisplayText] = useState(sageText)
+
+  // Stable serialization to avoid re-fetching on every render due to object identity
+  const payloadKey = useMemo(
+    () => contextualLinePayload ? JSON.stringify(contextualLinePayload) : null,
+    [contextualLinePayload]
+  )
+
+  useEffect(() => {
+    if (!payloadKey) return
+
+    let cancelled = false
+    async function fetchLine() {
+      try {
+        const res = await fetch('/api/home/contextual-line', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payloadKey,
+        })
+        if (!res.ok || cancelled) return
+        const data = await res.json() as { line?: string }
+        if (data.line && !cancelled) {
+          setDisplayText(data.line)
+        }
+      } catch {
+        // Keep fallback sageText
+      }
+    }
+    fetchLine()
+    return () => { cancelled = true }
+  }, [payloadKey])
+
   return (
     <div className="mx-5 mt-3">
       <div className="rounded-3xl p-6 bg-gradient-to-br from-amber-100/60 via-amber-50/40 to-orange-50/20 border border-amber-200/30 relative overflow-hidden">
@@ -27,7 +62,7 @@ export function HeroCard({ icon, title, sageText, ctaText, ctaHref }: HeroCardPr
           </div>
 
           <p className="text-[15px] text-warm-dark/70 leading-relaxed font-medium mb-5 pl-[2px]">
-            {sageText}
+            {displayText}
           </p>
 
           <Link

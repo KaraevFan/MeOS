@@ -6,6 +6,7 @@ import type {
   SageContextFrontmatter,
   PatternsFrontmatter,
   DailyLogFrontmatter,
+  DayPlanFrontmatter,
 } from '@/types/markdown-files'
 
 function now(): string {
@@ -124,6 +125,20 @@ export function generateDailyLogFrontmatter(
     domains_touched: overrides?.domains_touched,
     intention_fulfilled: overrides?.intention_fulfilled,
     session_depth: overrides?.session_depth,
+    created_at: now(),
+  }
+}
+
+export function generateDayPlanFrontmatter(
+  date: string,
+  overrides?: Partial<DayPlanFrontmatter>
+): DayPlanFrontmatter {
+  return {
+    date,
+    type: 'day-plan',
+    intention: sanitizeYamlValue(overrides?.intention),
+    status: overrides?.status ?? 'active',
+    carried_forward_from: overrides?.carried_forward_from,
     created_at: now(),
   }
 }

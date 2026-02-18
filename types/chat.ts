@@ -2,11 +2,11 @@ import type { FileType } from '@/lib/markdown/constants'
 
 export type MessageRole = 'user' | 'assistant'
 
-export type SessionType = 'life_mapping' | 'weekly_checkin' | 'ad_hoc' | 'close_day'
+export type SessionType = 'life_mapping' | 'weekly_checkin' | 'ad_hoc' | 'close_day' | 'open_day' | 'quick_capture'
 
 export type PulseContextMode = 'none' | 'onboarding_baseline' | 'checkin_after_rerate' | 'checkin_after_skip'
 
-export type SessionStatus = 'active' | 'completed' | 'abandoned'
+export type SessionStatus = 'active' | 'completed' | 'abandoned' | 'expired'
 
 export type DomainStatus = 'thriving' | 'stable' | 'needs_attention' | 'in_crisis'
 
@@ -75,12 +75,29 @@ export interface FileUpdateData {
   attributes?: Record<string, string>
 }
 
+/** AI-driven suggested reply buttons (parsed from [SUGGESTED_REPLIES] blocks) */
+export interface SuggestedRepliesData {
+  replies: string[]
+}
+
+/** Inline structured card rendered in conversation (parsed from [INLINE_CARD] blocks) */
+export type InlineCardData =
+  | { cardType: 'calendar'; items: string[] }
+
+/** Interactive carried-intention card with Keep/Change buttons (parsed from [INTENTION_CARD] blocks) */
+export interface IntentionCardData {
+  intention: string
+}
+
 export type StructuredBlock =
   | { type: 'domain_summary'; data: DomainSummary }
   | { type: 'life_map_synthesis'; data: LifeMapSynthesis }
   | { type: 'session_summary'; data: SessionSummary }
   | { type: 'file_update'; data: FileUpdateData }
   | { type: 'reflection_prompt'; data: { content: string } }
+  | { type: 'suggested_replies'; data: SuggestedRepliesData }
+  | { type: 'inline_card'; data: InlineCardData }
+  | { type: 'intention_card'; data: IntentionCardData }
 
 export type ParsedSegment =
   | { type: 'text'; content: string }
@@ -89,6 +106,9 @@ export type ParsedSegment =
   | { type: 'block'; blockType: 'session_summary'; data: SessionSummary }
   | { type: 'block'; blockType: 'file_update'; data: FileUpdateData }
   | { type: 'block'; blockType: 'reflection_prompt'; data: { content: string } }
+  | { type: 'block'; blockType: 'suggested_replies'; data: SuggestedRepliesData }
+  | { type: 'block'; blockType: 'inline_card'; data: InlineCardData }
+  | { type: 'block'; blockType: 'intention_card'; data: IntentionCardData }
 
 export interface ParsedMessage {
   segments: ParsedSegment[]

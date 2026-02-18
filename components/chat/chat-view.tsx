@@ -20,6 +20,9 @@ import { isPushSupported, requestPushPermission } from '@/lib/notifications/push
 import { PinnedContextCard } from './pinned-context-card'
 import { SessionCompleteCard } from './session-complete-card'
 import { SessionHeader } from './session-header'
+import { SuggestedReplyButtons } from './suggested-reply-buttons'
+import { IntentionCard } from './intention-card'
+import { BriefingCard } from './briefing-card'
 import { PulseRatingCard } from './pulse-rating-card'
 import type { ChatMessage, SessionType, DomainName, PulseContextMode } from '@/types/chat'
 import { PULSE_DOMAINS } from '@/types/pulse-check'
@@ -31,6 +34,12 @@ import { ALL_DOMAINS } from '@/lib/constants'
 import { addDaysIso } from '@/lib/utils'
 import { captureException } from '@/lib/monitoring/sentry'
 
+interface BriefingData {
+  firstName: string | null
+  todayIntention: string | null
+  yesterdayIntention: string | null
+}
+
 interface ChatViewProps {
   userId: string
   sessionType?: SessionType
@@ -41,6 +50,7 @@ interface ChatViewProps {
   sessionContext?: string
   precheckin?: boolean
   resumeSessionId?: string
+  briefingData?: BriefingData
 }
 
 function StateQuickReplies({
@@ -132,7 +142,7 @@ function getSageOpening(state: string, userName?: string, hasOnboardingPulse?: b
   }
 }
 
-export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain, nudgeContext, sessionContext, precheckin, resumeSessionId }: ChatViewProps) {
+export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain, nudgeContext, sessionContext, precheckin, resumeSessionId, briefingData }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -152,6 +162,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [showCheckinPulse, setShowCheckinPulse] = useState(false)
   const [checkinPulseSubmitting, setCheckinPulseSubmitting] = useState(false)
   const [previousRatings, setPreviousRatings] = useState<PulseCheckRating[]>([])
+  const [showBriefing, setShowBriefing] = useState(sessionType === 'open_day' && !!briefingData)
 
   const { setActiveDomain } = useSidebarContext()
 
@@ -816,12 +827,21 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           const hasOverview = updates.some((u) => u.fileType === 'overview')
           const hasCheckIn = updates.some((u) => u.fileType === 'check-in')
           const hasDailyLog = updates.some((u) => u.fileType === 'daily-log')
+          const hasDayPlan = updates.some((u) => u.fileType === 'day-plan')
 
           if (hasDailyLog) {
             completeSession(supabase, sessionId).then(() => {
               setSessionCompleted(true)
             }).catch(() => {
               console.error('Failed to complete close_day session')
+            })
+          }
+
+          if (hasDayPlan) {
+            completeSession(supabase, sessionId).then(() => {
+              setSessionCompleted(true)
+            }).catch(() => {
+              console.error('Failed to complete open_day session')
             })
           }
 
@@ -914,6 +934,20 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
         <div className="min-h-full flex flex-col justify-end space-y-4">
         <SessionHeader sessionType={sessionType} exploreDomain={exploreDomain} nudgeContext={nudgeContext} />
+
+        {/* Morning briefing card (open_day only, before first message) */}
+        {showBriefing && briefingData && messages.length === 0 && !isStreaming && (
+          <BriefingCard
+            firstName={briefingData.firstName}
+            todayIntention={briefingData.todayIntention}
+            yesterdayIntention={briefingData.yesterdayIntention}
+            onStart={() => {
+              setShowBriefing(false)
+              handleSend("Let's open the day")
+            }}
+          />
+        )}
+
         {messages.map((message, index) => {
           const parsed = parseMessage(message.content)
           const isLastMessage = index === messages.length - 1
@@ -925,10 +959,21 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           )
           const showDomainQuickReplies = isLastMessage && hasDomainCard && sessionType === 'life_mapping' && !isStreaming
 
+          // Check for AI-driven suggested replies and intention cards
+          const suggestedReplies = parsed.segments.find(
+            (s) => s.type === 'block' && s.blockType === 'suggested_replies'
+          )
+          const intentionCard = parsed.segments.find(
+            (s) => s.type === 'block' && s.blockType === 'intention_card'
+          )
+          const hasSuggestedReplies = isLastMessage && suggestedReplies && !isStreaming
+          const hasIntentionCard = isLastMessage && intentionCard && !isStreaming
+
           // Show state-aware quick replies after opening message (first assistant msg, no user messages yet)
+          // But only if there are no AI-driven suggested replies
           const hasNoUserMessages = !messages.some((m) => m.role === 'user')
           const isOpeningMessage = index === 0 && message.role === 'assistant'
-          const showStateQuickReplies = isLastMessage && isOpeningMessage && hasNoUserMessages && !isStreaming && !showPulseCheck
+          const showStateQuickReplies = isLastMessage && isOpeningMessage && hasNoUserMessages && !isStreaming && !showPulseCheck && !hasSuggestedReplies
 
           return (
             <div key={message.id}>
@@ -937,6 +982,25 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
                 parsedContent={parsed}
                 onCorrectDomain={handleCorrectDomain}
               />
+              {hasIntentionCard && intentionCard.type === 'block' && intentionCard.blockType === 'intention_card' && (
+                <div className="mt-2 flex justify-start">
+                  <IntentionCard
+                    data={intentionCard.data}
+                    onKeep={() => handleSend("I'll keep that focus")}
+                    onChange={() => handleSend('I want to change my focus')}
+                    disabled={isStreaming}
+                  />
+                </div>
+              )}
+              {hasSuggestedReplies && suggestedReplies.type === 'block' && suggestedReplies.blockType === 'suggested_replies' && (
+                <div className="mt-2">
+                  <SuggestedReplyButtons
+                    data={suggestedReplies.data}
+                    onSelect={handleSend}
+                    disabled={isStreaming}
+                  />
+                </div>
+              )}
               {showDomainQuickReplies && (
                 <div className="mt-2">
                   <QuickReplyButtons

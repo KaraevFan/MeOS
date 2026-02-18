@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { buildConversationContext } from '@/lib/ai/context'
+import { buildConversationContext, expireStaleOpenDaySessions } from '@/lib/ai/context'
 import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
 import { captureException } from '@/lib/monitoring/sentry'
@@ -35,7 +35,7 @@ function checkRateLimit(userId: string): boolean {
 
 const ChatRequestSchema = z.object({
   sessionId: z.string().uuid(),
-  sessionType: z.enum(['life_mapping', 'weekly_checkin', 'ad_hoc', 'close_day']),
+  sessionType: z.enum(['life_mapping', 'weekly_checkin', 'ad_hoc', 'close_day', 'open_day', 'quick_capture']),
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string().max(10_000),
@@ -249,6 +249,11 @@ export async function POST(request: Request) {
       status: 404,
       headers: { 'Content-Type': 'application/json' },
     })
+  }
+
+  // Expire stale open_day sessions before building close_day context
+  if (sessionType === 'close_day') {
+    await expireStaleOpenDaySessions(user.id)
   }
 
   // Build system prompt with context (session type already validated by Zod schema)

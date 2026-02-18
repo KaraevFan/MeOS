@@ -11,6 +11,7 @@ interface SessionCompleteCardProps {
 export function SessionCompleteCard({ sessionType, nextCheckinDate }: SessionCompleteCardProps) {
   const isLifeMapping = sessionType === 'life_mapping'
   const isCloseDay = sessionType === 'close_day'
+  const isOpenDay = sessionType === 'open_day'
 
   const formattedDate = nextCheckinDate
     ? new Date(nextCheckinDate).toLocaleDateString('en-US', {
@@ -20,7 +21,9 @@ export function SessionCompleteCard({ sessionType, nextCheckinDate }: SessionCom
       })
     : null
 
-  const title = isCloseDay
+  const title = isOpenDay
+    ? "You're set. Go make it happen."
+    : isCloseDay
     ? 'Day logged. Sleep well.'
     : isLifeMapping
     ? 'Your life map is ready.'
@@ -38,7 +41,7 @@ export function SessionCompleteCard({ sessionType, nextCheckinDate }: SessionCom
         {title}
       </p>
 
-      {formattedDate && !isCloseDay && (
+      {formattedDate && !isCloseDay && !isOpenDay && (
         <p className="mt-1.5 text-sm text-text-secondary">
           Next check-in: {formattedDate}
         </p>

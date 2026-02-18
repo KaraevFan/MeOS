@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { storeCalendarIntegration } from '@/lib/calendar/google-calendar'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
@@ -7,9 +8,16 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
-    if (!error) {
+    if (!error && data.session) {
+      // Extract and store Google Calendar provider tokens.
+      // Note: provider_token is only available on initial Google OAuth exchange,
+      // not on magic-link sign-in or Supabase session refresh. Once stored in
+      // the integrations table, the app uses its own refresh_token cycle.
+      const providerToken = data.session.provider_token
+      const providerRefreshToken = data.session.provider_refresh_token
+
       // Check if user record exists, create if not
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
@@ -24,6 +32,20 @@ export async function GET(request: Request) {
             id: user.id,
             email: user.email,
           })
+        }
+
+        // Store calendar integration if provider tokens are present
+        if (providerToken) {
+          const expiresAt = data.session.expires_at
+            ? new Date(data.session.expires_at * 1000).toISOString()
+            : null
+
+          await storeCalendarIntegration(
+            user.id,
+            providerToken,
+            providerRefreshToken ?? null,
+            expiresAt
+          )
         }
       }
 

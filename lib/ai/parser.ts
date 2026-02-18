@@ -8,6 +8,9 @@ import type {
   FileUpdateData,
   DomainStatus,
   DomainName,
+  SuggestedRepliesData,
+  InlineCardData,
+  IntentionCardData,
 } from '@/types/chat'
 import { FILE_TYPES } from '@/lib/markdown/constants'
 import type { FileType } from '@/lib/markdown/constants'
@@ -35,12 +38,9 @@ const LEGACY_BLOCK_TAGS = [
  */
 const FILE_UPDATE_TAG_REGEX = /\[FILE_UPDATE\s+([^\]]+)\]/
 const FILE_UPDATE_CLOSE = '[/FILE_UPDATE]'
-const ATTR_REGEX = /(\w+)="([^"]*)"/g
-
 function parseFileUpdateAttributes(attrString: string): Record<string, string> {
   const attrs: Record<string, string> = {}
-  let m: RegExpExecArray | null
-  while ((m = ATTR_REGEX.exec(attrString)) !== null) {
+  for (const m of attrString.matchAll(/(\w+)="([^"]*)"/g)) {
     attrs[m[1]] = m[2]
   }
   return attrs
@@ -49,6 +49,18 @@ function parseFileUpdateAttributes(attrString: string): Record<string, string> {
 /** [REFLECTION_PROMPT] block markers */
 const REFLECTION_PROMPT_OPEN = '[REFLECTION_PROMPT]'
 const REFLECTION_PROMPT_CLOSE = '[/REFLECTION_PROMPT]'
+
+/** [SUGGESTED_REPLIES] block markers */
+const SUGGESTED_REPLIES_OPEN = '[SUGGESTED_REPLIES]'
+const SUGGESTED_REPLIES_CLOSE = '[/SUGGESTED_REPLIES]'
+
+/** [INLINE_CARD] block markers */
+const INLINE_CARD_TAG_REGEX = /\[INLINE_CARD\s+([^\]]+)\]/
+const INLINE_CARD_CLOSE = '[/INLINE_CARD]'
+
+/** [INTENTION_CARD] block markers */
+const INTENTION_CARD_OPEN = '[INTENTION_CARD]'
+const INTENTION_CARD_CLOSE = '[/INTENTION_CARD]'
 
 function parseFileUpdateBlock(openTag: string, body: string): FileUpdateData | null {
   const tagMatch = openTag.match(FILE_UPDATE_TAG_REGEX)
@@ -197,11 +209,12 @@ export function parseMessage(content: string): ParsedMessage {
   let remaining = content
 
   while (remaining.length > 0) {
-    // Find the earliest opening tag: check FILE_UPDATE first, then REFLECTION_PROMPT, then legacy
+    // Find the earliest opening tag
     let earliestOpen = -1
-    let matchType: 'file_update' | 'reflection_prompt' | 'legacy' = 'legacy'
+    let matchType: 'file_update' | 'reflection_prompt' | 'suggested_replies' | 'inline_card' | 'intention_card' | 'legacy' = 'legacy'
     let matchedLegacyTag: (typeof LEGACY_BLOCK_TAGS)[number] | null = null
     let fileUpdateOpenMatch: RegExpExecArray | null = null
+    let inlineCardOpenMatch: RegExpExecArray | null = null
 
     // Check for [FILE_UPDATE ...] opening tag
     const fuMatch = FILE_UPDATE_TAG_REGEX.exec(remaining)
@@ -223,6 +236,38 @@ export function parseMessage(content: string): ParsedMessage {
       matchedLegacyTag = null
     }
 
+    // Check for [SUGGESTED_REPLIES] tag
+    const srIdx = remaining.indexOf(SUGGESTED_REPLIES_OPEN)
+    if (srIdx !== -1 && (earliestOpen === -1 || srIdx < earliestOpen)) {
+      earliestOpen = srIdx
+      matchType = 'suggested_replies'
+      fileUpdateOpenMatch = null
+      matchedLegacyTag = null
+    }
+
+    // Check for [INLINE_CARD ...] tag
+    const icMatch = INLINE_CARD_TAG_REGEX.exec(remaining)
+    if (icMatch && icMatch.index !== undefined) {
+      const icIdx = remaining.indexOf(icMatch[0])
+      if (icIdx !== -1 && (earliestOpen === -1 || icIdx < earliestOpen)) {
+        earliestOpen = icIdx
+        matchType = 'inline_card'
+        inlineCardOpenMatch = icMatch
+        fileUpdateOpenMatch = null
+        matchedLegacyTag = null
+      }
+    }
+
+    // Check for [INTENTION_CARD] tag
+    const intentIdx = remaining.indexOf(INTENTION_CARD_OPEN)
+    if (intentIdx !== -1 && (earliestOpen === -1 || intentIdx < earliestOpen)) {
+      earliestOpen = intentIdx
+      matchType = 'intention_card'
+      fileUpdateOpenMatch = null
+      matchedLegacyTag = null
+      inlineCardOpenMatch = null
+    }
+
     // Check legacy tags
     for (const tag of LEGACY_BLOCK_TAGS) {
       const idx = remaining.indexOf(tag.open)
@@ -231,6 +276,7 @@ export function parseMessage(content: string): ParsedMessage {
         matchType = 'legacy'
         matchedLegacyTag = tag
         fileUpdateOpenMatch = null
+        inlineCardOpenMatch = null
       }
     }
 
@@ -295,6 +341,65 @@ export function parseMessage(content: string): ParsedMessage {
       segments.push({ type: 'block', blockType: 'reflection_prompt', data: { content: blockContent } })
 
       remaining = remaining.slice(closeIndex + REFLECTION_PROMPT_CLOSE.length)
+    } else if (matchType === 'suggested_replies') {
+      // Parse [SUGGESTED_REPLIES] block
+      const closeIndex = remaining.indexOf(SUGGESTED_REPLIES_CLOSE, earliestOpen + SUGGESTED_REPLIES_OPEN.length)
+      if (closeIndex === -1) {
+        const text = remaining.trim()
+        if (text) segments.push({ type: 'text', content: text })
+        break
+      }
+
+      const textBefore = remaining.slice(0, earliestOpen).trim()
+      if (textBefore) segments.push({ type: 'text', content: textBefore })
+
+      const blockContent = remaining.slice(earliestOpen + SUGGESTED_REPLIES_OPEN.length, closeIndex).trim()
+      const replies = blockContent.split('\n').map((l) => l.trim()).filter(Boolean)
+      if (replies.length > 0) {
+        segments.push({ type: 'block', blockType: 'suggested_replies', data: { replies } satisfies SuggestedRepliesData })
+      }
+
+      remaining = remaining.slice(closeIndex + SUGGESTED_REPLIES_CLOSE.length)
+    } else if (matchType === 'inline_card' && inlineCardOpenMatch) {
+      // Parse [INLINE_CARD type="..."] block
+      const openTagFull = inlineCardOpenMatch[0]
+      const closeIndex = remaining.indexOf(INLINE_CARD_CLOSE, earliestOpen + openTagFull.length)
+      if (closeIndex === -1) {
+        const text = remaining.trim()
+        if (text) segments.push({ type: 'text', content: text })
+        break
+      }
+
+      const textBefore = remaining.slice(0, earliestOpen).trim()
+      if (textBefore) segments.push({ type: 'text', content: textBefore })
+
+      const attrs = parseFileUpdateAttributes(inlineCardOpenMatch[1])
+      const cardType = attrs['type']
+      if (cardType === 'calendar') {
+        const blockContent = remaining.slice(earliestOpen + openTagFull.length, closeIndex).trim()
+        const items = blockContent.split('\n').map((l) => l.trim()).filter(Boolean)
+        segments.push({ type: 'block', blockType: 'inline_card', data: { cardType: 'calendar', items } satisfies InlineCardData })
+      }
+
+      remaining = remaining.slice(closeIndex + INLINE_CARD_CLOSE.length)
+    } else if (matchType === 'intention_card') {
+      // Parse [INTENTION_CARD] block
+      const closeIndex = remaining.indexOf(INTENTION_CARD_CLOSE, earliestOpen + INTENTION_CARD_OPEN.length)
+      if (closeIndex === -1) {
+        const text = remaining.trim()
+        if (text) segments.push({ type: 'text', content: text })
+        break
+      }
+
+      const textBefore = remaining.slice(0, earliestOpen).trim()
+      if (textBefore) segments.push({ type: 'text', content: textBefore })
+
+      const intention = remaining.slice(earliestOpen + INTENTION_CARD_OPEN.length, closeIndex).trim()
+      if (intention) {
+        segments.push({ type: 'block', blockType: 'intention_card', data: { intention } satisfies IntentionCardData })
+      }
+
+      remaining = remaining.slice(closeIndex + INTENTION_CARD_CLOSE.length)
     } else if (matchType === 'legacy' && matchedLegacyTag) {
       // Parse legacy block
       const closeIndex = remaining.indexOf(matchedLegacyTag.close, earliestOpen + matchedLegacyTag.open.length)
@@ -387,6 +492,76 @@ export function parseStreamingChunk(accumulated: string): {
       displayText: textBefore,
       pendingBlock: false,
       completedBlock: { type: 'reflection_prompt', data: { content: blockContent } },
+    }
+  }
+
+  // Check [SUGGESTED_REPLIES] block
+  const srOpenIdx = accumulated.indexOf(SUGGESTED_REPLIES_OPEN)
+  if (srOpenIdx !== -1) {
+    const srCloseIdx = accumulated.indexOf(SUGGESTED_REPLIES_CLOSE, srOpenIdx)
+    if (srCloseIdx === -1) {
+      return {
+        displayText: accumulated.slice(0, srOpenIdx).trim(),
+        pendingBlock: true,
+        completedBlock: null,
+      }
+    }
+
+    const textBefore = accumulated.slice(0, srOpenIdx).trim()
+    const blockContent = accumulated.slice(srOpenIdx + SUGGESTED_REPLIES_OPEN.length, srCloseIdx).trim()
+    const replies = blockContent.split('\n').map((l) => l.trim()).filter(Boolean)
+    return {
+      displayText: textBefore,
+      pendingBlock: false,
+      completedBlock: replies.length > 0 ? { type: 'suggested_replies', data: { replies } } : null,
+    }
+  }
+
+  // Check [INLINE_CARD ...] block
+  const icMatch = INLINE_CARD_TAG_REGEX.exec(accumulated)
+  if (icMatch) {
+    const icOpenIdx = accumulated.indexOf(icMatch[0])
+    const icCloseIdx = accumulated.indexOf(INLINE_CARD_CLOSE, icOpenIdx)
+    if (icCloseIdx === -1) {
+      return {
+        displayText: accumulated.slice(0, icOpenIdx).trim(),
+        pendingBlock: true,
+        completedBlock: null,
+      }
+    }
+
+    const textBefore = accumulated.slice(0, icOpenIdx).trim()
+    const attrs = parseFileUpdateAttributes(icMatch[1])
+    const cardType = attrs['type']
+    if (cardType === 'calendar') {
+      const blockContent = accumulated.slice(icOpenIdx + icMatch[0].length, icCloseIdx).trim()
+      const items = blockContent.split('\n').map((l) => l.trim()).filter(Boolean)
+      return {
+        displayText: textBefore,
+        pendingBlock: false,
+        completedBlock: { type: 'inline_card', data: { cardType: 'calendar', items } },
+      }
+    }
+  }
+
+  // Check [INTENTION_CARD] block
+  const intentOpenIdx = accumulated.indexOf(INTENTION_CARD_OPEN)
+  if (intentOpenIdx !== -1) {
+    const intentCloseIdx = accumulated.indexOf(INTENTION_CARD_CLOSE, intentOpenIdx)
+    if (intentCloseIdx === -1) {
+      return {
+        displayText: accumulated.slice(0, intentOpenIdx).trim(),
+        pendingBlock: true,
+        completedBlock: null,
+      }
+    }
+
+    const textBefore = accumulated.slice(0, intentOpenIdx).trim()
+    const intention = accumulated.slice(intentOpenIdx + INTENTION_CARD_OPEN.length, intentCloseIdx).trim()
+    return {
+      displayText: textBefore,
+      pendingBlock: false,
+      completedBlock: intention ? { type: 'intention_card', data: { intention } } : null,
     }
   }
 

@@ -19,6 +19,13 @@ export default function LoginPage() {
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+        // Calendar scope requested upfront for all Google sign-ins (MVP).
+        // Post-MVP: request incrementally after user opts into calendar integration.
+        scopes: 'https://www.googleapis.com/auth/calendar.readonly',
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
       },
     })
     if (error) {

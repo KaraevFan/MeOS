@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Greeting } from './greeting'
 import { SessionChips } from './session-chips'
 import { HeroCard } from './hero-card'
@@ -8,6 +8,11 @@ import { InfoCard } from './info-card'
 import { CaptureBar } from './capture-bar'
 import { AmbientCard } from './ambient-card'
 import { ActiveSessionCard } from './active-session-card'
+import { CalendarCard } from './calendar-card'
+import { YesterdayIntentionCard } from './yesterday-intention-card'
+import { CheckinCard } from './checkin-card'
+import { BreadcrumbsCard } from './breadcrumbs-card'
+import type { CalendarEvent } from '@/lib/calendar/types'
 import type { SessionType } from '@/types/chat'
 
 export type TimeState = 'morning' | 'midday' | 'evening'
@@ -18,10 +23,13 @@ export interface HomeScreenData {
   checkinOverdue: boolean
   nextCheckinDate: string | null
   todayClosed: boolean
+  openDayCompleted: boolean
   yesterdayJournalSummary: string | null
   todayCaptureCount: number
   todayIntention: string | null
   yesterdayIntention: string | null
+  calendarEvents: CalendarEvent[]
+  calendarSummary: string | null
   activeSessionId: string | null
   activeSessionType: SessionType | null
 }
@@ -100,12 +108,58 @@ const SmallSunIcon = (
   </svg>
 )
 
+function CheckinDueCard() {
+  return (
+    <InfoCard borderColor="amber">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            <span className="text-[11px] font-bold tracking-[0.06em] uppercase text-amber-600/80">
+              Check-in due
+            </span>
+          </div>
+          <p className="text-[14px] text-warm-dark/85">
+            Your weekly reflection is ready.
+          </p>
+        </div>
+        <a
+          href="/chat?type=weekly_checkin"
+          className="px-4 py-2 bg-amber-500 text-white rounded-xl text-[13px] font-semibold hover:bg-amber-600 transition-colors"
+        >
+          Check in
+        </a>
+      </div>
+    </InfoCard>
+  )
+}
+
 export function HomeScreen({ data }: { data: HomeScreenData }) {
   const [timeState, setTimeState] = useState<TimeState>('morning')
 
   useEffect(() => {
     setTimeState(detectTimeState())
   }, [])
+
+  // Stable payload for LLM contextual line — only for morning/evening with data
+  const morningLinePayload = useMemo(() => {
+    if (!data.yesterdayIntention && !data.yesterdayJournalSummary && !data.calendarSummary) return undefined
+    return {
+      timeState: 'morning' as const,
+      yesterdayIntention: data.yesterdayIntention,
+      yesterdayJournalSummary: data.yesterdayJournalSummary,
+      calendarSummary: data.calendarSummary,
+    }
+  }, [data.yesterdayIntention, data.yesterdayJournalSummary, data.calendarSummary])
+
+  const eveningLinePayload = useMemo(() => {
+    if (!data.todayIntention && !data.todayCaptureCount) return undefined
+    return {
+      timeState: 'evening' as const,
+      todayIntention: data.todayIntention,
+      todayCaptureCount: data.todayCaptureCount,
+    }
+  }, [data.todayIntention, data.todayCaptureCount])
 
   // If there's an active session, show the resume card prominently
   if (data.activeSessionId && data.activeSessionType) {
@@ -119,6 +173,8 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             sessionType={data.activeSessionType}
           />
         </div>
+        {/* Check-in nudge persists even with active session */}
+        {data.checkinOverdue && data.nextCheckinDate && <CheckinDueCard />}
       </div>
     )
   }
@@ -129,14 +185,20 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
       <SessionChips activeState={timeState} />
 
       {/* ===== MORNING ===== */}
+      {/* Order: Hero → CaptureBar → Yesterday's Synthesis → Calendar → Yesterday's Intention → Ambient */}
       {timeState === 'morning' && (
         <>
           <HeroCard
             icon={SunIcon}
-            title="Open Your Day"
-            sageText={getMorningSageText(data)}
-            ctaText="Begin morning session"
-            ctaHref="/chat?type=ad_hoc"
+            title={data.openDayCompleted ? 'Day Plan Set' : 'Open Your Day'}
+            sageText={
+              data.openDayCompleted && data.todayIntention
+                ? `Your intention: "${data.todayIntention}"`
+                : getMorningSageText(data)
+            }
+            ctaText={data.openDayCompleted ? 'View day plan' : 'Begin morning session'}
+            ctaHref={data.openDayCompleted ? '/life-map' : '/chat?type=open_day'}
+            contextualLinePayload={data.openDayCompleted ? undefined : morningLinePayload}
           />
           <CaptureBar />
 
@@ -154,18 +216,25 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             </InfoCard>
           )}
 
+          {/* Calendar — conditional on integration */}
+          {data.calendarSummary && (
+            <CalendarCard
+              summary={data.calendarSummary}
+              events={data.calendarEvents}
+            />
+          )}
+
           {/* Yesterday's Intention — conditional on day plan data */}
           {data.yesterdayIntention && (
-            <InfoCard borderColor="blue-gray">
-              <div className="flex flex-col gap-3">
-                <span className="text-[11px] font-bold tracking-[0.06em] uppercase text-blue-gray">
-                  Yesterday&apos;s Intention
-                </span>
-                <p className="text-[15px] italic text-warm-dark/80 leading-relaxed">
-                  &ldquo;{data.yesterdayIntention}&rdquo;
-                </p>
-              </div>
-            </InfoCard>
+            <YesterdayIntentionCard
+              intention={data.yesterdayIntention}
+              onCompleted={() => {
+                // TODO: Mark yesterday's day plan intention as completed via API
+              }}
+              onCarryForward={() => {
+                // TODO: Write carry-forward context for morning session via API
+              }}
+            />
           )}
 
           <AmbientCard />
@@ -173,6 +242,7 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
       )}
 
       {/* ===== MID-DAY ===== */}
+      {/* Order: Hero → Check-In → Captures Today */}
       {timeState === 'midday' && (
         <>
           <HeroCard
@@ -182,6 +252,11 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             ctaText="Capture a thought"
             ctaHref="/chat?type=ad_hoc"
           />
+
+          {/* Check-In — conditional on open_day completed today */}
+          {data.openDayCompleted && data.todayIntention && (
+            <CheckinCard intention={data.todayIntention} />
+          )}
 
           {/* Captures Today — conditional */}
           {data.todayCaptureCount > 0 && (
@@ -200,6 +275,7 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
       )}
 
       {/* ===== EVENING ===== */}
+      {/* Order: Hero → CaptureBar → Breadcrumbs → Morning Intention Recall → Ambient */}
       {timeState === 'evening' && (
         <>
           <HeroCard
@@ -212,8 +288,12 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             }
             ctaText={data.todayClosed ? 'Update tonight\'s journal' : 'Close your day'}
             ctaHref="/chat?type=close_day"
+            contextualLinePayload={data.todayClosed ? undefined : eveningLinePayload}
           />
           <CaptureBar />
+
+          {/* Breadcrumbs — evening only, conditional on captures */}
+          {/* TODO: Wire with actual capture texts when captures storage is implemented (M3) */}
 
           {/* Morning Intention Recall — conditional on today's day plan */}
           {data.todayIntention && (
@@ -237,29 +317,7 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
       )}
 
       {/* Check-in nudge — shown across all states when overdue */}
-      {data.checkinOverdue && data.nextCheckinDate && (
-        <InfoCard borderColor="amber">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                <span className="text-[11px] font-bold tracking-[0.06em] uppercase text-amber-600/80">
-                  Check-in due
-                </span>
-              </div>
-              <p className="text-[14px] text-warm-dark/85">
-                Your weekly reflection is ready.
-              </p>
-            </div>
-            <a
-              href="/chat?type=weekly_checkin"
-              className="px-4 py-2 bg-amber-500 text-white rounded-xl text-[13px] font-semibold hover:bg-amber-600 transition-colors"
-            >
-              Check in
-            </a>
-          </div>
-        </InfoCard>
-      )}
+      {data.checkinOverdue && data.nextCheckinDate && <CheckinDueCard />}
     </div>
   )
 }
