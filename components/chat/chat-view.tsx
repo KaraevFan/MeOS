@@ -132,6 +132,10 @@ function getSageOpening(state: string, userName?: string, hasOnboardingPulse?: b
       return `Welcome back${name ? ',' + name : ''}. Want to keep going with your life map?`
     case 'mapping_complete':
       return `Hey${name ? ',' + name : ''}. I'm here whenever. Anything on your mind?`
+    case 'close_day':
+      return `Hey${name ? ',' + name : ''}. Let's close out the day together.`
+    case 'open_day':
+      return `Good morning${name ? ',' + name : ''}. Let's set the tone for today.`
     case 'checkin_due':
       return `Hey${name ? ',' + name : ''} — it's check-in time. Ready to look at how this week went?`
     case 'checkin_overdue':
@@ -353,8 +357,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
             const needsPulseCheck = state === 'new_user' && sessionType === 'life_mapping' && !hasOnboardingPulse
 
-            // Add Sage's opening message
-            const openingMessage = getSageOpening(state, initialSessionState?.userName, hasOnboardingPulse)
+            // Add Sage's opening message — daily rhythm sessions use sessionType directly
+            const openingKey = sessionType === 'close_day' || sessionType === 'open_day' ? sessionType : state
+            const openingMessage = getSageOpening(openingKey, initialSessionState?.userName, hasOnboardingPulse)
 
             const { data: savedMsg, error: insertError } = await supabase
               .from('messages')
@@ -385,10 +390,15 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               setShowPulseCheck(true)
             }
 
-            // Auto-trigger Sage for ad-hoc sessions
+            // Auto-trigger Sage for sessions that need an AI-generated opening
             if (precheckin) {
               setTimeout(() => {
                 triggerSageResponse('none', { precheckin: true })
+              }, 100)
+            } else if (sessionType === 'close_day') {
+              // close_day: Sage opens with context-aware evening reflection prompt
+              setTimeout(() => {
+                triggerSageResponse('none')
               }, 100)
             } else if (adHocContext) {
               // Context from session metadata (nudge, session history, or generic opening)
