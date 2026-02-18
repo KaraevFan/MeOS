@@ -166,28 +166,27 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
     }
   }, [data.todayIntention, data.todayCaptureCount])
 
-  // If there's an active session, show the resume card prominently
-  if (data.activeSessionId && data.activeSessionType) {
-    return (
-      <div className="pb-28">
-        <Greeting timeState={timeState} displayName={data.displayName} />
-        <SessionChips activeState={timeState} />
+  // Derive active session href once — used to resolve dual-CTA conflicts
+  const activeSessionHref = data.activeSessionId
+    ? `/chat?session=${data.activeSessionId}`
+    : null
+  const hasActiveOpenDay = data.activeSessionType === 'open_day' && !!activeSessionHref
+  const hasActiveCloseDay = data.activeSessionType === 'close_day' && !!activeSessionHref
+
+  return (
+    <div className="pb-28">
+      <Greeting timeState={timeState} displayName={data.displayName} />
+      <SessionChips activeState={timeState} />
+
+      {/* Active session resume — inline card, doesn't replace the layout */}
+      {data.activeSessionId && data.activeSessionType && (
         <div className="px-5 mt-4">
           <ActiveSessionCard
             sessionId={data.activeSessionId}
             sessionType={data.activeSessionType}
           />
         </div>
-        {/* Check-in nudge persists even with active session */}
-        {data.checkinOverdue && data.nextCheckinDate && <CheckinDueCard />}
-      </div>
-    )
-  }
-
-  return (
-    <div className="pb-28">
-      <Greeting timeState={timeState} displayName={data.displayName} />
-      <SessionChips activeState={timeState} />
+      )}
 
       {/* ===== MORNING ===== */}
       {/* Order: Hero → CaptureBar → Yesterday's Synthesis → Calendar → Yesterday's Intention → Ambient */}
@@ -195,14 +194,14 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
         <>
           <HeroCard
             icon={SunIcon}
-            title={data.openDayCompleted ? 'Day Plan Set' : 'Open Your Day'}
+            title={data.openDayCompleted ? 'Day Plan Set' : hasActiveOpenDay ? 'Morning Session' : 'Open Your Day'}
             sageText={
               data.openDayCompleted && data.todayIntention
                 ? `Your intention: "${data.todayIntention}"`
                 : getMorningSageText(data)
             }
-            ctaText={data.openDayCompleted ? 'View day plan' : 'Begin morning session'}
-            ctaHref={data.openDayCompleted ? '/life-map' : '/chat?type=open_day'}
+            ctaText={data.openDayCompleted ? 'View day plan' : hasActiveOpenDay ? 'Resume morning session' : 'Begin morning session'}
+            ctaHref={data.openDayCompleted ? '/life-map' : hasActiveOpenDay ? activeSessionHref! : '/chat?type=open_day'}
             contextualLinePayload={data.openDayCompleted ? undefined : morningLinePayload}
           />
           <CaptureBar />
@@ -286,8 +285,8 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
                 ? 'You already reflected tonight. Sleep well.'
                 : getEveningSageText(data)
             }
-            ctaText={data.todayClosed ? 'Update tonight\'s journal' : 'Close your day'}
-            ctaHref="/chat?type=close_day"
+            ctaText={data.todayClosed ? 'Update tonight\'s journal' : hasActiveCloseDay ? 'Resume evening reflection' : 'Close your day'}
+            ctaHref={hasActiveCloseDay ? activeSessionHref! : '/chat?type=close_day'}
             contextualLinePayload={data.todayClosed ? undefined : eveningLinePayload}
           />
           <CaptureBar />
