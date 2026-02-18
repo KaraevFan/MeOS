@@ -8,6 +8,7 @@ const PushSubscribeSchema = z.object({
     p256dh: z.string(),
     auth: z.string(),
   }),
+  timezone: z.string().optional(),
 })
 
 export async function POST(request: Request) {
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { endpoint, keys } = body
+  const { endpoint, keys, timezone } = body
 
   // Upsert push subscription (replace existing for this user + endpoint)
   const { error } = await supabase
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
         user_id: user.id,
         endpoint,
         keys,
+        ...(timezone ? { timezone } : {}),
       },
       { onConflict: 'user_id,endpoint' }
     )

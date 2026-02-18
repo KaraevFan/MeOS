@@ -17,6 +17,7 @@ import { handleAllFileUpdates } from '@/lib/markdown/file-write-handler'
 import type { FileUpdateData } from '@/types/chat'
 import { savePulseCheckRatings, pulseRatingToDomainStatus, getLatestRatingsPerDomain } from '@/lib/supabase/pulse-check'
 import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
+import { scheduleMidDayNudge } from '@/lib/notifications/schedule-nudge'
 import { PinnedContextCard } from './pinned-context-card'
 import { SessionCompleteCard } from './session-complete-card'
 import { SessionHeader } from './session-header'
@@ -840,6 +841,15 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           if (hasDayPlan) {
             completeSession(supabase, sessionId).then(() => {
               setSessionCompleted(true)
+
+              // Fire-and-forget: schedule mid-day nudge referencing morning intention
+              const dayPlanUpdate = updates.find((u) => u.fileType === 'day-plan')
+              const intention = dayPlanUpdate?.attributes?.intention ?? null
+              if (intention) {
+                scheduleMidDayNudge(supabase, userId, intention).catch(() => {
+                  console.error('Failed to schedule mid-day nudge')
+                })
+              }
             }).catch(() => {
               console.error('Failed to complete open_day session')
             })

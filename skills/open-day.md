@@ -92,7 +92,7 @@ Change my focus
 
 When the user confirms, emit the day plan:
 
-[FILE_UPDATE type="day-plan" name="{YYYY-MM-DD}"]
+[FILE_UPDATE type="day-plan" name="{YYYY-MM-DD}" intention="[The confirmed intention]"]
 ## Intention
 "[The confirmed intention]"
 

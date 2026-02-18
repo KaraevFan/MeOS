@@ -3,12 +3,36 @@
 import { useState } from 'react'
 import { InfoCard } from './info-card'
 
+type CheckinResponse = 'yes' | 'not-yet' | 'snooze'
+
 interface CheckinCardProps {
   intention: string
+  initialResponse?: CheckinResponse | null
 }
 
-export function CheckinCard({ intention }: CheckinCardProps) {
-  const [response, setResponse] = useState<string | null>(null)
+export function CheckinCard({ intention, initialResponse = null }: CheckinCardProps) {
+  const [response, setResponse] = useState<CheckinResponse | null>(initialResponse)
+  const [saving, setSaving] = useState(false)
+
+  async function handleResponse(value: CheckinResponse) {
+    setResponse(value) // Optimistic UI
+    setSaving(true)
+    try {
+      const res = await fetch('/api/checkin/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response: value }),
+      })
+      if (!res.ok) {
+        console.error('[CheckinCard] Failed to persist response')
+        // Don't revert — response is shown, just log the error
+      }
+    } catch {
+      console.error('[CheckinCard] Network error persisting response')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   if (response) {
     const messages: Record<string, string> = {
@@ -47,28 +71,31 @@ export function CheckinCard({ intention }: CheckinCardProps) {
         </p>
         <div className="flex gap-2">
           <button
-            onClick={() => setResponse('yes')}
+            onClick={() => handleResponse('yes')}
+            disabled={saving}
             className="h-8 px-4 text-[13px] font-semibold rounded-xl
                        bg-amber-500 text-white
                        hover:bg-amber-600 active:bg-amber-700
-                       transition-colors duration-150"
+                       transition-colors duration-150 disabled:opacity-50"
           >
             Yes
           </button>
           <button
-            onClick={() => setResponse('not-yet')}
+            onClick={() => handleResponse('not-yet')}
+            disabled={saving}
             className="h-8 px-4 text-[13px] font-semibold rounded-xl
                        bg-warm-dark/[0.04] text-warm-dark/70
                        hover:bg-warm-dark/[0.08]
-                       transition-colors duration-150"
+                       transition-colors duration-150 disabled:opacity-50"
           >
             Not yet
           </button>
           <button
-            onClick={() => setResponse('snooze')}
+            onClick={() => handleResponse('snooze')}
+            disabled={saving}
             className="h-8 px-3 text-[13px] font-medium text-warm-gray
                        hover:text-warm-dark/70
-                       transition-colors duration-150"
+                       transition-colors duration-150 disabled:opacity-50"
           >
             Snooze
           </button>
