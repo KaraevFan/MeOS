@@ -7,8 +7,8 @@ import { cn } from '@/lib/utils'
 
 function getOrbHref(hour: number): string {
   if (hour < 11) return '/chat?type=open_day' // Morning → Open Day
-  if (hour < 18) return '/chat?type=ad_hoc'   // Mid-Day → Capture (ad_hoc until M3 quick_capture)
-  return '/chat?type=close_day'                // Evening → Close Day
+  if (hour < 18) return '/home?capture=1'     // Mid-Day → Quick Capture (home screen capture bar)
+  return '/chat?type=close_day'               // Evening → Close Day
 }
 
 function getOrbLabel(hour: number): string {

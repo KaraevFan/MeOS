@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Greeting } from './greeting'
 import { SessionChips } from './session-chips'
 import { HeroCard } from './hero-card'
@@ -136,6 +137,8 @@ function CheckinDueCard() {
 
 export function HomeScreen({ data }: { data: HomeScreenData }) {
   const [timeState, setTimeState] = useState<TimeState>('morning')
+  const searchParams = useSearchParams()
+  const captureAutoExpand = searchParams.get('capture') === '1'
 
   useEffect(() => {
     setTimeState(detectTimeState())
@@ -242,7 +245,7 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
       )}
 
       {/* ===== MID-DAY ===== */}
-      {/* Order: Hero → Check-In → Captures Today */}
+      {/* Order: Hero → CaptureBar → Check-In → Captures Today */}
       {timeState === 'midday' && (
         <>
           <HeroCard
@@ -250,8 +253,9 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             title="Quick Capture"
             sageText="Got a thought worth holding onto? Drop it here — it'll be waiting tonight."
             ctaText="Capture a thought"
-            ctaHref="/chat?type=ad_hoc"
+            ctaHref="/home?capture=1"
           />
+          <CaptureBar autoExpand={captureAutoExpand} />
 
           {/* Check-In — conditional on open_day completed today */}
           {data.openDayCompleted && data.todayIntention && (
