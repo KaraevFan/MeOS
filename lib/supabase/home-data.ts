@@ -17,10 +17,12 @@ export interface HomeData {
   openDayCompleted: boolean
   yesterdayJournalSummary: string | null
   todayCaptureCount: number
+  todayCaptures: string[]
   todayIntention: string | null
   yesterdayIntention: string | null
   calendarEvents: CalendarEvent[]
   calendarSummary: string | null
+  checkinResponse: string | null
 }
 
 export async function getHomeData(
@@ -55,11 +57,13 @@ export async function getHomeData(
   let todayClosed = false
   let openDayCompleted = false
   let yesterdayJournalSummary: string | null = null
-  const todayCaptureCount = 0 // TODO: captures not implemented yet
+  let todayCaptureCount = 0
+  let todayCaptures: string[] = []
   let todayIntention: string | null = null
   let yesterdayIntention: string | null = null
   let calendarEvents: CalendarEvent[] = []
   let calendarSummary: string | null = null
+  let checkinResponse: string | null = null
 
   if (onboardingCompleted) {
     const ufs = new UserFileSystem(supabase, userId)
@@ -78,6 +82,7 @@ export async function getHomeData(
       todayDayPlanResult,
       yesterdayDayPlanResult,
       calendarResult,
+      captureFilenamesResult,
     ] = await Promise.allSettled([
       supabase
         .from('sessions')
@@ -109,6 +114,7 @@ export async function getHomeData(
       ufs.readDayPlan(todayStr),
       ufs.readDayPlan(yesterday),
       getCalendarEvents(userId, todayStr),
+      ufs.listCaptures(todayStr, 5),
     ])
 
     // Extract active session from parallel result
@@ -138,9 +144,10 @@ export async function getHomeData(
       yesterdayJournalSummary = lines[0]?.trim() || null
     }
 
-    // Extract today's intention from day plan
+    // Extract today's intention and checkin response from day plan
     if (todayDayPlanResult.status === 'fulfilled' && todayDayPlanResult.value) {
       todayIntention = todayDayPlanResult.value.frontmatter.intention ?? null
+      checkinResponse = todayDayPlanResult.value.frontmatter.checkin_response ?? null
     }
 
     // Extract yesterday's intention for carry-forward
@@ -163,6 +170,20 @@ export async function getHomeData(
         calendarSummary = `${calendarEvents.length} meeting${calendarEvents.length === 1 ? '' : 's'} today · First at ${firstTime}${afternoon.length === 0 ? ' · Afternoon clear' : ''}`
       }
     }
+
+    // Extract today's captures (text content for BreadcrumbsCard)
+    if (captureFilenamesResult.status === 'fulfilled' && captureFilenamesResult.value.length > 0) {
+      const captureFilenames = captureFilenamesResult.value
+      todayCaptureCount = captureFilenames.length
+      const captureResults = await Promise.allSettled(
+        captureFilenames.map((filename) => ufs.readCapture(filename))
+      )
+      todayCaptures = captureResults
+        .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof ufs.readCapture>>> =>
+          r.status === 'fulfilled' && r.value !== null
+        )
+        .map((r) => r.value!.content)
+    }
   }
 
   return {
@@ -177,9 +198,11 @@ export async function getHomeData(
     openDayCompleted,
     yesterdayJournalSummary,
     todayCaptureCount,
+    todayCaptures,
     todayIntention,
     yesterdayIntention,
     calendarEvents,
     calendarSummary,
+    checkinResponse,
   }
 }

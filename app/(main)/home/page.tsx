@@ -41,12 +41,14 @@ export default async function HomePage() {
           openDayCompleted: homeData.openDayCompleted,
           yesterdayJournalSummary: homeData.yesterdayJournalSummary,
           todayCaptureCount: homeData.todayCaptureCount,
+          todayCaptures: homeData.todayCaptures,
           todayIntention: homeData.todayIntention,
           yesterdayIntention: homeData.yesterdayIntention,
           calendarEvents: homeData.calendarEvents,
           calendarSummary: homeData.calendarSummary,
           activeSessionId: homeData.activeSessionId,
           activeSessionType: homeData.activeSessionType,
+          checkinResponse: homeData.checkinResponse,
         }}
       />
     </div>

@@ -27,12 +27,14 @@ export interface HomeScreenData {
   openDayCompleted: boolean
   yesterdayJournalSummary: string | null
   todayCaptureCount: number
+  todayCaptures: string[]
   todayIntention: string | null
   yesterdayIntention: string | null
   calendarEvents: CalendarEvent[]
   calendarSummary: string | null
   activeSessionId: string | null
   activeSessionType: SessionType | null
+  checkinResponse: string | null
 }
 
 function detectTimeState(): TimeState {
@@ -259,21 +261,15 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
 
           {/* Check-In — conditional on open_day completed today */}
           {data.openDayCompleted && data.todayIntention && (
-            <CheckinCard intention={data.todayIntention} />
+            <CheckinCard
+              intention={data.todayIntention}
+              initialResponse={data.checkinResponse as 'yes' | 'not-yet' | 'snooze' | null}
+            />
           )}
 
-          {/* Captures Today — conditional */}
-          {data.todayCaptureCount > 0 && (
-            <InfoCard borderColor="sage">
-              <div className="flex flex-col gap-3">
-                <span className="text-[11px] font-bold tracking-[0.06em] uppercase text-sage">
-                  Captures Today
-                </span>
-                <p className="text-[14px] text-warm-dark/85 leading-snug">
-                  {data.todayCaptureCount} thought{data.todayCaptureCount === 1 ? '' : 's'} captured
-                </p>
-              </div>
-            </InfoCard>
+          {/* Breadcrumbs — mid-day captures */}
+          {data.todayCaptures.length > 0 && (
+            <BreadcrumbsCard captures={data.todayCaptures} />
           )}
         </>
       )}
@@ -296,8 +292,10 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
           />
           <CaptureBar />
 
-          {/* Breadcrumbs — evening only, conditional on captures */}
-          {/* TODO: Wire with actual capture texts when captures storage is implemented (M3) */}
+          {/* Breadcrumbs — evening, conditional on captures */}
+          {data.todayCaptures.length > 0 && (
+            <BreadcrumbsCard captures={data.todayCaptures} />
+          )}
 
           {/* Morning Intention Recall — conditional on today's day plan */}
           {data.todayIntention && (
