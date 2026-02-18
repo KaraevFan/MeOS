@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Greeting } from './greeting'
 import { SessionChips } from './session-chips'
 import { HeroCard } from './hero-card'
@@ -26,12 +27,14 @@ export interface HomeScreenData {
   openDayCompleted: boolean
   yesterdayJournalSummary: string | null
   todayCaptureCount: number
+  todayCaptures: string[]
   todayIntention: string | null
   yesterdayIntention: string | null
   calendarEvents: CalendarEvent[]
   calendarSummary: string | null
   activeSessionId: string | null
   activeSessionType: SessionType | null
+  checkinResponse: 'yes' | 'not-yet' | 'snooze' | null
 }
 
 function detectTimeState(): TimeState {
@@ -136,6 +139,8 @@ function CheckinDueCard() {
 
 export function HomeScreen({ data }: { data: HomeScreenData }) {
   const [timeState, setTimeState] = useState<TimeState>('morning')
+  const searchParams = useSearchParams()
+  const captureAutoExpand = searchParams.get('capture') === '1'
 
   useEffect(() => {
     setTimeState(detectTimeState())
@@ -242,7 +247,7 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
       )}
 
       {/* ===== MID-DAY ===== */}
-      {/* Order: Hero → Check-In → Captures Today */}
+      {/* Order: Hero → CaptureBar → Check-In → Captures Today */}
       {timeState === 'midday' && (
         <>
           <HeroCard
@@ -250,26 +255,21 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             title="Quick Capture"
             sageText="Got a thought worth holding onto? Drop it here — it'll be waiting tonight."
             ctaText="Capture a thought"
-            ctaHref="/chat?type=ad_hoc"
+            ctaHref="/home?capture=1"
           />
+          <CaptureBar autoExpand={captureAutoExpand} />
 
           {/* Check-In — conditional on open_day completed today */}
           {data.openDayCompleted && data.todayIntention && (
-            <CheckinCard intention={data.todayIntention} />
+            <CheckinCard
+              intention={data.todayIntention}
+              initialResponse={data.checkinResponse}
+            />
           )}
 
-          {/* Captures Today — conditional */}
-          {data.todayCaptureCount > 0 && (
-            <InfoCard borderColor="sage">
-              <div className="flex flex-col gap-3">
-                <span className="text-[11px] font-bold tracking-[0.06em] uppercase text-sage">
-                  Captures Today
-                </span>
-                <p className="text-[14px] text-warm-dark/85 leading-snug">
-                  {data.todayCaptureCount} thought{data.todayCaptureCount === 1 ? '' : 's'} captured
-                </p>
-              </div>
-            </InfoCard>
+          {/* Breadcrumbs — mid-day captures */}
+          {data.todayCaptures.length > 0 && (
+            <BreadcrumbsCard captures={data.todayCaptures} />
           )}
         </>
       )}
@@ -292,8 +292,10 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
           />
           <CaptureBar />
 
-          {/* Breadcrumbs — evening only, conditional on captures */}
-          {/* TODO: Wire with actual capture texts when captures storage is implemented (M3) */}
+          {/* Breadcrumbs — evening, conditional on captures */}
+          {data.todayCaptures.length > 0 && (
+            <BreadcrumbsCard captures={data.todayCaptures} />
+          )}
 
           {/* Morning Intention Recall — conditional on today's day plan */}
           {data.todayIntention && (

@@ -2,10 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react'
 
-export function CaptureBar() {
-  const [expanded, setExpanded] = useState(false)
+export function CaptureBar({ autoExpand = false }: { autoExpand?: boolean }) {
+  const [expanded, setExpanded] = useState(autoExpand)
   const [text, setText] = useState('')
   const [flash, setFlash] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -20,15 +21,34 @@ export function CaptureBar() {
     return () => clearTimeout(timer)
   }, [flash])
 
-  function handleSubmit() {
-    if (!text.trim()) {
+  async function handleSubmit() {
+    const trimmed = text.trim()
+    if (!trimmed) {
       setExpanded(false)
       return
     }
-    // TODO (M3): Save capture to captures/{date}-{timestamp}.md
-    setFlash('Captured — saved when captures ship in M3')
+
+    // Optimistic UI: show flash and collapse immediately
+    setFlash('Captured')
     setText('')
     setExpanded(false)
+    setSaving(true)
+
+    try {
+      const res = await fetch('/api/capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: trimmed, inputMode: 'text' }),
+      })
+
+      if (!res.ok) {
+        setFlash('Couldn\u2019t save \u2014 try again')
+      }
+    } catch {
+      setFlash('Couldn\u2019t save \u2014 try again')
+    } finally {
+      setSaving(false)
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -60,7 +80,7 @@ export function CaptureBar() {
           />
           <button
             onClick={handleSubmit}
-            disabled={!text.trim()}
+            disabled={!text.trim() || saving}
             className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center shrink-0
                        disabled:opacity-30 hover:bg-amber-600 active:bg-amber-700
                        transition-colors duration-150"

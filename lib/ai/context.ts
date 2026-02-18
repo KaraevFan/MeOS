@@ -189,6 +189,37 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
     }
   }
 
+  // 8b2. Today's captures (close_day: fold into evening synthesis)
+  if (sessionType === 'close_day') {
+    try {
+      const todayStr = new Date().toLocaleDateString('en-CA')
+      const captureFilenames = await ufs.listCaptures(todayStr, 10) // max 10 for token budget
+      if (captureFilenames.length > 0) {
+        const captureResults = await Promise.allSettled(
+          captureFilenames.map((filename) => ufs.readCapture(filename))
+        )
+        const validCaptures = captureResults
+          .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof ufs.readCapture>>> =>
+            r.status === 'fulfilled' && r.value !== null
+          )
+          .map((r) => r.value!)
+
+        if (validCaptures.length > 0) {
+          parts.push(`\n=== TODAY'S QUICK CAPTURES (${validCaptures.length} shown) ===`)
+          for (const capture of validCaptures) {
+            const time = new Date(capture.frontmatter.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+            const mode = capture.frontmatter.input_mode === 'voice' ? ' [voice]' : ''
+            // Strip block tags to prevent prompt injection from user content
+            const sanitized = capture.content.replace(/\[\/?(FILE_UPDATE|DOMAIN_SUMMARY|LIFE_MAP_SYNTHESIS|SESSION_SUMMARY)[^\]]*\]/g, '')
+            parts.push(`- ${time}${mode}: "${sanitized}"`)
+          }
+        }
+      }
+    } catch {
+      // No captures — that's fine
+    }
+  }
+
   // 8c. Daily journal context (session-type dependent)
   if (dailyLogFilenames.status === 'fulfilled' && dailyLogFilenames.value.length > 0) {
     const logFilenames = dailyLogFilenames.value

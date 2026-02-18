@@ -21,6 +21,7 @@ export async function requestPushPermission(): Promise<boolean> {
     })
 
     const subJson = subscription.toJSON()
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
     const response = await fetch('/api/push/subscribe', {
       method: 'POST',
@@ -28,6 +29,7 @@ export async function requestPushPermission(): Promise<boolean> {
       body: JSON.stringify({
         endpoint: subJson.endpoint,
         keys: subJson.keys,
+        timezone,
       }),
     })
 

@@ -528,21 +528,46 @@ Orb contextual routing:
 ##### Task 16: Quick Capture Input Surface
 
 **Files to create:**
-- `app/api/capture/route.ts` — capture write endpoint
-- `components/capture/capture-input.tsx` — capture UI component
+- `app/api/capture/route.ts` — capture write endpoint (POST, authenticated, Zod-validated)
+- `components/capture/capture-input.tsx` — standalone capture UI (text + voice)
 
 **Files to modify:**
-- `components/home/capture-bar.tsx` — wire to actual storage
-- `components/ui/bottom-tab-bar.tsx` — mid-day orb → quick_capture
+- `components/home/capture-bar.tsx` — wire to actual storage via `/api/capture`
+- `components/ui/bottom-tab-bar.tsx` — mid-day orb → quick_capture route
 
 **Implementation details:**
 
 1. Dedicated capture flow: tap → record/type → save → done (no AI conversation)
-2. Voice input via existing MediaRecorder + transcription pipeline
-3. Text input fallback
+2. Voice input via existing MediaRecorder + transcription pipeline (reuse `lib/voice/` pattern)
+3. Text input fallback (already built in capture-bar.tsx)
 4. Entry points: capture bar (inline expansion), mid-day voice orb, session chips "Capture" button
-5. `quick_capture` is NOT a real session — just a write operation. No messages table entry, no streaming.
-6. All captures also append to today's day plan Quick Capture section (if day plan exists)
+5. **`quick_capture` does NOT create a `sessions` table row.** It's a direct write operation — no messages table entry, no streaming. The `quick_capture` value in `SessionType` is used only for write permission lookup in `SESSION_WRITE_PERMISSIONS`, not for session lifecycle.
+6. Day plan Quick Capture section: captures do NOT live-append to the day plan. The day plan's Quick Capture section is populated during evening synthesis only (Task 19). This avoids concurrent write conflicts.
+
+**Capture API (`app/api/capture/route.ts`):**
+```typescript
+// POST /api/capture
+// Body: { text: string, inputMode: 'text' | 'voice' }
+// Returns: { id: string, path: string }
+// 1. Authenticate user
+// 2. Validate with Zod: { text: z.string().min(1).max(2000), inputMode: z.enum(['text', 'voice']) }
+// 3. Call ufs.writeCapture(date, timestamp, text, { input_mode: inputMode })
+// 4. Fire-and-forget: classifyCapture(userId, path, text) — Task 17
+// 5. Return { id, path } immediately (don't wait for classification)
+```
+
+**Voice capture flow (`capture-input.tsx`):**
+- Reuse `lib/voice/use-voice-recorder.ts` for MediaRecorder
+- Record → Stop → Transcribe via `/api/voice/transcribe` → Save transcription as capture
+- Show "Transcribing..." loading state between stop and save
+- If transcription fails, offer text input fallback
+
+**Optimistic UI in capture-bar.tsx:**
+- Show "Captured" flash immediately on submit
+- API call fires in background (fire-and-forget from UI perspective)
+- If API fails, show error flash "Couldn't save — try again" with retry button
+
+**Known limitation (post-M3):** No offline queue. Captures entered offline are lost. Document as known limitation for Wave 3 testing feedback.
 
 ##### Task 17: Simple AI Classification
 
@@ -554,51 +579,92 @@ Orb contextual routing:
 1. After capture is saved, make lightweight Claude Haiku call:
    - Input: capture text + user's life map domain list
    - Output: `{ classification: 'thought' | 'task' | 'idea' | 'tension', tags: string[] }`
-2. Update capture frontmatter with classification + tags
-3. No routing logic — just classify and store
+2. **Write-back mechanism:** Re-read the capture file, merge classification into frontmatter, re-write. Use `ufs.readFile()` → merge → `ufs.writeFile()`. No race condition concern because classification is the only writer after initial save, and each capture has a unique file.
+3. No routing logic — just classify and store. Tasks are tagged but not routed to a backlog (post-M3).
 4. Fire-and-forget: classification happens async after save confirmation. User sees "Captured" immediately.
+5. **Failure handling:** If classification fails (LLM error, timeout, network), capture remains with `classification: null` and `auto_tags: []`. No retry — the capture is still valuable without classification. Log the error for monitoring.
+6. **Rate limiting:** No per-user throttle needed for MVP. Haiku calls are cheap ($0.25/MTok input). If a user fires 10 captures rapidly, that's ~10 Haiku calls — acceptable. Batch classification is a post-M3 optimization.
 
 ##### Task 18: Capture File System
 
 **Files to modify:**
-- `lib/markdown/user-file-system.ts` — wire capture methods
-- `lib/markdown/constants.ts` — capture write permissions
-- `lib/markdown/file-write-handler.ts` — capture path resolution
+- `types/markdown-files.ts` — add `CaptureFrontmatterSchema` Zod schema
+- `lib/markdown/frontmatter.ts` — add `generateCaptureFrontmatter()`
+- `lib/markdown/user-file-system.ts` — add `writeCapture`, `listCaptures`, `readCapture` methods
+- `lib/markdown/constants.ts` — already has `captures/` in write permissions (verify only)
+
+**Note:** `file-write-handler.ts` does NOT need a capture case — captures bypass the `[FILE_UPDATE]` pipeline entirely (they're direct writes via the capture API, not Sage output). The existing `FILE_TYPES.CAPTURE` constant and `inferFileType` already handle index operations.
 
 **Implementation details:**
 
-1. `writeCapture(date, timestamp, content, overrides)` — writes to `captures/{date}-{timestamp}.md`
-2. `listCaptures(date)` — lists captures for a given date, sorted by timestamp
-3. `readCapture(path)` — reads a specific capture
-4. Auto-generated frontmatter:
-```yaml
-date: 2026-02-19
-type: capture
-timestamp: "2026-02-19T14:14:00+09:00"
-input_mode: voice
-classification: thought
-auto_tags: [career, meos]
-folded_into_journal: false
+1. **Capture filename convention:** `captures/{date}-{HHmmss}.md` — no colons (colons fail `SAFE_PATH_REGEX`). Example: `captures/2026-02-19-141400.md`. Timestamp is local time formatted as HHmmss. This is sortable and unique per second.
+
+2. **`CaptureFrontmatterSchema`** in `types/markdown-files.ts`:
+```typescript
+export const CaptureFrontmatterSchema = z.object({
+  date: z.string(),
+  type: z.literal('capture'),
+  timestamp: z.string(), // full ISO timestamp with timezone
+  input_mode: z.enum(['text', 'voice']).default('text'),
+  classification: z.enum(['thought', 'task', 'idea', 'tension']).nullable().default(null),
+  auto_tags: z.array(z.string()).default([]),
+  folded_into_journal: z.boolean().default(false),
+})
 ```
 
-5. Write permissions:
+3. **`generateCaptureFrontmatter()`** in `lib/markdown/frontmatter.ts`:
+```typescript
+export function generateCaptureFrontmatter(
+  date: string,
+  overrides?: Partial<CaptureFrontmatter>
+): CaptureFrontmatter {
+  return {
+    date,
+    type: 'capture',
+    timestamp: overrides?.timestamp ?? now(),
+    input_mode: overrides?.input_mode ?? 'text',
+    classification: overrides?.classification ?? null,
+    auto_tags: overrides?.auto_tags ?? [],
+    folded_into_journal: overrides?.folded_into_journal ?? false,
+  }
+}
+```
+
+4. **UFS methods** in `user-file-system.ts`:
+- `writeCapture(date, timestamp, content, overrides)` — writes to `captures/{date}-{timestamp}.md`
+- `listCaptures(date?)` — if `date` provided, filter by filename prefix `captures/{date}-*`. Uses `listFiles('captures/')` + client-side date filter. Returns filenames sorted chronologically.
+- `readCapture(filename)` — reads a specific capture, validates frontmatter with `CaptureFrontmatterSchema.safeParse()`
+- `updateCaptureFrontmatter(filename, updates)` — reads file, merges frontmatter updates, re-writes. Used by classification (Task 17) and evening fold (Task 19).
+
+5. Write permissions: already set in `constants.ts`:
 ```typescript
 quick_capture: ['captures/'],
 ```
+
+6. Add `CaptureFrontmatter` to `AnyFrontmatter` union in `types/markdown-files.ts`.
 
 ##### Task 19: Capture → Evening Synthesis Integration
 
 **Files to modify:**
 - `lib/ai/context.ts` — add captures to close_day context
+- `lib/markdown/constants.ts` — add `captures/` to `close_day` write permissions
 - `skills/close-day.md` — update prompt to reference captures
 
 **Implementation details:**
 
-1. `close_day` context injection now reads today's captures:
-   - `listCaptures(today)` → inject as context block
-   - Include count + content of each capture
+1. **Context injection** — `close_day` context reads today's captures:
+   - `ufs.listCaptures(today)` → read up to **10 most recent** captures (token budget: ~50-100 tokens each = 500-1000 tokens max, acceptable given existing context budget)
+   - Use `Promise.allSettled()` to read captures in parallel (institutional learning: batch reads with graceful degradation)
+   - Inject as a labeled context block:
+   ```
+   ## Today's Quick Captures (N total)
+   - 2:14pm [voice]: "Feeling stuck on onboarding flow"
+   - 4:30pm [text]: "Good convo with Claude on agent-native arch"
+   ```
+   - If more than 10 captures: inject the 10 most recent + "...and N more earlier captures"
+   - If zero captures: omit the section entirely (no "You had 0 captures today")
 
-2. Update close-day prompt/skill: "You dropped N thoughts today. Let's make sense of them."
+2. Update close-day prompt/skill: "You dropped N thoughts today. Let's make sense of them." (already partially present in `skills/close-day.md` lines 39-43)
 
 3. Journal artifact includes captures:
 ```markdown
@@ -607,17 +673,29 @@ quick_capture: ['captures/'],
 - 4:30pm: "Good convo with Claude on agent-native arch"
 ```
 
-4. After synthesis, update capture frontmatter: `folded_into_journal: true`
+4. **`folded_into_journal` update** — After `close_day` session completes and journal is written, update each folded capture's frontmatter via `ufs.updateCaptureFrontmatter(filename, { folded_into_journal: true })`. This requires adding `captures/` to `close_day` write permissions:
+```typescript
+close_day: [
+  'daily-logs/',
+  'sage/context.md',
+  'captures/',  // for folded_into_journal update
+],
+```
+
+5. **Timing:** The fold-marking happens in the session completion handler (after journal `FILE_UPDATE` is processed), not during context building. Fire-and-forget: if marking fails, the capture still exists — it just might get re-surfaced tomorrow. No data loss.
+
+6. **Next-morning filtering:** `open_day` context can filter `captures/yesterday-unprocessed` by checking `folded_into_journal === false`. If the field was never set (fold-marking failed), the capture is treated as unprocessed — safe default.
 
 ##### Task 20: Mid-Day Nudge
 
 **Files to create:**
-- `app/api/nudge/trigger/route.ts` — nudge generation endpoint
+- `app/api/nudge/trigger/route.ts` — nudge generation endpoint (called by Supabase Edge Function cron)
 - `lib/notifications/nudge.ts` — nudge content generator
+- `app/api/checkin/respond/route.ts` — checkin response persistence endpoint
 
 **Files to modify:**
 - `lib/notifications/push.ts` — extend for nudge payloads
-- `components/home/checkin-card.tsx` — wire nudge response actions
+- `components/home/checkin-card.tsx` — wire response to persist via API
 
 **Implementation details:**
 
@@ -625,28 +703,72 @@ quick_capture: ['captures/'],
    - "You set an intention to focus on the proposal. Still on track?"
    - One-tap response: Yes / Not yet / Snooze
 
-2. Trigger: cron job or scheduled function, mid-afternoon (~2-3pm)
-   - Requires today's day plan exists (user completed Open the Day)
-   - Use existing push notification infrastructure (`lib/notifications/push.ts`)
+2. **Scheduling mechanism:** Use existing `scheduled_notifications` table pattern.
+   - When `open_day` session completes (day plan written), insert a scheduled notification row:
+     ```sql
+     INSERT INTO scheduled_notifications (user_id, type, scheduled_for, payload, status)
+     VALUES (user_id, 'midday_nudge', '2026-02-19T14:00:00+09:00', '{"intention": "..."}', 'pending')
+     ```
+   - **Timezone:** Use the browser timezone captured at push subscription time (`Intl.DateTimeFormat().resolvedOptions().timeZone`). Store timezone in `push_subscriptions` table. Schedule nudge for 2pm in user's local timezone.
+   - If no `open_day` completed today → no nudge row created → no nudge sent.
+   - Existing `send-notifications` Supabase Edge Function processes the queue.
 
-3. Response handling:
-   - "Yes" → creates lightweight capture: "On track with [intention]"
-   - "Not yet" → creates capture: "Not on track with [intention] — [optional note]"
-   - "Snooze" → dismisses, no action
+3. **Fallback for no morning intention:** If user has no day plan for today, no nudge is sent (explicitly — not a generic fallback). This is correct per the product design: the nudge is part of the intention → check-in → reflection loop.
 
-4. Home screen Check-In card mirrors the push notification content
+4. **Response handling:**
+   - "Yes" → creates lightweight capture: "On track with [intention]" + writes `checkin_response: 'yes'` to today's day plan frontmatter
+   - "Not yet" → creates capture: "Not on track with [intention]" + writes `checkin_response: 'not-yet'` to day plan frontmatter
+   - "Snooze" → dismisses, writes `checkin_response: 'snooze'` to day plan frontmatter
+
+5. **Response persistence (`app/api/checkin/respond/route.ts`):**
+   ```typescript
+   // POST /api/checkin/respond
+   // Body: { response: 'yes' | 'not-yet' | 'snooze' }
+   // 1. Read today's day plan
+   // 2. Update frontmatter: checkin_response field
+   // 3. If 'yes' or 'not-yet': also write a capture via ufs.writeCapture()
+   // 4. Return success
+   ```
+
+6. **DayPlanFrontmatter extension:** Add optional `checkin_response` field:
+   ```typescript
+   checkin_response: z.enum(['yes', 'not-yet', 'snooze']).optional()
+   ```
+
+7. **CheckinCard wire-up:** Replace `useState` with API call. On tap, call `/api/checkin/respond`, show optimistic UI, persist response.
+
+8. Home screen Check-In card mirrors the push notification content. Card reads `todayIntention` from `HomeData` and `checkinResponse` from day plan frontmatter.
 
 ##### Task 21: Home Screen Mid-Day Polish
 
 **Files to modify:**
+- `lib/supabase/home-data.ts` — extend `HomeData` interface + fetch capture data
 - `components/home/home-screen.tsx` — wire mid-day cards to real data
+- `components/home/checkin-card.tsx` — read persisted response from props
 
 **Implementation details:**
 
-- Check-In card: reads from today's day plan, shows intention + quick response buttons
-- Next Event card: reads from calendar, shows next event within ~2 hours
-- Captures Today card: reads from `captures/` directory, shows today's captures
-- These card components were built in M2b; M3 connects them to live data from captures + nudge responses
+1. **Extend `HomeData` interface:**
+```typescript
+interface HomeData {
+  // ... existing fields ...
+  todayCaptureCount: number     // replace hardcoded 0
+  todayCaptures: string[]       // NEW: capture texts for BreadcrumbsCard
+  checkinResponse: string | null // NEW: from day plan frontmatter
+}
+```
+
+2. **Home data fetch:** Add to `Promise.allSettled` batch in `getHomeData()`:
+   - `ufs.listCaptures(todayStr)` → count + read first 5 for breadcrumbs display
+   - Read `checkinResponse` from today's day plan frontmatter (already fetched as `todayDayPlanResult`)
+
+3. **Card wiring:**
+   - **Check-In card:** Pass `checkinResponse` prop. If already responded, show confirmation message. If null, show interactive buttons. Buttons call `/api/checkin/respond`.
+   - **Next Event card:** Already has calendar data from M2. Filter to "next event within 2 hours of now."
+   - **BreadcrumbsCard:** Pass `todayCaptures` (actual text content). Only render when `todayCaptures.length > 0`. Render in evening state (as currently designed) AND mid-day state if captures exist.
+   - **Captures Today card:** Show `todayCaptureCount` badge. Tapping opens capture list (future — for now, just display count).
+
+4. **BreadcrumbsCard in mid-day:** Currently only rendered in evening block. Add conditional render in mid-day block too — users accumulating captures throughout the day should see them reflected.
 
 ---
 
@@ -691,14 +813,22 @@ quick_capture: ['captures/'],
 - [x] No broken references between home and life map
 
 #### M3
-- [ ] Quick capture: tap → type/speak → save → done (under 10 seconds)
-- [ ] Captures classified (thought/task/idea/tension) with auto-tags
-- [ ] If classification fails (LLM error/timeout), capture saved with `classification: null` and no tags; user sees "Captured" confirmation regardless
-- [ ] `close_day` references today's captures in evening synthesis
-- [ ] Journal artifact lists folded-in captures
-- [ ] Mid-day nudge notification references morning intention
-- [ ] Mid-day nudge is NOT sent if the user did not complete Open the Day
-- [ ] Mid-day home screen cards show live data (captures, check-in, next event)
+- [x] Quick capture: tap → type/speak → save → done (under 10 seconds)
+- [x] Captures stored as `captures/{date}-{HHmmss}.md` with proper frontmatter (CaptureFrontmatterSchema)
+- [x] Captures classified (thought/task/idea/tension) with auto-tags via fire-and-forget Haiku call
+- [x] If classification fails (LLM error/timeout), capture saved with `classification: null` and no tags; user sees "Captured" confirmation regardless
+- [x] Classification result written back to capture file frontmatter (re-read + merge + re-write)
+- [x] `close_day` references today's captures in evening synthesis (up to 10 most recent injected into context)
+- [x] Journal artifact lists folded-in captures
+- [x] After evening synthesis, folded captures marked `folded_into_journal: true` (fire-and-forget)
+- [x] Mid-day nudge notification references morning intention
+- [x] Mid-day nudge is NOT sent if the user did not complete Open the Day (no day plan → no nudge row)
+- [x] Mid-day nudge scheduled in user's local timezone (from push subscription)
+- [x] Check-in response (Yes/Not yet/Snooze) persisted to day plan frontmatter via `/api/checkin/respond`
+- [x] Mid-day home screen cards show live data (captures, check-in response, next event)
+- [x] BreadcrumbsCard renders actual capture texts (not just count)
+- [x] `captures/` added to `close_day` write permissions for folded_into_journal update
+- [x] `quick_capture` does NOT create a `sessions` table row
 
 ### Non-Functional Requirements
 
@@ -718,6 +848,67 @@ quick_capture: ['captures/'],
 - [ ] Calendar-not-connected path tested: all calendar-dependent flows degrade gracefully
 
 ---
+
+## M3 Build Order & Dependencies
+
+**Critical path:** Task 18 → Task 16 → Task 17 → Task 19 → Task 20 → Task 21
+
+```
+Task 18 (File System) ──blocks──> Task 16 (Input Surface)
+                       ──blocks──> Task 17 (Classification write-back)
+                       ──blocks──> Task 19 (Evening reads captures)
+                       ──blocks──> Task 21 (Home screen reads captures)
+
+Task 16 (Input Surface) ──blocks──> Task 17 (Classification triggers after save)
+
+Task 20 (Nudge) is mostly independent (requires push infra which exists)
+  └─ but needs DayPlanFrontmatter extension (checkin_response field)
+
+Task 21 (Home Screen) depends on Tasks 16, 18, and 20 (response persistence)
+```
+
+**Recommended build order:**
+1. **Task 18** (Capture File System) — foundation, unblocks everything
+2. **Task 16** (Quick Capture Input) — wires UI to file system
+3. **Task 17** (AI Classification) — enhances captures after save
+4. **Task 19** (Evening Synthesis) — completes capture lifecycle
+5. **Task 20** (Mid-Day Nudge) — independent but needs schema extension
+6. **Task 21** (Home Screen Polish) — final wiring, depends on all above
+
+## M3 Research Findings
+
+**What already exists (from M2):**
+- `SessionType` includes `quick_capture` ✓
+- `FILE_TYPES.CAPTURE` constant ✓
+- `captures/` in `ALLOWED_PATH_PREFIXES` ✓
+- `quick_capture` write permissions in `SESSION_WRITE_PERMISSIONS` ✓
+- `inferFileType` handles captures ✓
+- `rebuildIndex` includes captures prefix ✓
+- Push notification infrastructure ✓
+- `close-day.md` skill has capture integration instructions (lines 39-43) ✓
+- `BreadcrumbsCard` component built (UI only) ✓
+- `CheckinCard` component built (ephemeral state) ✓
+- `CaptureBar` component built (UI only, flash stub) ✓
+
+**What needs building (M3):**
+- `CaptureFrontmatterSchema` Zod schema + `generateCaptureFrontmatter()`
+- `writeCapture`, `listCaptures`, `readCapture`, `updateCaptureFrontmatter` on UFS
+- `/api/capture` route
+- `/api/checkin/respond` route
+- `classify-capture.ts` Haiku classification
+- Capture context injection in `context.ts` for `close_day`
+- `captures/` in `close_day` write permissions
+- Nudge scheduling (scheduled_notifications row after open_day completion)
+- `HomeData` extension: `todayCaptures: string[]`, `checkinResponse: string | null`
+- `DayPlanFrontmatter` extension: `checkin_response` field
+
+**Institutional learnings applied:**
+- Fire-and-forget for capture writes and classification (non-blocking)
+- `Promise.allSettled()` for batch capture reads in context injection
+- Zod validation on all API request bodies
+- `matchAll()` for regex (not module-level `/g` flags)
+- Command-query separation: side effects in API routes, not in context builders
+- Deny-by-default write permissions (captures/ only writable by quick_capture and close_day)
 
 ## SpecFlow Analysis — Resolved Gaps
 

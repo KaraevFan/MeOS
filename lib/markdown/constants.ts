@@ -74,6 +74,7 @@ export const SESSION_WRITE_PERMISSIONS: Record<string, string[]> = {
   close_day: [
     'daily-logs/',
     'sage/context.md',
+    'captures/',
   ],
   open_day: [
     'day-plans/',

@@ -16,6 +16,7 @@ import {
   generatePatternsFrontmatter,
   generateDailyLogFrontmatter,
   generateDayPlanFrontmatter,
+  generateCaptureFrontmatter,
 } from './frontmatter'
 import {
   DomainFileFrontmatterSchema,
@@ -26,6 +27,7 @@ import {
   PatternsFrontmatterSchema,
   DailyLogFrontmatterSchema,
   DayPlanFrontmatterSchema,
+  CaptureFrontmatterSchema,
 } from '@/types/markdown-files'
 import type {
   DomainFileFrontmatter,
@@ -36,6 +38,7 @@ import type {
   PatternsFrontmatter,
   DailyLogFrontmatter,
   DayPlanFrontmatter,
+  CaptureFrontmatter,
   ParsedMarkdownFile,
 } from '@/types/markdown-files'
 import type { DomainName } from '@/types/chat'
@@ -322,6 +325,35 @@ export class UserFileSystem {
     return limit ? filenames.slice(0, limit) : filenames
   }
 
+  async readCapture(filename: string): Promise<ParsedMarkdownFile<CaptureFrontmatter> | null> {
+    const file = await this.readFile(`captures/${filename}`)
+    if (!file) return null
+
+    const parsed = CaptureFrontmatterSchema.safeParse(file.frontmatter)
+    if (!parsed.success) {
+      return {
+        frontmatter: { date: '', type: 'capture' as const, timestamp: '', input_mode: 'text' as const, classification: null, auto_tags: [], folded_into_journal: false },
+        content: file.content,
+      }
+    }
+    return {
+      frontmatter: parsed.data,
+      content: file.content,
+    }
+  }
+
+  /**
+   * List capture files for a given date (or all captures), sorted newest first.
+   * Returns filenames (not full paths).
+   */
+  async listCaptures(date?: string, limit?: number): Promise<string[]> {
+    const files = await this.listFiles('captures/')
+    const filenames = files.map((f) => f.replace('captures/', ''))
+    // Filter by date prefix if provided (captures are named {date}-{HHmmss}.md)
+    const filtered = date ? filenames.filter((f) => f.startsWith(date)) : filenames
+    return limit ? filtered.slice(0, limit) : filtered
+  }
+
   /**
    * List check-in files, sorted newest first. Returns filenames (not full paths).
    */
@@ -392,6 +424,27 @@ export class UserFileSystem {
     const filename = `${date}.md`
     await this.writeFile(`day-plans/${filename}`, frontmatter, content)
     await this.updateFileIndex(`day-plans/${filename}`, FILE_TYPES.DAY_PLAN, frontmatter)
+  }
+
+  async writeCapture(date: string, timeCode: string, content: string, overrides?: Partial<CaptureFrontmatter>): Promise<string> {
+    const frontmatter = generateCaptureFrontmatter(date, overrides)
+    const filename = `${date}-${timeCode}.md`
+    await this.writeFile(`captures/${filename}`, frontmatter, content)
+    await this.updateFileIndex(`captures/${filename}`, FILE_TYPES.CAPTURE, frontmatter)
+    return filename
+  }
+
+  /**
+   * Update a capture file's frontmatter (e.g., after classification or evening fold).
+   * Reads the existing file, merges updates, and re-writes.
+   */
+  async updateCaptureFrontmatter(filename: string, updates: Partial<CaptureFrontmatter>): Promise<void> {
+    const existing = await this.readCapture(filename)
+    if (!existing) return
+
+    const merged = { ...existing.frontmatter, ...updates }
+    await this.writeFile(`captures/${filename}`, merged, existing.content)
+    await this.updateFileIndex(`captures/${filename}`, FILE_TYPES.CAPTURE, merged)
   }
 
   async writeSageContext(content: string, overrides?: Partial<SageContextFrontmatter>, existingFrontmatter?: Partial<SageContextFrontmatter> | null): Promise<void> {
