@@ -5,6 +5,7 @@ import { DomainCard } from './domain-card'
 import { SynthesisCard } from './synthesis-card'
 import { MarkdownDomainCard } from './markdown-domain-card'
 import { MarkdownSynthesisCard } from './markdown-synthesis-card'
+import { JournalCard } from './journal-card'
 import type { ChatMessage, ParsedMessage, ParsedSegment, DomainName } from '@/types/chat'
 
 interface MessageBubbleProps {
@@ -72,6 +73,13 @@ function SegmentRenderer({
       return (
         <div className="w-full max-w-[95%]">
           <MarkdownSynthesisCard data={segment.data} />
+        </div>
+      )
+    }
+    if (segment.data.fileType === 'daily-log') {
+      return (
+        <div className="w-full max-w-[95%]">
+          <JournalCard data={segment.data} />
         </div>
       )
     }

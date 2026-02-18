@@ -12,7 +12,7 @@ The long-term platform vision is a full Personal Operating System: intake, sense
 
 # The One-Liner
 
-> An AI-powered personal operating system that turns your messy thoughts into structured action — starting with voice-first life mapping and guided weekly reflections.
+> An AI-powered personal operating system that turns your messy thoughts into structured action — starting with voice-first life mapping, a daily rhythm that gives your day shape, and weekly reflections that compound over time.
 > 
 
 ---
@@ -76,54 +76,59 @@ The distinction matters: Life Map = reflection. Life Plan = commitment. Most pro
 
 **This is the magic moment.** The user sees it and thinks: *"Wow, this thing gets me."* If we nail this, everything else follows. If we don't, nothing else matters.
 
-## Layer 1: Recurring Reflections (The Retention Engine)
+## Layer 1: Recurring Reflections (The Deepening Engine)
 
 *"Let's check in."*
 
-Weekly and quarterly guided conversations that:
+Weekly and quarterly guided conversations that synthesize daily data into deeper insight:
 
-- Review what happened since last time
-- Compare reality to intentions
-- Surface patterns ("You've mentioned feeling stuck on X three weeks in a row")
-- Gently challenge ("You said this was your priority but you haven't touched it — what's going on?")
-- Update the life map based on new information
+- Review what happened since last time — with daily journals and day plans as concrete evidence
+- Compare intention to reality — day plan intentions vs journal reflections across the week
+- Surface patterns ("Your energy dipped every afternoon this week. Your journals mention grinding through meetings each time.")
+- Gently challenge ("You said this was your priority but your day plans show you never allocated time for it — what's going on?")
+- Update the life map based on accumulated daily signals
 
-**Key design principle:** These check-ins are not performance reviews. They're sense-making conversations — "what's actually happening and what does it mean?" The tone is curious and warm, not judgmental.
+**Key design principle:** These check-ins are not performance reviews. They're sense-making conversations — "what's actually happening and what does it mean?" The tone is curious and warm, not judgmental. With daily data, check-ins are dramatically richer than starting cold with "how was your week?"
 
 **Cadence:**
 
-- Weekly: 5-10 min voice check-in (the core habit)
+- Weekly: 5-10 min voice check-in (the deepening habit — sits on top of daily data)
 - Monthly: 15-20 min deeper review
 - Quarterly: 30-45 min strategic reassessment
 
-## Layer 2: Daily Nudging (The Ambient Layer)
+## Layer 2: The Daily Rhythm (The Retention Engine)
 
-*"Here's something to think about today."*
+*"Open your day. Close your day."*
 
-Once the system knows your life map and has weekly check-in data, it starts lightweight daily touches:
+Two ritualistic sessions bracket the user's day, with lightweight capture in between. Total active time: under 5 minutes per day.
 
-- Morning: "Today you said you wanted to focus on X. Your one thing is Y."
-- Micro-prompts: "You mentioned wanting to reconnect with Z. Want to send them a message today?"
-- Pattern alerts: "Your mood has been trending down for two weeks. Want to talk about it?"
-- Wins: "You've been consistent with morning walks for 3 weeks. That's real."
+- **"Open the Day" (morning, ~2 min):** Sage shows a briefing card (today's calendar, active priorities, yesterday's reflection), then asks one intention question. Produces a day plan artifact.
+- **Quick Captures (mid-day, ~10 sec each):** Non-conversational voice or text input. No AI response — just save. Auto-classified and surfaced during the evening session and weekly check-ins.
+- **Mid-day Nudge (once, system-initiated):** One notification tied to the morning intention. "You set an intention to protect your maker block. Still on track?" One tap: yes / no / snooze.
+- **"Close the Day" (evening, ~2-3 min):** Sage references the day's plan, calendar, and captures, asks one specific question, and produces a journal artifact with structured metadata.
 
-**Design principle:** These should feel like a thoughtful friend texting you, not an app sending notifications. Sparse, well-timed, personalized.
+**The key insight (Feb 18, 2026):** Users don't want to "journal." They want to close their day, empty their head, and wake up with clarity. The journal is a byproduct of rituals they already want to do — the *flow* is the feature, the *file* is the artifact.
 
-## Layer 2.5: First POS Modules (The Daily Utility Layer)
+**Why this replaces nudging:** The original Layer 2 was push notifications — a thoughtful friend texting you. That's still part of it (the mid-day nudge), but the primary daily mechanism is now a structured ritual, not a notification. The daily rhythm closes the post-onboarding gap: instead of 7 days until the next event, the next event is tomorrow morning.
 
-*"Sage, help me plan my day."*
+**Design principle:** Each daily session should feel like it takes less time than it actually does. The total is under 5 minutes, but the user should feel like "that was nothing" — because the conversation is so focused and the closure is so clean.
 
-**Critical insight (Feb 16, 2026):** The gap between check-ins isn't a retention problem to solve with hooks and notifications — it's a daily utility problem. Life mapping and reflections are intake and calibration mechanisms. They're how the system learns about you. But they're not the thing that makes someone open the app on a Tuesday afternoon. POS modules are.
+## Layer 2.5: The POS Kernel in Action (Daily Utility)
 
-The Life Map becomes the kernel of a Personal Operating System. Every module reads from it and writes to it. This is what makes MeOS's modules better than standalone alternatives — they share a deep, structured understanding of who the user is.
+*"Sage, what matters today?"*
 
-**First modules (Weeks 3-4 of Q1, validated by user testing):**
+**Critical insight (Feb 16, 2026):** The gap between check-ins isn't a retention problem to solve with hooks and notifications — it's a daily utility problem. Life mapping and reflections are intake and calibration mechanisms. They're how the system learns about you. But they're not the thing that makes someone open the app on a Tuesday afternoon.
 
-- **Daily journal/reflections** — A 2-minute conversational reflection. Sage asks 1-2 questions, user responds via voice or text, the response passively updates the Life Map and feeds context into the next check-in. Extends the existing conversational UX at a different cadence.
-- **Quick notes / capture** — "Hey Sage, remind me..." or "Had a thought about X" — zero-friction input that feeds the Life Map. Entry point for a second brain that needs no upkeep.
-- **Day planner** — Sage pulls from calendar + Life Map priorities to help plan the day in natural language. Requires calendar integration. The visible "this is smarter than any other planner" moment.
+**Updated insight (Feb 18, 2026):** The daily rhythm sessions (Open the Day, Close the Day, Quick Capture) aren't standalone "modules" — they're integrated parts of a single daily ritual that produces structured data as its output. The journal, the day plan, and the captures are artifacts of a flow the user already wants, not features to adopt.
 
-**Design principle: Sage IS the desktop.** Users don't open separate module UIs — they talk to Sage, and Sage surfaces the right context, tools, and structured cards. Each module is a prompt + a tool + a card type, not a separate screen. This is dramatically faster to build and stays true to "conversation is the product."
+The Life Map becomes the kernel of a Personal Operating System. Every session type reads from it. Daily sessions produce data that weekly check-ins synthesize upward. This "capture down, synthesize up" architecture means each layer of the system gets richer without extra effort from the user.
+
+**The daily rhythm IS the first POS proof-of-concept.** It demonstrates:
+- **Close the Day** = daily journal, but framed as an evening ritual, not a writing exercise
+- **Open the Day** = day planner, but framed as a morning intention, not a calendar session
+- **Quick Capture** = second brain entry point, but with zero friction (no AI response, just save)
+
+**Design principle: Sage IS the desktop.** Users don't open separate module UIs — they talk to Sage, and Sage surfaces the right context, tools, and structured cards. Each session type is a skill (a text-based description of the arc, tools, permissions, and output format), not hard-coded logic.
 
 **The test for every module:** Is this genuinely better than the standalone alternative *because* it shares the Life Map context? If not, don't build it.
 
@@ -257,9 +262,11 @@ If we build this, we must not lose these properties:
 6. **AI that challenges, not just affirms** — a mirror, not a cheerleader
 7. **Artifacts that evolve, not dashboards that judge** — living documents, not scorecards
 8. **Fast loops back to reality** — insight must become action quickly
-9. **Three layers, one conversation** — identity (Life Map), planning (Life Plan), and execution (check-ins) are distinct but connected through the same conversational interface
+9. **Three layers, one conversation** — identity (Life Map), planning (Life Plan), and execution (daily rhythm + check-ins) are distinct but connected through the same conversational interface
 10. **The Life Map is the kernel, not the product** — every module reads from and writes to the Life Map. The depth of the kernel is what makes each module better than its standalone equivalent. Without the kernel, modules are just AI wrappers. With it, they're an integrated system that understands you.
 11. **Daily utility before retention hooks** — people don't come back because of notifications and streaks. They come back because the app helps them on a Tuesday afternoon. Build daily utility, not engagement tricks.
+12. **Rituals, not features** — users don't want to "journal" or "plan." They want to close their day and open the next one. Design around the flow they already want; the artifact is the byproduct.
+13. **Capture down, synthesize up** — daily sessions produce atomic data. Weekly check-ins synthesize it. The user's effort is at the leaf level (2-3 minutes); the system's intelligence flows upward through the stack.
 
 ---
 
@@ -268,12 +275,12 @@ If we build this, we must not lose these properties:
 | Dimension | Answer |
 | --- | --- |
 | Vision | An AI life partner that helps people live intentionally |
-| Wedge | Life mapping (kernel) → first POS modules for daily utility (journal, capture, day planner) → weekly reflections (calibration) → platform expansion |
+| Wedge | Life mapping (kernel) → daily rhythm for retention (bookend sessions + quick capture) → weekly deepening (calibration) → platform expansion |
 | Target user | Reflective strivers, 25-40, bounced off productivity tools |
 | Core insight | People talk about their lives easier than they organize them; AI bridges that gap |
 | Magic moment | First life mapping conversation — "this thing gets me" |
-| Retention loop | Weekly voice check-in that remembers everything and surfaces patterns |
+| Retention loop | Daily rhythm (2-min bookend sessions) creates 24-hour engagement cycle; weekly check-ins deepen by synthesizing daily data |
 | Moat | Accumulated understanding deepens over time; can't be replicated by switching |
 | Business model | Freemium; free life mapping + limited check-ins; $15-20/mo for full access |
 | GTM | Content (founder story) + OpenClaw ecosystem as distribution channel (MCP server + skill) + community seeding |
-| Long-term platform | Full Personal OS: Life Map as kernel, Sage as unified interface, modules for every life domain (planner, researcher, project manager, knowledge graph, public projection). First modules ship Week 3-4 of Q1. |
+| Long-term platform | Full Personal OS: Life Map as kernel, Sage as unified interface, modules for every life domain (planner, researcher, project manager, knowledge graph, public projection). First daily rhythm modules ship in Milestone 1. |

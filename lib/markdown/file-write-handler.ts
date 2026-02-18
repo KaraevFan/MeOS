@@ -7,6 +7,7 @@ import {
   FILE_TYPES,
 } from './constants'
 import type { DomainName } from '@/types/chat'
+import type { DailyLogFrontmatter } from '@/types/markdown-files'
 
 export interface FileWriteResult {
   success: boolean
@@ -45,6 +46,10 @@ export function resolveFileUpdatePath(update: FileUpdateData): string | null {
       return 'sage/patterns.md'
     case FILE_TYPES.SESSION_INSIGHTS:
       return 'sage/session-insights.md'
+    case FILE_TYPES.DAILY_LOG: {
+      const date = update.name ?? new Date().toISOString().split('T')[0]
+      return `daily-logs/${date}-journal.md`
+    }
     default:
       console.warn(`[FileWriteHandler] Unknown file type: ${update.fileType}`)
       return null
@@ -131,6 +136,22 @@ export async function handleFileUpdate(
       case FILE_TYPES.SESSION_INSIGHTS:
         await ufs.writeSessionInsights(update.content)
         break
+      case FILE_TYPES.DAILY_LOG: {
+        const date = update.name ?? new Date().toISOString().split('T')[0]
+        const overrides: Partial<DailyLogFrontmatter> = {}
+        const VALID_ENERGY = new Set<DailyLogFrontmatter['energy']>(['high', 'moderate', 'low'])
+        if (update.attributes?.energy && VALID_ENERGY.has(update.attributes.energy as DailyLogFrontmatter['energy'])) {
+          overrides.energy = update.attributes.energy as DailyLogFrontmatter['energy']
+        }
+        if (update.attributes?.mood_signal) {
+          overrides.mood_signal = update.attributes.mood_signal
+        }
+        if (update.attributes?.domains_touched) {
+          overrides.domains_touched = update.attributes.domains_touched.split(',').map(s => s.trim())
+        }
+        await ufs.writeDailyLog(date, update.content, overrides)
+        break
+      }
       default:
         return {
           success: false,

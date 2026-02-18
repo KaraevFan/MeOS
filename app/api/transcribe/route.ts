@@ -20,6 +20,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No audio file provided' }, { status: 400 })
     }
 
+    // 25MB limit (Whisper API limit)
+    const MAX_FILE_SIZE = 25 * 1024 * 1024
+    if (audioFile.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'Audio file too large (max 25MB)' }, { status: 400 })
+    }
+
     // Determine file extension from the uploaded file name or MIME type
     const fileName = audioFile instanceof File ? audioFile.name : 'recording.webm'
     const ext = fileName.split('.').pop() || 'webm'

@@ -5,6 +5,7 @@ import type {
   CheckInFileFrontmatter,
   SageContextFrontmatter,
   PatternsFrontmatter,
+  DailyLogFrontmatter,
 } from '@/types/markdown-files'
 
 function now(): string {
@@ -108,6 +109,22 @@ export function generatePatternsFrontmatter(
     last_updated: now(),
     active_count: updates.active_count ?? existing?.active_count ?? 0,
     version: bumpVersion(existing?.version),
+  }
+}
+
+export function generateDailyLogFrontmatter(
+  date: string,
+  overrides?: Partial<DailyLogFrontmatter>
+): DailyLogFrontmatter {
+  return {
+    date,
+    type: 'daily-journal',
+    energy: overrides?.energy,
+    mood_signal: sanitizeYamlValue(overrides?.mood_signal),
+    domains_touched: overrides?.domains_touched,
+    intention_fulfilled: overrides?.intention_fulfilled,
+    session_depth: overrides?.session_depth,
+    created_at: now(),
   }
 }
 

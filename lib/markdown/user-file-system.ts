@@ -14,6 +14,7 @@ import {
   generateCheckInFrontmatter,
   generateSageContextFrontmatter,
   generatePatternsFrontmatter,
+  generateDailyLogFrontmatter,
 } from './frontmatter'
 import {
   DomainFileFrontmatterSchema,
@@ -22,6 +23,7 @@ import {
   CheckInFileFrontmatterSchema,
   SageContextFrontmatterSchema,
   PatternsFrontmatterSchema,
+  DailyLogFrontmatterSchema,
 } from '@/types/markdown-files'
 import type {
   DomainFileFrontmatter,
@@ -30,6 +32,7 @@ import type {
   CheckInFileFrontmatter,
   SageContextFrontmatter,
   PatternsFrontmatter,
+  DailyLogFrontmatter,
   ParsedMarkdownFile,
 } from '@/types/markdown-files'
 import type { DomainName } from '@/types/chat'
@@ -262,16 +265,43 @@ export class UserFileSystem {
     }
   }
 
+  async readDailyLog(date: string): Promise<ParsedMarkdownFile<DailyLogFrontmatter> | null> {
+    const file = await this.readFile(`daily-logs/${date}-journal.md`)
+    if (!file) return null
+
+    const parsed = DailyLogFrontmatterSchema.safeParse(file.frontmatter)
+    if (!parsed.success) {
+      console.warn('[UserFileSystem] Daily log frontmatter parse failed:', parsed.error.issues)
+      return {
+        frontmatter: { date, type: 'daily-journal' as const },
+        content: file.content,
+      }
+    }
+    return {
+      frontmatter: parsed.data,
+      content: file.content,
+    }
+  }
+
+  /**
+   * List daily log files, sorted newest first. Returns filenames (not full paths).
+   */
+  async listDailyLogs(limit?: number): Promise<string[]> {
+    const files = await this.listFiles('daily-logs/')
+    // listFiles already returns sorted desc by name from storage API
+    const filenames = files.map((f) => f.replace('daily-logs/', ''))
+    return limit ? filenames.slice(0, limit) : filenames
+  }
+
   /**
    * List check-in files, sorted newest first. Returns filenames (not full paths).
    */
   async listCheckIns(limit?: number): Promise<string[]> {
     const files = await this.listFiles('check-ins/')
-    // listFiles returns full paths like 'check-ins/2026-02-14-weekly.md'
+    // listFiles already returns sorted desc by name from storage API
     // Strip the prefix so results can be passed directly to readCheckIn()
     const filenames = files.map((f) => f.replace('check-ins/', ''))
-    const sorted = filenames.sort().reverse()
-    return limit ? sorted.slice(0, limit) : sorted
+    return limit ? filenames.slice(0, limit) : filenames
   }
 
   // ============================================
@@ -321,6 +351,13 @@ export class UserFileSystem {
     await this.updateFileIndex(`check-ins/${filename}`, FILE_TYPES.CHECK_IN, frontmatter)
   }
 
+  async writeDailyLog(date: string, content: string, overrides?: Partial<DailyLogFrontmatter>): Promise<void> {
+    const frontmatter = generateDailyLogFrontmatter(date, overrides)
+    const filename = `${date}-journal.md`
+    await this.writeFile(`daily-logs/${filename}`, frontmatter, content)
+    await this.updateFileIndex(`daily-logs/${filename}`, FILE_TYPES.DAILY_LOG, frontmatter)
+  }
+
   async writeSageContext(content: string, overrides?: Partial<SageContextFrontmatter>, existingFrontmatter?: Partial<SageContextFrontmatter> | null): Promise<void> {
     const existing = existingFrontmatter !== undefined ? existingFrontmatter : (await this.readSageContext())?.frontmatter ?? null
     const frontmatter = generateSageContextFrontmatter(
@@ -365,24 +402,41 @@ export class UserFileSystem {
     frontmatter: Record<string, unknown>,
     domainName?: string
   ): Promise<void> {
-    try {
-      await this.supabase.from('file_index').upsert(
-        {
-          user_id: this.userId,
-          file_path: filePath,
-          file_type: fileType,
-          domain_name: domainName ?? null,
-          status: (frontmatter.status as string) ?? null,
-          quarter: (frontmatter.quarter as string) ?? null,
-          last_updated: new Date().toISOString(),
-          version: (frontmatter.version as number) ?? 1,
-          frontmatter,
-        },
-        { onConflict: 'user_id,file_path' }
-      )
-    } catch (err) {
-      // Index update is best-effort — don't fail the write
-      console.error('[UserFileSystem] Index update failed:', err)
+    const MAX_RETRIES = 2
+    const payload = {
+      user_id: this.userId,
+      file_path: filePath,
+      file_type: fileType,
+      domain_name: domainName ?? null,
+      status: (frontmatter.status as string) ?? null,
+      quarter: (frontmatter.quarter as string) ?? null,
+      last_updated: new Date().toISOString(),
+      version: (frontmatter.version as number) ?? 1,
+      frontmatter,
+    }
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const { error } = await this.supabase
+          .from('file_index')
+          .upsert(payload, { onConflict: 'user_id,file_path' })
+
+        if (error) throw error
+        return
+      } catch (err) {
+        if (attempt < MAX_RETRIES) {
+          // Exponential backoff: 200ms, 400ms
+          await new Promise((r) => setTimeout(r, 200 * Math.pow(2, attempt)))
+          continue
+        }
+        // Final attempt failed — log structured error but don't crash
+        console.error('[UserFileSystem] Index update failed after retries:', {
+          filePath,
+          fileType,
+          userId: this.userId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
     }
   }
 
@@ -390,7 +444,7 @@ export class UserFileSystem {
    * Rebuild the entire file index by reading all files. Used for recovery.
    */
   async rebuildIndex(): Promise<void> {
-    const prefixes = ['life-map/', 'life-plan/', 'check-ins/', 'sage/']
+    const prefixes = ['life-map/', 'life-plan/', 'check-ins/', 'sage/', 'daily-logs/']
     for (const prefix of prefixes) {
       const files = await this.listFiles(prefix)
       for (const filePath of files) {
@@ -437,6 +491,7 @@ export class UserFileSystem {
     if (filePath === 'sage/context.md') return FILE_TYPES.SAGE_CONTEXT
     if (filePath === 'sage/patterns.md') return FILE_TYPES.SAGE_PATTERNS
     if (filePath === 'sage/session-insights.md') return FILE_TYPES.SESSION_INSIGHTS
+    if (filePath.startsWith('daily-logs/')) return FILE_TYPES.DAILY_LOG
     return 'unknown'
   }
 }

@@ -812,9 +812,18 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             })
           }
 
-          // Handle session lifecycle for synthesis/check-in file updates
+          // Handle session lifecycle for synthesis/check-in/daily-log file updates
           const hasOverview = updates.some((u) => u.fileType === 'overview')
           const hasCheckIn = updates.some((u) => u.fileType === 'check-in')
+          const hasDailyLog = updates.some((u) => u.fileType === 'daily-log')
+
+          if (hasDailyLog) {
+            completeSession(supabase, sessionId).then(() => {
+              setSessionCompleted(true)
+            }).catch(() => {
+              console.error('Failed to complete close_day session')
+            })
+          }
 
           if (hasOverview || hasCheckIn) {
             completeSession(supabase, sessionId).then(() => {

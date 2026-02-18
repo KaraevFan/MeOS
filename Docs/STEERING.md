@@ -8,31 +8,39 @@
 
 ## Current Focus
 
-**Staged Validation + POS Expansion** — validate the kernel with real users, then expand to daily utility modules. Full design: `Docs/plans/2026-02-16-pos-vision-strategy-design.md`
+**Milestone 1: "Close the Day" + Stability** — ship the evening daily rhythm session + P0 reliability fixes before Wave 1 external testing. Full design: `Docs/plans/2026-02-18-milestone1-close-the-day-design.md`
 
-### This Week (Week 1)
-- Ship UX architecture gaps branch (PR #9)
-- R3 self-test of shipped retention features
-- Recruit 8-10 external testers for Wave 1
+**Strategic shift (Feb 18):** Instead of testing life mapping in isolation (Wave 1 as originally planned), ship "Close the Day" first so testers experience the daily cadence from day one. Validates both the kernel AND daily retention in a single wave. Daily rhythm design: `Docs/feedback/20260218_MeOS_Daily_Rhythm.md`
 
-### Week 2
-- **Wave 1 testing:** 4-5 users do life mapping. Same-day interviews. Key question: does the "this gets me" moment happen?
-- Fix issues surfaced during R3 self-test
-- **Build:** Google Calendar OAuth plumbing (consent screen, token management, refresh, read access)
+### Milestone 1 (~10 days, current)
+- `close_day` session type + prompt + JournalCard
+- File system infra: `daily-logs/`, `day-plans/`, `captures/` directories + frontmatter schemas
+- Home screen evening CTA ("Close your day" after 5pm)
+- Weekly check-in reads from journal data (capture down, synthesize up)
+- P0 reliability fixes: server-side pulse context, durable file-index, request validation
+- Self-test end-to-end, then recruit 4-5 external testers
 
-### Week 3
-- **Ship:** Daily Journal module + Quick Capture module
-- **Wave 2 testing:** Wave 1 returnees + new users test journal + capture + first check-in
-- **Build:** Calendar write access (create/update/delete events)
-- Module discovery: Day 2 push notification introduces journal. Sage introduces modules during first check-in.
+### Wave 1 Testing (after Milestone 1)
+- 4-5 users do life mapping + "Close the Day" daily loop
+- Same-day interviews. Key questions: does "this gets me" happen? Do they come back for the evening ritual?
+- Decision gate: see design doc for signal → action table
 
-### Week 4
-- **Ship:** Day Planner with full calendar read/write. The "holy shit" module.
-- **Wave 3 testing:** Full POS experience — life mapping → daily modules → check-in
+### Milestone 2: "Open the Day" + Calendar + Home Screen
+- Google Calendar read-only OAuth
+- `open_day` session type + morning briefing card
+- Home screen card-stack redesign (time-aware: morning/mid-day/evening states)
+- Content redistribution: identity content moves to Life Map tab
+- Wave 2 testing: returnees + new users test both bookends
 
-### Weeks 5-6
-- Iterate based on data. Expand to 15-20 beta users.
-- **Decision gate:** Do users open the app 3+ days/week? Is the day planner better because of Life Map context?
+### Milestone 3: Quick Capture + Mid-Day + Full Daily Rhythm
+- Quick capture input surface (voice + text, auto-classification)
+- Mid-day nudge notification
+- Capture → evening synthesis integration
+- Wave 3 testing: full daily rhythm experience
+
+### Milestone 4: Ring 3 — Pattern Detection + Trust Ladder
+- Beta expansion to 15-20 users
+- Decision gate: Do users open the app 3+ days/week?
 
 ---
 
@@ -154,6 +162,8 @@ Amber breathing orb as visual identity, brighter warm color tokens.
 
 | Date | Decision | Rationale |
 |---|---|---|
+| Feb 18 | **Ship "Close the Day" before Wave 1 testing** | Testing life mapping in isolation tells you if the conversation lands, but not if people come back. Leading with the evening daily rhythm session means Wave 1 validates both the kernel AND daily retention simultaneously. Evening first because it's closest to natural behavior and doesn't need calendar integration. Design: `Docs/plans/2026-02-18-milestone1-close-the-day-design.md` |
+| Feb 18 | **Daily rhythm reframe: journal is a byproduct, not a feature** | Users don't want to "journal." They want to close their day and wake up with clarity. The journaling happens as a side effect of rituals they already want to do. Designed as a bookend model (Open the Day + Close the Day) with captures in between. Full design: `Docs/feedback/20260218_MeOS_Daily_Rhythm.md` |
 | Feb 16 | **POS strategy: Staged validation with ring architecture** | Validate kernel (Wave 1) → daily utility modules (Wave 2-3) → system intelligence (Ring 3) → agentic execution (Ring 4). Don't build the next ring until the current one has its proof point. Day planner is the "holy shit" module — requires calendar from day one. Design doc: `Docs/plans/2026-02-16-pos-vision-strategy-design.md` |
 | Feb 16 | **Day planner requires bidirectional calendar** | Read-only calendar gets 60% of the wow. Write access (Sage creates calendar blocks) gets 100%. Ship journal + capture first (no calendar needed), day planner last with full OAuth. |
 | Feb 16 | **Module build order: Journal → Capture → Day Planner** | Journal is lowest-risk (extends existing conversation UX). Capture tests push-to-system behavior. Day planner is highest-impact but needs calendar OAuth — build plumbing in parallel, ship module last. |

@@ -8,7 +8,7 @@ This document captures the UX design decisions, interaction patterns, and visual
 
 The core principle: **conversation IS the product.** Everything else — the life map view, history, home screen — exists to support and display the outputs of conversation. The UI should get out of the way and let the conversation breathe.
 
-Five non-negotiable UX principles:
+Seven non-negotiable UX principles:
 
 **1. Conversation is the product.** Other screens support and display conversation outputs. The chat view is where the magic happens.
 
@@ -16,9 +16,13 @@ Five non-negotiable UX principles:
 
 **3. Warmth in every detail.** Soft amber, warm gray, muted earth tones. Not cold productivity blues or sterile whites. This is a life partner, not a spreadsheet. Every micro-interaction should feel human.
 
-**4. Voice button as hero element.** The most prominent, most beautiful element in the app. It should feel like a warm invitation to speak, not a utilitarian record button.
+**4. Voice orb as contextual hero.** The most prominent, most beautiful element in the app. It adapts to what the user most likely wants to do right now — morning opens "Open your day," evening opens "Close your day," mid-day opens quick capture. Long-press always opens a free conversation. It should feel like a warm invitation to speak, and its behavior should feel natural enough that users never wonder what it will do.
 
 **5. No lonely empty states.** Every screen should feel alive even before the user has generated data. Sage's presence fills the space.
+
+**6. Time-aware, not time-locked.** The app knows what time of day it is and surfaces the most relevant content and action — but never removes access to anything. Morning and evening states are defaults, not gates. The user always has full access to everything; time only affects ordering and emphasis.
+
+**7. Concierge, not dashboard.** The home screen shows what's happening now and what's next. It's a prioritized stream of contextual cards, not a wall of status panels. Identity-level content (north star, commitments, boundaries) lives on the Life Map tab where it changes slowly. The home screen is lightweight and action-oriented.
 
 ---
 
@@ -50,6 +54,13 @@ Before building, study these apps for specific patterns:
 
 - [**Otter.ai**](http://Otter.ai) — Recording interface, real-time transcripts, processing states. Study the voice-to-text UX flow.
 - **Just Press Record** — Extreme simplicity (one button). Study what happens when you strip voice recording to its absolute minimum.
+
+## Time-Aware / Contextual UI
+
+- **Spotify** — Different home screen content at 7am vs 10pm. Morning surfaces energetic content, evening surfaces wind-down. Everything still accessible, just ordered differently. Study how content reordering communicates context without confusion.
+- **Google Maps** — Transitions to dark mode as night falls. Context-aware surfacing of what matters at the moment. Study ambient visual adaptation.
+- **Airbnb / Uber** — Completely different feature sets depending on user state (guest vs host, rider vs driver). Shows that contextual UX can be dramatic without being confusing.
+- **Weather apps** — Visual adaptation to real-time conditions (rain animations, brightness shifts). Study how aesthetics communicate context beyond just content changes.
 
 ---
 
@@ -128,14 +139,15 @@ First standalone view of the complete life map. User sees all explored domains, 
 
 ## Screen 6: Home (Default Landing for Return Visits)
 
-Minimal home screen showing:
+The home screen is a **time-aware contextual concierge** — a card stream that reorders based on time of day.
 
-- Days until next check-in (with a "Start early" button)
-- Current top 3 priorities
-- "Talk to Sage" quick-start button
-- "View Life Map" button
+**Morning return:** Hero card says "Open your day." Below it: today's calendar summary, yesterday's intention check, and a reflection prompt. The voice orb defaults to launching the morning flow.
 
-Not a dashboard. Not a wall of metrics. Just the essentials to orient and get moving.
+**Evening return:** Hero card says "Close your day." Below it: today's quick captures as breadcrumbs, morning intention recall, and a reflection prompt. The voice orb defaults to launching the evening flow.
+
+**Mid-day return:** Hero card invites a quick capture. Calendar shows what's next. Any mid-day nudge appears if a commitment check is due.
+
+Identity-level content (north star, commitments, boundaries) has moved to the Life Map tab, keeping the home screen lightweight. Not a dashboard. Not a wall of metrics. Just what matters right now.
 
 ---
 
@@ -145,10 +157,10 @@ Bottom tab bar with 4 tabs:
 
 `[Home]  [Chat]  [Life Map]  [History]`
 
-- **Home:** Default landing, next check-in, priorities, quick actions
-- **Chat:** The conversation interface. Primary interaction surface.
-- **Life Map:** Structured view of the full life map, organized by domain
-- **History:** Past sessions listed chronologically with AI summaries
+- **Home:** Time-aware concierge. Card stream reorders by time of day (morning/mid-day/evening). Daily rhythm CTAs, contextual cards, quick capture FAB.
+- **Chat:** The conversation interface. Primary interaction surface. Handles all session types (life mapping, daily rhythm, check-ins, ad hoc).
+- **Life Map:** Structured view of the full life map + identity/direction content (north star, commitments, boundaries, priorities). Richer than before — absorbs content that previously lived on the home screen.
+- **History:** Past sessions listed chronologically with AI summaries. Daily sessions grouped by date.
 
 ---
 
@@ -172,6 +184,9 @@ The most important screen in the app.
 - Sage messages: left-aligned, slightly warmer background, optional small Sage avatar/icon
 - Domain summary cards: full-width, structured card layout, visually distinct from chat
 - Synthesis cards: full-width, premium feel, clear sections
+- **JournalCard** (new — Close the Day receipt): compact, warm background, rounded corners. Shows date + time, 1-2 sentence summary, energy indicator (subtle word, not a scale), domain tags as small pills, captures folded in (count). Footer: "This feeds into your next check-in." Lighter and more compact than domain cards — the feeling should be "captured," a receipt that says the system heard you.
+- **DayPlanCard** (new — Open the Day receipt): compact card showing date, intention, calendar event count, key commitments. Similar warmth to JournalCard.
+- **CaptureConfirmationCard** (new — quick capture): single-line confirmation, minimal: "Captured: [summary] → [classification]"
 
 **Input Area:**
 
@@ -181,26 +196,63 @@ The most important screen in the app.
 
 ## Life Map View
 
-- Top section: narrative summary + cross-cutting insights (compounding engine, priorities, tensions, anti-goals)
+The Life Map tab is now richer — it absorbs identity/direction content that previously lived on the home screen, making this the home for slow-changing, identity-level data.
+
+**Section 1: "Where I Am" (Domain Map)**
+
 - Domain grid: each of the 8 domains as cards, expandable
 - Each domain card shows: status indicator (color dot), current state summary, stated intention
 - Expanded view shows full detail: what's working, what's not, desires, tensions
+- Narrative summary at the top (Sage's "coach notes")
 - "Last updated" timestamp visible
 - Changelog accessible ("See what changed")
 
+**Section 2: "Who I Am & What I'm Doing" (Identity + Direction)**
+
+- North star (primary compounding engine) — highlighted card with "because" clause
+- Active commitments with progress indicators and next steps
+- Quarterly priorities (top 3)
+- Boundaries (anti-goals) — what the user is explicitly not pursuing
+- Quarter theme (if life plan data exists)
+- Radar chart from pulse check (baseline + current)
+
 ## Home Screen
 
-- Greeting: "Hey [name]" or time-based ("Good morning")
-- Next check-in: date + "Start now" button
-- Current priorities: top 3, displayed simply
-- Quick-start: "Talk to Sage" button
+A prioritized card stream that reorders based on time of day. All cards remain scrollable — nothing hidden, just weighted differently.
+
+**Morning state (before ~11am):**
+1. Hero card: "Open your day" CTA
+2. Today's calendar summary (when calendar integration is available)
+3. Yesterday's intention check — did you follow through?
+4. Quick capture FAB (persistent)
+5. Active commitments (collapsed, tappable → Life Map)
+6. "Something to sit with" reflection prompt
+
+**Mid-day state (~11am - 6pm):**
+1. Hero card: Quick capture CTA ("Drop a thought")
+2. Unresolved morning intentions flagged
+3. Mid-day nudge card (if micro-commitment check is due)
+4. Calendar: what's next
+5. Quick capture FAB (persistent)
+
+**Evening state (after ~6pm):**
+1. Hero card: "Close your day" CTA
+2. Today's breadcrumbs (quick captures as mini-timeline)
+3. Morning intention recall — "You set out to..."
+4. Quick capture FAB (persistent)
+5. "Something to sit with" reflection prompt
+6. Next check-in (if within 2 days)
+
+**Voice orb behavior:** Morning → Open Day, mid-day → capture, evening → Close Day. Long-press always opens free conversation.
+
 - No clutter, no metrics walls, no guilt-inducing streaks
-- Streak/consistency shown gently if at all ("3 weeks in a row" as warm acknowledgment, not a score)
+- Sage dynamic line persists across all states: contextual one-liner referencing the life map
 
 ## History View
 
 - Reverse chronological list of sessions
-- Each entry: date, session type (life mapping / weekly check-in), AI summary snippet, key themes as tags
+- Each entry: date, session type (life mapping / daily journal / day plan / weekly check-in), AI summary snippet, key themes as tags
+- Daily sessions grouped by date for scannability
 - Tappable to expand full summary or see transcript
 - Simple, clean, scannable
 
@@ -225,11 +277,52 @@ The most important screen in the app.
 4. Card has subtle "edit" affordance
 5. Below the card, quick-reply buttons appear for next domain or wrap-up
 
+## Close the Day Flow
+
+1. User taps "Close your day" hero card on home screen (or voice orb in evening) → opens chat in `close_day` mode
+2. Sage displays context loading briefly, then delivers ONE opening question drawn from today's data
+3. User responds via voice or text (1-3 messages)
+4. Sage may ask one follow-up if the user shared something significant. If not, close warmly.
+5. Sage produces journal artifact → JournalCard rendered inline as receipt
+6. Session closes. Home screen updates to reflect completion.
+
+Total time: 2-3 minutes. The feeling should be "release" — emptying your head before bed.
+
+## Open the Day Flow
+
+1. User taps "Open your day" hero card (or voice orb in morning) → opens chat in `open_day` mode
+2. Briefing card appears first: today's calendar, active priorities, yesterday's reflection summary
+3. User scans the briefing (~30 seconds), then Sage asks ONE intention question
+4. User responds via voice or text
+5. Sage produces day plan artifact → DayPlanCard rendered inline
+6. Session closes. Home screen updates to show intention for the day.
+
+Total time: ~2 minutes. The feeling should be "oriented" — knowing what matters today.
+
+## Quick Capture Flow
+
+1. User taps quick capture FAB (always visible on home screen) or voice orb mid-day
+2. Voice recording or text input — NO conversation UI, just a single input surface
+3. User taps save
+4. System transcribes, auto-classifies (thought / task / idea / tension), saves to `captures/`
+5. CaptureConfirmationCard: "Captured." — single line, minimal
+6. Done. No AI response. No follow-up.
+
+Total time: ~10 seconds. Fastest possible input. These captures surface during Close the Day and weekly check-ins.
+
+## Mid-Day Nudge
+
+1. System-initiated push notification, once per day, mid-afternoon
+2. References the morning intention: "You set an intention to protect your maker block. Still on track?"
+3. One-tap response: yes / no / snooze
+4. Not a "journal!" reminder. A micro-accountability moment tied to the user's own morning choice.
+
 ## Weekly Check-In Trigger
 
 - Push notification at user's preferred time (default: Sunday evening)
 - Notification opens directly into conversation view with check-in mode
 - Home screen also shows countdown and "Start now" option
+- With daily rhythm in place, the check-in references the week's journals, day plans, and captures
 
 ---
 
@@ -238,10 +331,13 @@ The most important screen in the app.
 Every screen must feel alive, even before the user has data.
 
 - **Home (pre-life mapping):** Sage greeting + "Ready to map your life? Let's talk." button
+- **Home (post-mapping, first evening):** Evening hero card: "You mapped your life today. Ready to close the day?" — warm bridge from life mapping into the daily rhythm.
+- **Home (post-mapping, first morning):** Morning hero card: "Good morning, [name]. Yesterday was big. What matters today?" — first day plan.
 - **Life Map (pre-mapping):** Soft illustration + "Your life map will appear here after your first conversation with Sage."
 - **History (no sessions):** "Your conversation history will show up here. Start by talking to Sage."
+- **History (first daily sessions):** Daily entries appear grouped, making even one day of activity feel substantial.
 
-No blank screens. No "nothing here yet" emptiness. Always a warm nudge toward the conversation.
+No blank screens. No "nothing here yet" emptiness. Always a warm nudge toward the next natural step in the rhythm.
 
 ---
 

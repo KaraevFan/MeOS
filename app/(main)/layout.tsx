@@ -33,7 +33,7 @@ export default async function MainLayout({
     <div className="min-h-screen bg-bg">
       <ActivityTracker />
       <AppHeader email={email} displayName={displayName} />
-      <main className="pb-20">
+      <main className="pb-24">
         {children}
       </main>
       <BottomTabBar />

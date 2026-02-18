@@ -96,6 +96,23 @@ export const PatternsFrontmatterSchema = z.object({
 export type PatternsFrontmatter = z.infer<typeof PatternsFrontmatterSchema>
 
 // ============================================
+// Daily log (journal) file frontmatter
+// ============================================
+
+export const DailyLogFrontmatterSchema = z.object({
+  date: z.string(),
+  type: z.literal('daily-journal'),
+  energy: z.enum(['high', 'moderate', 'low']).optional(),
+  mood_signal: z.string().optional(),
+  domains_touched: z.array(z.string()).optional(),
+  intention_fulfilled: z.enum(['yes', 'partial', 'no', 'not-applicable']).optional(),
+  session_depth: z.enum(['quick-checkin', 'standard', 'deep-processing']).optional(),
+  created_at: z.string().optional(),
+})
+
+export type DailyLogFrontmatter = z.infer<typeof DailyLogFrontmatterSchema>
+
+// ============================================
 // Union type for all frontmatter
 // ============================================
 
@@ -106,6 +123,7 @@ export type AnyFrontmatter =
   | CheckInFileFrontmatter
   | SageContextFrontmatter
   | PatternsFrontmatter
+  | DailyLogFrontmatter
 
 // ============================================
 // Parsed file structure
