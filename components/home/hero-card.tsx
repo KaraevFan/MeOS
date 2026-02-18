@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 
 interface HeroCardProps {
@@ -16,8 +16,14 @@ interface HeroCardProps {
 export function HeroCard({ icon, title, sageText, ctaText, ctaHref, contextualLinePayload }: HeroCardProps) {
   const [displayText, setDisplayText] = useState(sageText)
 
+  // Stable serialization to avoid re-fetching on every render due to object identity
+  const payloadKey = useMemo(
+    () => contextualLinePayload ? JSON.stringify(contextualLinePayload) : null,
+    [contextualLinePayload]
+  )
+
   useEffect(() => {
-    if (!contextualLinePayload) return
+    if (!payloadKey) return
 
     let cancelled = false
     async function fetchLine() {
@@ -25,7 +31,7 @@ export function HeroCard({ icon, title, sageText, ctaText, ctaHref, contextualLi
         const res = await fetch('/api/home/contextual-line', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(contextualLinePayload),
+          body: payloadKey,
         })
         if (!res.ok || cancelled) return
         const data = await res.json() as { line?: string }
@@ -38,7 +44,7 @@ export function HeroCard({ icon, title, sageText, ctaText, ctaHref, contextualLi
     }
     fetchLine()
     return () => { cancelled = true }
-  }, [contextualLinePayload])
+  }, [payloadKey])
 
   return (
     <div className="mx-5 mt-3">

@@ -38,12 +38,9 @@ const LEGACY_BLOCK_TAGS = [
  */
 const FILE_UPDATE_TAG_REGEX = /\[FILE_UPDATE\s+([^\]]+)\]/
 const FILE_UPDATE_CLOSE = '[/FILE_UPDATE]'
-const ATTR_REGEX = /(\w+)="([^"]*)"/g
-
 function parseFileUpdateAttributes(attrString: string): Record<string, string> {
   const attrs: Record<string, string> = {}
-  let m: RegExpExecArray | null
-  while ((m = ATTR_REGEX.exec(attrString)) !== null) {
+  for (const m of attrString.matchAll(/(\w+)="([^"]*)"/g)) {
     attrs[m[1]] = m[2]
   }
   return attrs

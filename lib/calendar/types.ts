@@ -11,14 +11,16 @@ export const CalendarEventSchema = z.object({
 
 export type CalendarEvent = z.infer<typeof CalendarEventSchema>
 
-export interface CalendarIntegration {
-  id: string
-  user_id: string
-  provider: string
-  access_token: string
-  refresh_token: string | null
-  token_expires_at: string | null
-  scopes: string[] | null
-  created_at: string
-  updated_at: string
-}
+export const CalendarIntegrationSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  provider: z.string(),
+  access_token: z.string(),
+  refresh_token: z.string().nullable(),
+  token_expires_at: z.string().nullable(),
+  scopes: z.array(z.string()).nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+
+export type CalendarIntegration = z.infer<typeof CalendarIntegrationSchema>

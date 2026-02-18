@@ -255,9 +255,29 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
 }
 
 /**
+ * Expire stale open_day sessions for a user. Called from the API route
+ * before building close_day context, separated from prompt building to
+ * keep buildConversationContext free of write side-effects.
+ */
+export async function expireStaleOpenDaySessions(userId: string): Promise<void> {
+  const supabase = await createClient()
+  const todayStr = new Date().toLocaleDateString('en-CA')
+  await supabase
+    .from('sessions')
+    .update({ status: 'expired' })
+    .eq('user_id', userId)
+    .eq('session_type', 'open_day')
+    .eq('status', 'active')
+    .lt('created_at', `${todayStr}T23:59:59Z`)
+}
+
+/**
  * Build the full system prompt for a conversation.
  * Tries skill file first (skills/{session-type}.md), falls back to prompts.ts.
  * Injects life context from markdown files for all session types.
+ *
+ * Pure read-only — no database writes. Side effects like session expiry
+ * should be handled by the caller (see expireStaleOpenDaySessions).
  */
 export async function buildConversationContext(
   sessionType: SessionType,
@@ -286,19 +306,6 @@ export async function buildConversationContext(
   // Add FILE_UPDATE format instructions if not already in skill prompt
   if (skill) {
     basePrompt += getFileUpdateFormatInstructions()
-  }
-
-  // Expire stale open_day sessions when starting close_day
-  if (sessionType === 'close_day') {
-    const supabase = await createClient()
-    const todayStr = new Date().toLocaleDateString('en-CA')
-    await supabase
-      .from('sessions')
-      .update({ status: 'expired' })
-      .eq('user_id', userId)
-      .eq('session_type', 'open_day')
-      .eq('status', 'active')
-      .lt('created_at', `${todayStr}T23:59:59Z`)
   }
 
   const fileContext = await fetchAndInjectFileContext(userId, options?.exploreDomain, sessionType)

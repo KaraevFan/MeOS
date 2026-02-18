@@ -1,5 +1,6 @@
 import { google } from 'googleapis'
 import { createClient } from '@/lib/supabase/server'
+import { CalendarIntegrationSchema } from './types'
 import type { CalendarEvent, CalendarIntegration } from './types'
 
 const oauth2Client = new google.auth.OAuth2(
@@ -26,10 +27,14 @@ export async function getCalendarEvents(userId: string, date: string): Promise<C
 
     if (!integration) return []
 
-    const typedIntegration = integration as CalendarIntegration
+    const parsed = CalendarIntegrationSchema.safeParse(integration)
+    if (!parsed.success) {
+      console.warn('[calendar] Integration row failed validation:', parsed.error.message)
+      return []
+    }
 
     // Check if token needs refresh
-    const token = await getValidToken(typedIntegration, userId)
+    const token = await getValidToken(parsed.data, userId)
     if (!token) return []
 
     // Set credentials and fetch events

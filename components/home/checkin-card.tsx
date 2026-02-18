@@ -26,7 +26,7 @@ export function CheckinCard({ intention }: CheckinCardProps) {
             </span>
           </div>
           <p className="text-[14px] text-warm-gray">
-            {messages[response]}
+            {messages[response] ?? 'Got it.'}
           </p>
         </div>
       </InfoCard>

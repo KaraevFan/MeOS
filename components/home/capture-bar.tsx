@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from 'react'
 export function CaptureBar() {
   const [expanded, setExpanded] = useState(false)
   const [text, setText] = useState('')
+  const [flash, setFlash] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -13,12 +14,19 @@ export function CaptureBar() {
     }
   }, [expanded])
 
+  useEffect(() => {
+    if (!flash) return
+    const timer = setTimeout(() => setFlash(null), 2000)
+    return () => clearTimeout(timer)
+  }, [flash])
+
   function handleSubmit() {
     if (!text.trim()) {
       setExpanded(false)
       return
     }
     // TODO (M3): Save capture to captures/{date}-{timestamp}.md
+    setFlash('Captured — saved when captures ship in M3')
     setText('')
     setExpanded(false)
   }
@@ -70,6 +78,11 @@ export function CaptureBar() {
 
   return (
     <div className="mx-5 mt-4">
+      {flash && (
+        <p className="text-[12px] text-amber-600/80 mb-1.5 pl-1 animate-fade-in">
+          {flash}
+        </p>
+      )}
       <button
         onClick={() => setExpanded(true)}
         className="w-full flex items-center gap-3 px-4 h-[46px] rounded-2xl bg-warm-dark/[0.03] border border-warm-dark/[0.05] transition-colors hover:bg-warm-dark/[0.05] active:bg-warm-dark/[0.07]"

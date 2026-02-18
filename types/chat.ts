@@ -81,10 +81,8 @@ export interface SuggestedRepliesData {
 }
 
 /** Inline structured card rendered in conversation (parsed from [INLINE_CARD] blocks) */
-export interface InlineCardData {
-  cardType: 'calendar'
-  items: string[]
-}
+export type InlineCardData =
+  | { cardType: 'calendar'; items: string[] }
 
 /** Interactive carried-intention card with Keep/Change buttons (parsed from [INTENTION_CARD] blocks) */
 export interface IntentionCardData {

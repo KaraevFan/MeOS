@@ -11,7 +11,10 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && data.session) {
-      // Extract and store Google Calendar provider tokens
+      // Extract and store Google Calendar provider tokens.
+      // Note: provider_token is only available on initial Google OAuth exchange,
+      // not on magic-link sign-in or Supabase session refresh. Once stored in
+      // the integrations table, the app uses its own refresh_token cycle.
       const providerToken = data.session.provider_token
       const providerRefreshToken = data.session.provider_refresh_token
 

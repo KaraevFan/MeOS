@@ -1,17 +1,12 @@
 'use client'
 
+import { getTimeGreeting } from '@/lib/utils'
+
 interface BriefingCardProps {
   firstName: string | null
   todayIntention: string | null
   yesterdayIntention: string | null
   onStart: () => void
-}
-
-function getTimeGreeting(): string {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  return 'Good evening'
 }
 
 export function BriefingCard({ firstName, todayIntention, yesterdayIntention, onStart }: BriefingCardProps) {

@@ -60,6 +60,13 @@ export function loadSkill(sessionType: SessionType): SkillConfig | null {
 /**
  * Minimal YAML parser for skill frontmatter fields.
  * Handles: scalar values, simple arrays (bracket syntax and dash syntax).
+ *
+ * Known limitations (by design — skill files use a controlled subset):
+ * - Quoted string values include the quotes (skill files don't use them)
+ * - Colons in values break parsing (no values contain colons)
+ * - Multi-line strings not supported (not needed for skill config)
+ *
+ * If skill config grows beyond this subset, replace with gray-matter.
  */
 function parseSimpleYaml(yaml: string): Record<string, unknown> {
   const result: Record<string, unknown> = {}

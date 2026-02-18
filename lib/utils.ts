@@ -30,6 +30,19 @@ export function addDaysIso(from: Date | string, days: number): string {
   return new Date(base.getTime() + days * DAY_MS).toISOString()
 }
 
+/** Time-of-day greeting string (used by home screen and briefing card). */
+export function getTimeGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Good morning'
+  if (hour < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
+/** Today's date as YYYY-MM-DD in local time (avoids toLocaleDateString locale quirks). */
+export function todayLocalDate(): string {
+  return new Date().toLocaleDateString('en-CA')
+}
+
 /** Day-diff based on local calendar days for user-facing labels like "Tomorrow". */
 export function diffLocalCalendarDays(targetIso: string, now: Date = new Date()): number {
   const target = new Date(targetIso)

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
-import { diffLocalCalendarDays, getDisplayName } from '@/lib/utils'
+import { diffLocalCalendarDays, getDisplayName, getTimeGreeting } from '@/lib/utils'
 import { getCalendarEvents } from '@/lib/calendar/google-calendar'
 import type { CalendarEvent } from '@/lib/calendar/types'
 import type { SessionType } from '@/types/chat'
@@ -21,13 +21,6 @@ export interface HomeData {
   yesterdayIntention: string | null
   calendarEvents: CalendarEvent[]
   calendarSummary: string | null
-}
-
-function getTimeGreeting(): string {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  return 'Good evening'
 }
 
 export async function getHomeData(
