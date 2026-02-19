@@ -180,11 +180,11 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
   // Mobile viewport check removed — pill visibility uses CSS md:hidden instead
 
-  // Sync session state to ActiveSessionContext so tab bar hides/shows correctly
+  // Sync session state to ActiveSessionContext so tab bar hides/shows correctly.
+  // Any active session on /chat hides the tab bar — no need to wait for user messages.
   useEffect(() => {
-    const hasUserMessages = messages.some((m) => m.role === 'user')
-    setHasActiveSession(!!sessionId && hasUserMessages && !sessionCompleted)
-  }, [sessionId, messages, sessionCompleted, setHasActiveSession])
+    setHasActiveSession(!!sessionId && !sessionCompleted)
+  }, [sessionId, sessionCompleted, setHasActiveSession])
 
   // Clean up on unmount — tab bar reappears when navigating away from chat
   useEffect(() => {
