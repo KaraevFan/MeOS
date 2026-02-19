@@ -25,7 +25,7 @@ export function ChatLayout({ userId, sessionType, children }: ChatLayoutProps) {
 
   return (
     <SidebarProvider>
-      <div className="h-full grid grid-cols-1 lg:grid-cols-[1fr_auto]">
+      <div className="h-full grid grid-cols-1 lg:grid-cols-[1fr_auto] grid-rows-[1fr]">
         {children}
         <LifeMapSidebar userId={userId} />
       </div>

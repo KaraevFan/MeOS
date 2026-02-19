@@ -1026,7 +1026,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const hasNoUserMessages = !messages.some((m) => m.role === 'user')
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Session header — always visible at top; exit button triggers decision tree */}
       <SessionHeader
         sessionType={sessionType}
