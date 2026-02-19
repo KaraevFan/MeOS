@@ -17,19 +17,12 @@ function extractFirstParagraph(content: string): string {
   return lines[0]?.trim() ?? ''
 }
 
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
-  try {
-    const [year, month, day] = dateStr.split('-').map(Number)
-    const d = new Date(year, month - 1, day)
-    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
-  } catch {
-    return dateStr
-  }
+/** Always use the client's current date — Sage's name attr may contain hallucinated dates. */
+function formatDate(): string {
+  return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
 }
 
 export function JournalCard({ data }: JournalCardProps) {
-  const date = data.name
   const energy = data.attributes?.energy
   const moodSignal = data.attributes?.mood_signal
   const domainsTouched = data.attributes?.domains_touched?.split(',').map((s) => s.trim()).filter(Boolean) ?? []
@@ -41,7 +34,7 @@ export function JournalCard({ data }: JournalCardProps) {
       {/* Header: date + energy */}
       <div className="flex items-center justify-between mb-3">
         <span className="text-[13px] font-medium text-text-secondary tracking-wide">
-          {formatDate(date)}
+          {formatDate()}
         </span>
         {energyInfo && (
           <div className="flex items-center gap-1.5">

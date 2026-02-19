@@ -154,18 +154,20 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [previousRatings, setPreviousRatings] = useState<PulseCheckRating[]>([])
   const [showBriefing, setShowBriefing] = useState(sessionType === 'open_day' && !!briefingData)
   const [showExitSheet, setShowExitSheet] = useState(false)
+  // Two-phase close_day completion: card emitted (Phase A) → user confirms → session completes (Phase B)
+  const awaitingJournalConfirmationRef = useRef(false)
 
   const router = useRouter()
   const { setActiveDomain, setIsStreaming: setSidebarStreaming, signalDomainCompleted } = useSidebarContext()
   const { setHasActiveSession } = useActiveSession()
 
-  // Sync session state to ActiveSessionContext so tab bar hides/shows correctly.
-  // Any active session on /chat hides the tab bar — no need to wait for user messages.
+  // Keep tab bar hidden for the entire chat page lifecycle (active + completed).
+  // The SessionCompleteCard provides navigation after session ends ("Back to Home").
   // Cleanup on unmount resets to false so the tab bar reappears when navigating away.
   useEffect(() => {
-    setHasActiveSession(!!sessionId && !sessionCompleted)
+    setHasActiveSession(!!sessionId)
     return () => setHasActiveSession(false)
-  }, [sessionId, sessionCompleted, setHasActiveSession])
+  }, [sessionId, setHasActiveSession])
 
   // Stabilize pill ratings prop to avoid new array reference every render
   const pillRatings = useMemo(
@@ -943,11 +945,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           const hasDayPlan = updates.some((u) => u.fileType === 'day-plan')
 
           if (hasDailyLog) {
-            completeSession(supabase, sessionId).then(() => {
-              setSessionCompleted(true)
-            }).catch(() => {
-              console.error('Failed to complete close_day session')
-            })
+            // Phase A: JournalCard emitted — defer session completion until user confirms the card.
+            // Sage's prompt asks "Does this capture the day?" after the card.
+            awaitingJournalConfirmationRef.current = true
           }
 
           if (hasDayPlan) {
@@ -994,6 +994,26 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             }
           }
         }
+      }
+
+      // Phase B: close_day two-phase completion.
+      // If we're awaiting journal confirmation and Sage's closing response has no new daily-log
+      // and no suggested replies (indicating Sage is done, not asking follow-ups), complete the session.
+      const hasDailyLogInResponse = accumulated.includes('[FILE_UPDATE type="daily-log"')
+      const hasSuggestedReplies = accumulated.includes('[SUGGESTED_REPLIES]')
+      if (
+        sessionType === 'close_day' &&
+        awaitingJournalConfirmationRef.current &&
+        !hasDailyLogInResponse &&
+        !hasSuggestedReplies
+      ) {
+        awaitingJournalConfirmationRef.current = false
+        completeSession(supabase, sessionId).then(() => {
+          setSessionCompleted(true)
+        }).catch((err) => {
+          captureException(err, { tags: { component: 'chat-view', stage: 'complete_close_day' } })
+          console.error('Failed to complete close_day session')
+        })
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
