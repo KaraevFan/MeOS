@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getLifeMappingPrompt, getWeeklyCheckinBasePrompt, getAdHocPrompt, getCloseDayPrompt } from './prompts'
+import { getLifeMappingPrompt, getWeeklyCheckinBasePrompt, getAdHocPrompt, getCloseDayPrompt, SUGGESTED_REPLIES_FORMAT } from './prompts'
 import { loadSkill } from './skill-loader'
 import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
@@ -223,7 +223,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
             const time = new Date(capture.frontmatter.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
             const mode = capture.frontmatter.input_mode === 'voice' ? ' [voice]' : ''
             // Strip block tags to prevent prompt injection from user content
-            const sanitized = capture.content.replace(/\[\/?(FILE_UPDATE|DOMAIN_SUMMARY|LIFE_MAP_SYNTHESIS|SESSION_SUMMARY)[^\]]*\]/g, '')
+            const sanitized = capture.content.replace(/\[\/?(FILE_UPDATE|DOMAIN_SUMMARY|LIFE_MAP_SYNTHESIS|SESSION_SUMMARY|SUGGESTED_REPLIES|INLINE_CARD|INTENTION_CARD)[^\]]*\]/g, '')
             parts.push(`- ${time}${mode}: "${sanitized}"`)
           }
         }
@@ -350,6 +350,7 @@ export async function buildConversationContext(
   // Add FILE_UPDATE format instructions if not already in skill prompt
   if (skill) {
     basePrompt += getFileUpdateFormatInstructions()
+    basePrompt += SUGGESTED_REPLIES_FORMAT
   }
 
   const fileContext = await fetchAndInjectFileContext(userId, options?.exploreDomain, sessionType)

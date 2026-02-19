@@ -354,7 +354,7 @@ export function parseMessage(content: string): ParsedMessage {
       if (textBefore) segments.push({ type: 'text', content: textBefore })
 
       const blockContent = remaining.slice(earliestOpen + SUGGESTED_REPLIES_OPEN.length, closeIndex).trim()
-      const replies = blockContent.split('\n').map((l) => l.trim()).filter(Boolean)
+      const replies = blockContent.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 3)
       if (replies.length > 0) {
         segments.push({ type: 'block', blockType: 'suggested_replies', data: { replies } satisfies SuggestedRepliesData })
       }
@@ -509,7 +509,7 @@ export function parseStreamingChunk(accumulated: string): {
 
     const textBefore = accumulated.slice(0, srOpenIdx).trim()
     const blockContent = accumulated.slice(srOpenIdx + SUGGESTED_REPLIES_OPEN.length, srCloseIdx).trim()
-    const replies = blockContent.split('\n').map((l) => l.trim()).filter(Boolean)
+    const replies = blockContent.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 3)
     return {
       displayText: textBefore,
       pendingBlock: false,

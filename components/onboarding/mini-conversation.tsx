@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { SuggestionPills } from '@/components/chat/suggestion-pills'
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -28,46 +29,41 @@ const EXCHANGE_1_SCRIPTS: Record<string, ConversationExchange> = {
   intentional: {
     sageMessage: "Nice — sounds like you're in a good place and want to make the most of it. Before we dive in, quick question: when you imagine having more clarity about your life, what does that actually look like?",
     quickReplies: [
-      'Knowing my priorities and sticking to them',
-      'Feeling less pulled in every direction',
-      'Having a plan I actually follow',
-      "Honestly, I'm not sure yet",
+      'Knowing my priorities',
+      'Less pulled in every direction',
+      'Not sure yet',
     ],
   },
   new_start: {
     sageMessage: "Starting something new is exciting — and a little overwhelming. Quick question: is this something you chose, or something that happened to you?",
     quickReplies: [
-      "I chose this — ready for what's next",
-      "It happened to me — still figuring it out",
-      'A bit of both honestly',
-      "I'd rather not say",
+      'I chose this',
+      'It happened to me',
+      'A bit of both',
     ],
   },
   stuck: {
     sageMessage: "I hear you — that scattered feeling is really common, especially for people who have a lot going on. Quick question: is it more that you have too many things competing for attention, or that you're not sure what to focus on?",
     quickReplies: [
-      'Too many things, not enough focus',
-      "Not sure what actually matters to me",
+      'Too many things competing',
+      'Not sure what matters',
       'A bit of both',
-      "It's something else entirely",
     ],
   },
   tough_time: {
     sageMessage: "I appreciate you sharing that. No pressure to get into specifics right now. Quick question: is there one area of life that's weighing on you most, or does it feel like everything at once?",
     quickReplies: [
-      'One thing is really weighing on me',
-      'It feels like everything at once',
-      "I'm not sure — it's hard to pin down",
-      "I'd rather just get started",
+      'One thing weighing on me',
+      'Everything at once',
+      'Hard to pin down',
     ],
   },
   exploring: {
     sageMessage: "Love that — no pressure, just curiosity. Quick question: what made you want to check this out?",
     quickReplies: [
       'Someone recommended it',
-      'Saw it online and was curious',
+      'Saw it online',
       'I like the idea of a life map',
-      'Honestly, just killing time',
     ],
   },
 }
@@ -113,13 +109,16 @@ function TypingIndicator() {
 
 function ExchangeCard({
   exchange,
-  exchangeNum,
   onSelect,
 }: {
   exchange: ConversationExchange
-  exchangeNum: number
   onSelect: (option: string) => void
 }) {
+  const pills = exchange.quickReplies.slice(0, 3).map((option) => ({
+    label: option,
+    value: option,
+  }))
+
   return (
     <>
       <h2 className="text-lg font-medium text-text leading-snug mb-8 text-center">
@@ -130,23 +129,13 @@ function ExchangeCard({
           </span>
         ))}
       </h2>
-      <div className="flex flex-col gap-2.5">
-        {exchange.quickReplies.map((option, i) => (
-          <motion.button
-            key={option}
-            type="button"
-            onClick={() => onSelect(option)}
-            className="w-full text-left px-4 py-3.5 rounded-2xl border-[1.5px] border-border bg-bg text-[15px] text-text leading-snug active:bg-primary active:text-white active:border-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: i * 0.06 }}
-            whileTap={{ scale: 0.98 }}
-            aria-label={`${option} (question ${exchangeNum})`}
-          >
-            {option}
-          </motion.button>
-        ))}
-      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        <SuggestionPills pills={pills} onSelect={onSelect} />
+      </motion.div>
     </>
   )
 }
@@ -277,7 +266,7 @@ export function MiniConversation({
               ) : (
                 <ExchangeCard
                   exchange={exchange1}
-                  exchangeNum={1}
+
                   onSelect={(option) => handleQuickReply(1, option)}
                 />
               )}
@@ -298,7 +287,7 @@ export function MiniConversation({
               ) : (
                 <ExchangeCard
                   exchange={EXCHANGE_2}
-                  exchangeNum={2}
+
                   onSelect={(option) => handleQuickReply(2, option)}
                 />
               )}
@@ -319,7 +308,7 @@ export function MiniConversation({
               ) : (
                 <ExchangeCard
                   exchange={CLARIFICATION}
-                  exchangeNum={3}
+
                   onSelect={(option) => handleQuickReply(3, option)}
                 />
               )}
