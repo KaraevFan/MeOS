@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 
 interface SidebarContextValue {
@@ -31,10 +31,15 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const [isStreaming, setIsStreaming] = useState(false)
   const [lastCompletedDomain, setLastCompletedDomain] = useState<string | null>(null)
 
+  const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const signalDomainCompleted = useCallback((domain: string) => {
+    if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
     setLastCompletedDomain(domain)
-    const timer = setTimeout(() => setLastCompletedDomain(null), COMPLETION_SIGNAL_DURATION)
-    return () => clearTimeout(timer)
+    completionTimerRef.current = setTimeout(() => {
+      setLastCompletedDomain(null)
+      completionTimerRef.current = null
+    }, COMPLETION_SIGNAL_DURATION)
   }, [])
 
   return (

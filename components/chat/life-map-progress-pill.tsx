@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { LifeMapPillShelf, getIconForDomain } from './life-map-pill-shelf'
 import type { PillDomain } from './life-map-pill-shelf'
@@ -25,6 +25,8 @@ interface FileIndexRow {
   last_updated: string
 }
 
+const supabase = createClient()
+
 interface LifeMapProgressPillProps {
   userId: string
   domainsExplored: Set<DomainName>
@@ -40,12 +42,12 @@ export function LifeMapProgressPill({ userId, domainsExplored, pulseCheckRatings
   const autoCollapseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const userOpenedRef = useRef(false) // tracks whether user manually opened the shelf
 
-  const supabase = createClient()
   const exploredCount = domainsExplored.size
 
   // Build pulse rating lookup
-  const pulseMap = new Map(
-    (pulseCheckRatings ?? []).map((r) => [r.domain, r.ratingNumeric])
+  const pulseMap = useMemo(
+    () => new Map((pulseCheckRatings ?? []).map((r) => [r.domain, r.ratingNumeric])),
+    [pulseCheckRatings]
   )
 
   // Fetch file_index + insights on mount
@@ -77,7 +79,6 @@ export function LifeMapProgressPill({ userId, domainsExplored, pulseCheckRatings
     }
 
     fetchData()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
   // Realtime subscription for file_index changes
@@ -125,7 +126,6 @@ export function LifeMapProgressPill({ userId, domainsExplored, pulseCheckRatings
     return () => {
       supabase.removeChannel(channel)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
   // Auto-expand on domain completion
@@ -149,6 +149,10 @@ export function LifeMapProgressPill({ userId, domainsExplored, pulseCheckRatings
 
     return () => {
       clearTimeout(flashTimer)
+      if (autoCollapseRef.current) {
+        clearTimeout(autoCollapseRef.current)
+        autoCollapseRef.current = null
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastCompletedDomain])
@@ -178,23 +182,25 @@ export function LifeMapProgressPill({ userId, domainsExplored, pulseCheckRatings
     userOpenedRef.current = false
   }, [cancelAutoCollapse])
 
-  // Build domain data for the shelf
-  const domainFileIndex = new Map(
-    fileIndex
-      .filter((r) => r.file_type === 'domain' && r.domain_name)
-      .map((r) => [r.domain_name!, r])
-  )
+  // Build domain data for the shelf (memoized to avoid rebuilding on every streaming tick)
+  const domains: PillDomain[] = useMemo(() => {
+    const domainFileIndex = new Map(
+      fileIndex
+        .filter((r) => r.file_type === 'domain' && r.domain_name)
+        .map((r) => [r.domain_name!, r])
+    )
 
-  const domains: PillDomain[] = ALL_DOMAINS.map((name) => {
-    const indexRow = domainFileIndex.get(name)
-    return {
-      name,
-      iconName: getIconForDomain(name),
-      rating: pulseMap.get(name) ?? null,
-      explored: domainsExplored.has(name),
-      insight: indexRow ? ((indexRow.frontmatter?.preview_line as string) || null) : null,
-    }
-  })
+    return ALL_DOMAINS.map((name) => {
+      const indexRow = domainFileIndex.get(name)
+      return {
+        name,
+        iconName: getIconForDomain(name),
+        rating: pulseMap.get(name) ?? null,
+        explored: domainsExplored.has(name),
+        insight: indexRow ? ((indexRow.frontmatter?.preview_line as string) || null) : null,
+      }
+    })
+  }, [fileIndex, domainsExplored, pulseMap])
 
   // Display text for the pill
   const displayText = flashText ?? `${exploredCount} of ${ALL_DOMAINS.length}`

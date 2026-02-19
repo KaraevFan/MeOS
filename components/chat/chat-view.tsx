@@ -186,6 +186,12 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
     return () => mq.removeEventListener('change', handler)
   }, [])
 
+  // Stabilize pill ratings prop to avoid new array reference every render
+  const pillRatings = useMemo(
+    () => pulseCheckRatings?.map((r) => ({ domain: r.domain, ratingNumeric: r.ratingNumeric })) ?? null,
+    [pulseCheckRatings]
+  )
+
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<ChatMessage[]>([])
   const sessionIdRef = useRef<string | null>(null)
@@ -1021,7 +1027,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
         <LifeMapProgressPill
           userId={userId}
           domainsExplored={domainsExplored}
-          pulseCheckRatings={pulseCheckRatings?.map((r) => ({ domain: r.domain, ratingNumeric: r.ratingNumeric })) ?? null}
+          pulseCheckRatings={pillRatings}
         />
       )}
 
