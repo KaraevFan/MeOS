@@ -74,7 +74,7 @@ function extractOnboardingMeta(metadata: unknown): {
   }
   return {
     intent: typeof meta.onboarding_intent === 'string' ? meta.onboarding_intent : null,
-    name: typeof meta.onboarding_name === 'string' ? meta.onboarding_name : null,
+    name: typeof meta.onboarding_name === 'string' ? meta.onboarding_name.replace(/[<>]/g, '').slice(0, 50) : null,
     quickReplies,
   }
 }
@@ -284,7 +284,7 @@ export async function POST(request: Request) {
     if (sessionType === 'ad_hoc' && !precheckin) {
       const meta = sessionCheck?.metadata as Record<string, unknown> | null
       if (meta?.ad_hoc_context && typeof meta.ad_hoc_context === 'string') {
-        systemPrompt += `\n\n${(meta.ad_hoc_context as string).slice(0, 2000)}`
+        systemPrompt += `\n\n<user_data>\n${meta.ad_hoc_context.slice(0, 2000)}\n</user_data>`
       }
     }
   } catch (error) {

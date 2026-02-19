@@ -54,7 +54,7 @@ export function SummaryScreen({
       body: JSON.stringify({ ratings: domainRatings, domains }),
       signal: controller.signal,
     })
-      .then((res) => res.json())
+      .then((res) => res.json() as Promise<{ blurb: string }>)
       .then((data) => setBlurb(data.blurb))
       .catch((err) => {
         if (err.name !== 'AbortError') {

@@ -51,6 +51,8 @@
 @media (prefers-reduced-motion: reduce) {
   .orb-animated,
   .orb-animated *,
+  .animate-orb-breathe,
+  .animate-orb-inner-glow,
   .animate-fade-in-up {
     animation: none !important;
     transition: none !important;

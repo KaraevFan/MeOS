@@ -99,7 +99,9 @@ export function BottomTabBar({ onboardingCompleted }: BottomTabBarProps) {
 
   // State machine:
   // - pre-onboarding: hide tab bar + FAB entirely
-  // - active session (/chat route): hide tab bar + FAB (session header takes over)
+  // - active session (/chat* routes): hide tab bar — chat page renders its own session header.
+  //   Any route that starts with '/chat' triggers this hide. Add a new prefix here if a
+  //   future chat sub-route should also suppress the tab bar.
   // - otherwise: show tab bar + FAB
   const isActiveSession = pathname.startsWith('/chat')
 
@@ -108,8 +110,8 @@ export function BottomTabBar({ onboardingCompleted }: BottomTabBarProps) {
   }
 
   return (
-    // Patch 8: centered within 430px container, constrained on desktop
-    // Patch 9: z-10 (tab bar layer), bottom sheets are z-[50] and render above
+    // Centered within 430px phone container; z-10 (tab bar layer).
+    // Orb is z-30 (scoped inside nav); bottom sheets are z-[40]/z-[50] and render above.
     <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-10">
       {/* Orb — protruding above the bar */}
       <div className="absolute left-1/2 -translate-x-1/2 -top-7 z-30">

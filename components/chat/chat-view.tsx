@@ -175,6 +175,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const messagesRef = useRef<ChatMessage[]>([])
   const sessionIdRef = useRef<string | null>(null)
   const streamAbortRef = useRef<AbortController | null>(null)
+  // Cache parseMessage results by message ID — avoids re-parsing stable messages on every streaming tick
+  const parsedCache = useRef<Map<string, ReturnType<typeof parseMessage>>>(new Map())
   const supabase = createClient()
 
   // Scroll to bottom
@@ -202,44 +204,36 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
   // Initialize session
   useEffect(() => {
-    /** Load messages for a session and hydrate state. Returns true if session was found. */
-    async function loadSessionMessages(sid: string, domains?: DomainName[] | null): Promise<boolean> {
+    /** Load messages for a session and hydrate state. Returns the fetched messages array. */
+    async function loadSessionMessages(sid: string, domains?: DomainName[] | null): Promise<ChatMessage[]> {
       const { data: existingMessages } = await supabase
         .from('messages')
         .select('id, session_id, role, content, has_structured_block, created_at')
         .eq('session_id', sid)
         .order('created_at', { ascending: true })
 
-      if (!existingMessages || existingMessages.length === 0) {
-        // Session exists but has no messages — still set session ID
-        setSessionId(sid)
-        if (domains) setDomainsExplored(new Set(domains))
-        return true
-      }
-
-      setSessionId(sid)
-      setMessages(existingMessages.map((m) => ({
+      const mapped: ChatMessage[] = (existingMessages ?? []).map((m) => ({
         id: m.id,
         sessionId: m.session_id,
         role: m.role as 'user' | 'assistant',
         content: m.content,
         hasStructuredBlock: m.has_structured_block,
         createdAt: m.created_at,
-      })))
+      }))
+
+      setSessionId(sid)
+      if (mapped.length > 0) setMessages(mapped)
       if (domains) setDomainsExplored(new Set(domains))
-      return true
+      return mapped
     }
 
     async function init() {
       try {
         // Priority 1: Resume a specific session by ID (server already validated it's active + owned)
         if (resumeSessionId) {
-          const loaded = await loadSessionMessages(resumeSessionId)
-          if (loaded) {
-            setIsLoading(false)
-            return
-          }
-          // If session not found, fall through to normal init
+          await loadSessionMessages(resumeSessionId)
+          setIsLoading(false)
+          return
         }
 
         // Check for active session
@@ -254,30 +248,15 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           .maybeSingle()
 
         if (activeSession) {
-          await loadSessionMessages(activeSession.id, activeSession.domains_explored as DomainName[] | null)
+          // Derive hasNoUserMessages / hasNoMessages from already-fetched data — no extra queries
+          const existingMessages = await loadSessionMessages(activeSession.id, activeSession.domains_explored as DomainName[] | null)
 
           // Show pulse check if new user hasn't completed it yet
           // (handles page refresh, HMR, and StrictMode double-mount)
           const isNewUser = initialSessionState?.state === 'new_user'
           if (isNewUser && sessionType === 'life_mapping') {
-            // Check for user messages — if none exist we're still in "opening state"
-            // regardless of whether a Sage opener was already saved
-            const { data: userMsgs } = await supabase
-              .from('messages')
-              .select('id')
-              .eq('session_id', activeSession.id)
-              .eq('role', 'user')
-              .limit(1)
-
-            const hasNoUserMessages = !userMsgs || userMsgs.length === 0
-
-            // Also check all messages to determine whether to insert an opener
-            const { data: allMsgs } = await supabase
-              .from('messages')
-              .select('id')
-              .eq('session_id', activeSession.id)
-              .limit(1)
-            const hasNoMessages = !allMsgs || allMsgs.length === 0
+            const hasNoUserMessages = !existingMessages.some((m) => m.role === 'user')
+            const hasNoMessages = existingMessages.length === 0
 
             const { data: ratings } = await supabase
               .from('pulse_check_ratings')
@@ -735,11 +714,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             setNextCheckinDate(addDaysIso(new Date(), 7))
             setSessionCompleted(true)
 
-            // Mark onboarding complete
-            await supabase
-              .from('users')
-              .update({ onboarding_completed: true })
-              .eq('id', userId)
+            // Mark onboarding complete (fire-and-forget — same as the FILE_UPDATE path below)
+            supabase.from('users').update({ onboarding_completed: true }).eq('id', userId)
+              .then(({ error }) => { if (error) console.error('Failed to mark onboarding complete') })
 
             // Prompt for push notifications after first life mapping
             if (isPushSupported() && Notification.permission === 'default') {
@@ -894,12 +871,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             })
 
             if (hasOverview) {
-              Promise.resolve(
-                supabase
-                  .from('users')
-                  .update({ onboarding_completed: true })
-                  .eq('id', userId)
-              ).catch(() => console.error('Failed to mark onboarding complete'))
+              // Mark onboarding complete (fire-and-forget — same as the SESSION_SUMMARY path above)
+            supabase.from('users').update({ onboarding_completed: true }).eq('id', userId)
+              .then(({ error }) => { if (error) console.error('Failed to mark onboarding complete') })
 
               if (isPushSupported() && Notification.permission === 'default') {
                 setShowPushPrompt(true)
@@ -955,6 +929,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
     ? parseStreamingChunk(streamingText.replace(/\[PULSE_CHECK\]/g, ''))
     : null
 
+  // Computed once per render — prevents O(n²) scan if placed inside messages.map()
+  const hasNoUserMessages = !messages.some((m) => m.role === 'user')
+
   return (
     <div className="flex flex-col h-full">
       {/* Pinned context card for weekly check-ins */}
@@ -981,7 +958,11 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
         )}
 
         {messages.map((message, index) => {
-          const parsed = parseMessage(message.content)
+          let parsed = parsedCache.current.get(message.id)
+          if (!parsed) {
+            parsed = parseMessage(message.content)
+            parsedCache.current.set(message.id, parsed)
+          }
           const isLastMessage = index === messages.length - 1
           const hasDomainCard = parsed.segments.some(
             (s) => s.type === 'block' && (
@@ -1003,7 +984,6 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
           // Show state-aware quick replies after opening message (first assistant msg, no user messages yet)
           // But only if there are no AI-driven suggested replies
-          const hasNoUserMessages = !messages.some((m) => m.role === 'user')
           const isOpeningMessage = index === 0 && message.role === 'assistant'
           const showStateQuickReplies = isLastMessage && isOpeningMessage && hasNoUserMessages && !isStreaming && !showPulseCheck && !hasSuggestedReplies
 

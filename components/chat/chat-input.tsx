@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { useVoiceRecorder } from '@/lib/voice/recorder'
 
@@ -20,7 +20,7 @@ export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputP
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // handleAutoStop is defined below — forward-declare ref for the hook
+  // Forward-declare ref for the hook's stable onAutoStop callback
   const autoStopRef = useRef<((blob: Blob) => void) | undefined>(undefined)
 
   const {
@@ -85,9 +85,9 @@ export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputP
 
       const result = await response.json()
       if (result.text && result.text.trim()) {
-        setText(result.text)
-        // Focus so user can review and edit
-        setTimeout(() => inputRef.current?.focus(), 50)
+        // Trim to remove Whisper's common leading-space artifact
+        setText(result.text.trim())
+        inputRef.current?.focus()
       } else {
         showTranscriptionError('No speech detected. Try speaking louder.')
       }
@@ -98,16 +98,16 @@ export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputP
     }
   }
 
-  /** Handle auto-stop at recording limit — transcribe to field */
-  const handleAutoStop = useCallback((blob: Blob) => {
-    transcribeToField(blob)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Keep autoStopRef in sync so the hook's stable callback always calls the latest transcribeToField.
+  // Use mimeType as dep since transcribeToField closes over it.
+  useEffect(() => {
+    autoStopRef.current = (blob: Blob) => transcribeToField(blob)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mimeType])
 
-  // Keep autoStopRef in sync so the hook's stable callback can reach the latest handler
-  useEffect(() => { autoStopRef.current = handleAutoStop }, [handleAutoStop])
-
   async function handleVoiceTap() {
+    // Allow stopping an active recording even when disabled (prevents mic getting stuck open).
+    // Only block starting a new recording when disabled.
     if (disabled && voiceState === 'idle') return
 
     // Clear any existing error on tap
@@ -127,7 +127,9 @@ export function ChatInput({ onSend, disabled, prefill, placeholder }: ChatInputP
     }
   }
 
-  // Reset voice state if recording stops externally (but not during auto-stop processing)
+  // Reset voice state if recording stops externally.
+  // The guard voiceState === 'recording' ensures this doesn't reset 'processing'
+  // when auto-stop fires (transcribeToField sets 'processing' before this effect runs).
   useEffect(() => {
     if (!isRecording && voiceState === 'recording') {
       setVoiceState('idle')

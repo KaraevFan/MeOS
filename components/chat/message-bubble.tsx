@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { DomainCard } from './domain-card'
 import { SynthesisCard } from './synthesis-card'
@@ -15,7 +16,7 @@ interface MessageBubbleProps {
   onCorrectDomain?: (domain: DomainName) => void
 }
 
-function renderInlineMarkdown(text: string): React.ReactNode {
+function renderInlineMarkdown(text: string): ReactNode {
   // Support **bold** and *italic* only — no headers, code blocks, or tables in chat
   const parts = text.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g)
   return parts.map((part, i) => {

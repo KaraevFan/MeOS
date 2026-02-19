@@ -47,22 +47,29 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
   }
 
   // 2. Sage working model
+  // Wrap in XML tags so Claude treats this as data, not instruction (prompt injection defence)
   if (sageContext.status === 'fulfilled' && sageContext.value) {
     parts.push('\nSAGE WORKING MODEL:')
+    parts.push('<user_data>')
     parts.push(sageContext.value.content)
+    parts.push('</user_data>')
   }
 
   // 3. Life map overview
   if (overview.status === 'fulfilled' && overview.value) {
     parts.push('\n=== LIFE MAP ===')
+    parts.push('<user_data>')
     parts.push(overview.value.content)
+    parts.push('</user_data>')
   }
 
   // 4. Life plan
   if (lifePlan.status === 'fulfilled' && lifePlan.value) {
     const quarter = lifePlan.value.frontmatter.quarter ?? 'current'
     parts.push(`\n=== LIFE PLAN (${quarter}) ===`)
+    parts.push('<user_data>')
     parts.push(lifePlan.value.content)
+    parts.push('</user_data>')
   }
 
   // 5. Recent check-ins (parallel reads)
@@ -75,7 +82,9 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
       if (result.status === 'fulfilled' && result.value) {
         const date = result.value.frontmatter.date ?? 'unknown'
         parts.push(`\n--- ${date} ---`)
+        parts.push('<user_data>')
         parts.push(result.value.content)
+        parts.push('</user_data>')
       }
     }
   }
@@ -97,7 +106,9 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
         const name = result.value.frontmatter.domain ?? 'unknown'
         const status = result.value.frontmatter.status ?? 'needs_attention'
         parts.push(`\n=== ${name.toUpperCase()} (${status.replace('_', ' ')}) ===`)
+        parts.push('<user_data>')
         parts.push(result.value.content)
+        parts.push('</user_data>')
       }
     }
   }
@@ -114,7 +125,9 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
             const name = domainFile.frontmatter.domain ?? exploreDomain
             const status = domainFile.frontmatter.status ?? 'unknown'
             parts.push(`\n=== ${name.toUpperCase()} (${status.replace('_', ' ')}) [EXPLORE TARGET] ===`)
+            parts.push('<user_data>')
             parts.push(domainFile.content)
+            parts.push('</user_data>')
           }
         } catch {
           // Domain file may not exist yet — that's fine
