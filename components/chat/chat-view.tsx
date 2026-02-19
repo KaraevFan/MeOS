@@ -179,8 +179,6 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const { setActiveDomain, setIsStreaming: setSidebarStreaming, signalDomainCompleted } = useSidebarContext()
   const { setHasActiveSession } = useActiveSession()
 
-  // Mobile viewport check removed — pill visibility uses CSS md:hidden instead
-
   // Sync session state to ActiveSessionContext so tab bar hides/shows correctly.
   // Any active session on /chat hides the tab bar — no need to wait for user messages.
   // Cleanup on unmount resets to false so the tab bar reappears when navigating away.
@@ -1044,15 +1042,13 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
         onExit={sessionCompleted ? undefined : handleExit}
       />
 
-      {/* Life Map Progress Pill — mobile only (CSS md:hidden), life_mapping sessions, after pulse check */}
+      {/* Life Map Progress Pill — shown during life_mapping sessions after pulse check */}
       {sessionType === 'life_mapping' && !showPulseCheck && !showCheckinPulse && (
-        <div className="md:hidden">
-          <LifeMapProgressPill
-            userId={userId}
-            domainsExplored={domainsExplored}
-            pulseCheckRatings={pillRatings}
-          />
-        </div>
+        <LifeMapProgressPill
+          userId={userId}
+          domainsExplored={domainsExplored}
+          pulseCheckRatings={pillRatings}
+        />
       )}
 
       {/* Pinned context card for weekly check-ins */}
