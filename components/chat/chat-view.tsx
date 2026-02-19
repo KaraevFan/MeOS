@@ -16,7 +16,7 @@ import { completeSession, updateDomainsExplored, updateSessionSummary, abandonSe
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { handleAllFileUpdates } from '@/lib/markdown/file-write-handler'
 import type { FileUpdateData } from '@/types/chat'
-import { savePulseCheckRatings, pulseRatingToDomainStatus, getLatestRatingsPerDomain } from '@/lib/supabase/pulse-check'
+import { savePulseCheckRatings, pulseRatingToDomainStatus, getLatestRatingsPerDomain, getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
 import { scheduleMidDayNudge } from '@/lib/notifications/schedule-nudge'
 import { PinnedContextCard } from './pinned-context-card'
@@ -176,15 +176,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const router = useRouter()
   const { setActiveDomain, setIsStreaming: setSidebarStreaming, signalDomainCompleted } = useSidebarContext()
 
-  // Mobile viewport check for pill visibility
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 768px)')
-    setIsMobile(mq.matches)
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [])
+  // Mobile viewport check removed — pill visibility uses CSS md:hidden instead
 
   // Stabilize pill ratings prop to avoid new array reference every render
   const pillRatings = useMemo(
@@ -340,7 +332,13 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               if (hasNoMessages) {
                 setShowPulseCheck(true)
               }
-            } else if (hasNoUserMessages) {
+            } else {
+              // Pulse data exists — load into state so pill/spider chart can display
+              const baselineRatings = await getBaselineRatings(supabase, userId)
+              if (baselineRatings) setPulseCheckRatings(baselineRatings)
+            }
+
+            if (ratings && ratings.length > 0 && hasNoUserMessages) {
               // Pulse data exists and user hasn't replied yet — ensure Sage opens with rating context
               if (hasNoMessages) {
                 // Insert the opening acknowledgment message
@@ -471,6 +469,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
             // Auto-trigger Sage with pulse context for post-onboarding users
             if (hasOnboardingPulse && state === 'new_user') {
+              // Load baseline ratings into state so pill/spider chart can display
+              const baselineRatings = await getBaselineRatings(supabase, userId)
+              if (baselineRatings) setPulseCheckRatings(baselineRatings)
+
               setTimeout(() => {
                 triggerSageResponse('onboarding_baseline')
               }, 100)
@@ -1022,13 +1024,15 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
         onExit={sessionCompleted ? undefined : handleExit}
       />
 
-      {/* Life Map Progress Pill — mobile only, life_mapping sessions, after pulse check */}
-      {isMobile && sessionType === 'life_mapping' && !showPulseCheck && !showCheckinPulse && (
-        <LifeMapProgressPill
-          userId={userId}
-          domainsExplored={domainsExplored}
-          pulseCheckRatings={pillRatings}
-        />
+      {/* Life Map Progress Pill — mobile only (CSS md:hidden), life_mapping sessions, after pulse check */}
+      {sessionType === 'life_mapping' && !showPulseCheck && !showCheckinPulse && (
+        <div className="md:hidden">
+          <LifeMapProgressPill
+            userId={userId}
+            domainsExplored={domainsExplored}
+            pulseCheckRatings={pillRatings}
+          />
+        </div>
       )}
 
       {/* Pinned context card for weekly check-ins */}
