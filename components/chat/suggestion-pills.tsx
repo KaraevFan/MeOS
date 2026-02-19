@@ -19,7 +19,7 @@ export function SuggestionPills({ pills, onSelect, disabled }: SuggestionPillsPr
   if (visible.length === 0) return null
 
   return (
-    <div className="flex gap-2 px-4 py-2 animate-fade-in-up" style={{ animation: 'fade-in-up 0.3s ease-out both' }}>
+    <div className="flex gap-2 px-4 py-2 animate-fade-in-up">
       {visible.map((pill) => (
         <button
           key={pill.value}

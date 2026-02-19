@@ -223,7 +223,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
             const time = new Date(capture.frontmatter.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
             const mode = capture.frontmatter.input_mode === 'voice' ? ' [voice]' : ''
             // Strip block tags to prevent prompt injection from user content
-            const sanitized = capture.content.replace(/\[\/?(FILE_UPDATE|DOMAIN_SUMMARY|LIFE_MAP_SYNTHESIS|SESSION_SUMMARY)[^\]]*\]/g, '')
+            const sanitized = capture.content.replace(/\[\/?(FILE_UPDATE|DOMAIN_SUMMARY|LIFE_MAP_SYNTHESIS|SESSION_SUMMARY|SUGGESTED_REPLIES|INLINE_CARD|INTENTION_CARD)[^\]]*\]/g, '')
             parts.push(`- ${time}${mode}: "${sanitized}"`)
           }
         }
