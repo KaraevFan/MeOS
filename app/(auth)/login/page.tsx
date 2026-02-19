@@ -70,7 +70,7 @@ export default function LoginPage() {
         style={{ animation: 'fade-in-up 0.6s ease-out 0.25s both' }}
       >
         <p className="mt-2 text-lg text-text-secondary">
-          Your AI life partner
+          Live with Intention
         </p>
       </div>
 
