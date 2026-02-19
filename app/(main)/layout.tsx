@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { BottomTabBar } from '@/components/ui/bottom-tab-bar'
 import { AppHeader } from '@/components/ui/app-header'
 import { ActivityTracker } from '@/components/activity-tracker'
+import { ActiveSessionProvider } from '@/components/providers/active-session-provider'
 import { getDisplayName } from '@/lib/utils'
 
 export default async function MainLayout({
@@ -43,13 +44,15 @@ export default async function MainLayout({
   const hasActiveSession = !!activeSessionData
 
   return (
-    <div className="mx-auto max-w-[430px] min-h-[100dvh] bg-bg relative shadow-[0_0_60px_rgba(0,0,0,0.07)]">
-      <ActivityTracker />
-      <AppHeader email={email} displayName={displayName} />
-      <main className="pb-24">
-        {children}
-      </main>
-      <BottomTabBar onboardingCompleted={onboardingCompleted} hasActiveSession={hasActiveSession} />
-    </div>
+    <ActiveSessionProvider initialValue={hasActiveSession}>
+      <div className="mx-auto max-w-[430px] min-h-[100dvh] bg-bg relative shadow-[0_0_60px_rgba(0,0,0,0.07)]">
+        <ActivityTracker />
+        <AppHeader email={email} displayName={displayName} />
+        <main className="pb-24">
+          {children}
+        </main>
+        <BottomTabBar onboardingCompleted={onboardingCompleted} />
+      </div>
+    </ActiveSessionProvider>
   )
 }

@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ChatView } from '@/components/chat/chat-view'
 import { ChatLayout } from '@/components/chat/chat-layout'
+import { ChatContainer } from '@/components/chat/chat-container'
 import { detectSessionState } from '@/lib/supabase/session-state'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { extractCommitments } from '@/lib/markdown/extract'
@@ -49,7 +50,7 @@ export default async function ChatPage({
       }
 
       return (
-        <div className="fixed top-0 bottom-[84px] left-1/2 -translate-x-1/2 w-full max-w-[430px] pb-[env(safe-area-inset-bottom)]">
+        <ChatContainer>
           <ChatLayout userId={user.id} sessionType={targetType}>
             <ChatView
               userId={user.id}
@@ -58,7 +59,7 @@ export default async function ChatPage({
               initialCommitments={targetCommitments}
             />
           </ChatLayout>
-        </div>
+        </ChatContainer>
       )
     }
     // If session not found/not active, fall through to normal routing
@@ -189,7 +190,7 @@ export default async function ChatPage({
   }
 
   return (
-    <div className="fixed top-0 bottom-[84px] left-1/2 -translate-x-1/2 w-full max-w-[430px] pb-[env(safe-area-inset-bottom)]">
+    <ChatContainer>
       <ChatLayout userId={user.id} sessionType={sessionType}>
         <ChatView
           userId={user.id}
@@ -203,6 +204,6 @@ export default async function ChatPage({
           briefingData={briefingData}
         />
       </ChatLayout>
-    </div>
+    </ChatContainer>
   )
 }

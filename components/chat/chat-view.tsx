@@ -17,6 +17,7 @@ import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { handleAllFileUpdates } from '@/lib/markdown/file-write-handler'
 import type { FileUpdateData } from '@/types/chat'
 import { savePulseCheckRatings, pulseRatingToDomainStatus, getLatestRatingsPerDomain, getBaselineRatings } from '@/lib/supabase/pulse-check'
+import { useActiveSession } from '@/components/providers/active-session-provider'
 import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
 import { scheduleMidDayNudge } from '@/lib/notifications/schedule-nudge'
 import { PinnedContextCard } from './pinned-context-card'
@@ -175,8 +176,20 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
   const router = useRouter()
   const { setActiveDomain, setIsStreaming: setSidebarStreaming, signalDomainCompleted } = useSidebarContext()
+  const { setHasActiveSession } = useActiveSession()
 
   // Mobile viewport check removed — pill visibility uses CSS md:hidden instead
+
+  // Sync session state to ActiveSessionContext so tab bar hides/shows correctly
+  useEffect(() => {
+    const hasUserMessages = messages.some((m) => m.role === 'user')
+    setHasActiveSession(!!sessionId && hasUserMessages && !sessionCompleted)
+  }, [sessionId, messages, sessionCompleted, setHasActiveSession])
+
+  // Clean up on unmount — tab bar reappears when navigating away from chat
+  useEffect(() => {
+    return () => setHasActiveSession(false)
+  }, [setHasActiveSession])
 
   // Stabilize pill ratings prop to avoid new array reference every render
   const pillRatings = useMemo(

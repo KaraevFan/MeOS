@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { useActiveSession } from '@/components/providers/active-session-provider'
 
 function getOrbHref(hour: number): string {
   if (hour < 11) return '/chat?type=open_day' // Morning → Open Day
@@ -87,10 +88,10 @@ function TabLink({ tab }: { tab: { label: string; href: string; icon: (active: b
 
 interface BottomTabBarProps {
   onboardingCompleted: boolean
-  hasActiveSession: boolean
 }
 
-export function BottomTabBar({ onboardingCompleted, hasActiveSession }: BottomTabBarProps) {
+export function BottomTabBar({ onboardingCompleted }: BottomTabBarProps) {
+  const { hasActiveSession } = useActiveSession()
   const [hour, setHour] = useState(12) // Default to midday for SSR
   const pathname = usePathname()
 
