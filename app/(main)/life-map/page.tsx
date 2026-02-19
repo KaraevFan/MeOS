@@ -8,6 +8,7 @@ import { FILE_TO_DOMAIN_MAP, DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { extractMarkdownSection, extractBulletList, extractCommitments } from '@/lib/markdown/extract'
 import { LifeMapTabs } from '@/components/life-map/life-map-tabs'
 import { RadarChart } from '@/components/ui/radar-chart'
+import { RADAR_ABBREVIATED_LABELS } from '@/lib/constants'
 import { PULSE_DOMAINS } from '@/types/pulse-check'
 import type { LifeMap, LifeMapDomain } from '@/types/database'
 import type { OverviewFileFrontmatter, DomainFileFrontmatter } from '@/types/markdown-files'
@@ -210,13 +211,14 @@ export default async function LifeMapPage() {
       <h1 className="text-xl font-bold tracking-tight">Your Life Map</h1>
 
       {baselineRatingsData.length > 0 && (
-        <div className="mb-2">
+        <div className="mb-2 px-8">
           <RadarChart
             domains={radarDomains}
             ratings={radarRatings}
             maxRating={4}
             size={280}
             exploredDomains={exploredDomainNames}
+            labels={RADAR_ABBREVIATED_LABELS}
           />
         </div>
       )}

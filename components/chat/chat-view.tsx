@@ -33,6 +33,7 @@ import type { PulseCheckRating } from '@/types/pulse-check'
 import type { SessionState, SessionStateResult } from '@/lib/supabase/session-state'
 import type { Commitment } from '@/lib/markdown/extract'
 import { useSidebarContext } from './sidebar-context'
+import { LifeMapProgressPill } from './life-map-progress-pill'
 import { ALL_DOMAINS } from '@/lib/constants'
 import { addDaysIso } from '@/lib/utils'
 import { captureException } from '@/lib/monitoring/sentry'
@@ -173,7 +174,23 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [showExitSheet, setShowExitSheet] = useState(false)
 
   const router = useRouter()
-  const { setActiveDomain } = useSidebarContext()
+  const { setActiveDomain, setIsStreaming: setSidebarStreaming, signalDomainCompleted } = useSidebarContext()
+
+  // Mobile viewport check for pill visibility
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)')
+    setIsMobile(mq.matches)
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  // Stabilize pill ratings prop to avoid new array reference every render
+  const pillRatings = useMemo(
+    () => pulseCheckRatings?.map((r) => ({ domain: r.domain, ratingNumeric: r.ratingNumeric })) ?? null,
+    [pulseCheckRatings]
+  )
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<ChatMessage[]>([])
@@ -188,13 +205,29 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
     [sessionType, initialSessionState]
   )
 
-  // Scroll to bottom
-  const scrollToBottom = useCallback(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  // Sync streaming state to SidebarContext so pill can show shimmer
+  useEffect(() => {
+    setSidebarStreaming(isStreaming)
+  }, [isStreaming, setSidebarStreaming])
+
+  // Scroll to bottom — proximity-aware: only auto-scroll if user is near bottom
+  const NEAR_BOTTOM_THRESHOLD = 100 // px
+  const scrollToBottom = useCallback((force = false) => {
+    if (!scrollRef.current) return
+    const el = scrollRef.current
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    if (force || distanceFromBottom < NEAR_BOTTOM_THRESHOLD) {
+      el.scrollTop = el.scrollHeight
     }
   }, [])
 
+  // Force-scroll on mount (initial load)
+  useEffect(() => {
+    scrollToBottom(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Proximity-aware scroll on new messages / streaming updates
   useEffect(() => {
     scrollToBottom()
   }, [messages, streamingText, scrollToBottom])
@@ -827,14 +860,23 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           // Track explored domains from domain-type file updates
           const newDomains = new Set(domainsExplored)
           let domainChanged = false
+          let lastNewDomain: string | null = null
           for (const block of fileUpdateBlocks) {
             if (block.data.fileType === 'domain' && block.data.name) {
-              newDomains.add(block.data.name as DomainName)
+              const domainName = block.data.name as DomainName
+              if (!domainsExplored.has(domainName)) {
+                lastNewDomain = domainName
+              }
+              newDomains.add(domainName)
               domainChanged = true
             }
           }
           if (domainChanged) {
             setDomainsExplored(newDomains)
+            // Signal pill auto-expand for newly completed domains
+            if (lastNewDomain) {
+              signalDomainCompleted(lastNewDomain)
+            }
             setActiveDomain(null) // Clear sidebar active domain after card is generated
             updateDomainsExplored(supabase, sessionId, [...newDomains]).catch(() => {
               console.error('Failed to update domains explored')
@@ -979,6 +1021,15 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
         nudgeContext={nudgeContext}
         onExit={sessionCompleted ? undefined : handleExit}
       />
+
+      {/* Life Map Progress Pill — mobile only, life_mapping sessions, after pulse check */}
+      {isMobile && sessionType === 'life_mapping' && !showPulseCheck && !showCheckinPulse && (
+        <LifeMapProgressPill
+          userId={userId}
+          domainsExplored={domainsExplored}
+          pulseCheckRatings={pillRatings}
+        />
+      )}
 
       {/* Pinned context card for weekly check-ins */}
       {sessionType === 'weekly_checkin' && initialCommitments && initialCommitments.length > 0 && (

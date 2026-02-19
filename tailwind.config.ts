@@ -80,12 +80,17 @@ const config: Config = {
           '0%, 100%': { opacity: '0.7', transform: 'translateY(0px)' },
           '50%': { opacity: '1', transform: 'translateY(-2px)' },
         },
+        shimmer: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
+        },
       },
       animation: {
         pulse: 'pulse 3s ease-in-out infinite',
         'fade-up': 'fade-up 200ms ease-out',
         'orb-breathe': 'orb-breathe 7s ease-in-out infinite',
         'orb-inner-glow': 'orb-inner-glow 7s ease-in-out 0.3s infinite',
+        shimmer: 'shimmer 1.5s ease-in-out infinite',
       },
     },
   },

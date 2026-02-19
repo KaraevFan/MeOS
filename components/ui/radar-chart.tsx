@@ -11,11 +11,13 @@ interface RadarChartProps {
   size?: number
   /** Domain names that have been fully explored (shown with full opacity dots) */
   exploredDomains?: string[]
+  /** Abbreviated display labels (falls back to domains[] if omitted) */
+  labels?: string[]
 }
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const
 
-export function RadarChart({ domains, ratings, maxRating, size = 320, exploredDomains }: RadarChartProps) {
+export function RadarChart({ domains, ratings, maxRating, size = 320, exploredDomains, labels }: RadarChartProps) {
   const [animationProgress, setAnimationProgress] = useState(0)
 
   const numAxes = domains.length
@@ -172,7 +174,7 @@ export function RadarChart({ domains, ratings, maxRating, size = 320, exploredDo
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4 + i * 0.05, duration: 0.4 }}
             >
-              {domain}
+              {(labels ?? domains)[i]}
             </motion.text>
           )
         })}

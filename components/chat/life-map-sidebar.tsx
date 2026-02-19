@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 import { RadarChart } from '@/components/ui/radar-chart'
 import { useSidebarContext } from './sidebar-context'
-import { ALL_DOMAINS } from '@/lib/constants'
+import { ALL_DOMAINS, RADAR_ABBREVIATED_LABELS } from '@/lib/constants'
 import { STORAGE_BUCKET } from '@/lib/markdown/constants'
 import { cn } from '@/lib/utils'
 import type { DomainName, DomainStatus } from '@/types/chat'
@@ -256,13 +256,14 @@ export function LifeMapSidebar({ userId }: LifeMapSidebarProps) {
 
       {/* Compact Radar Chart */}
       {pulseRatings.length > 0 && (
-        <div className="px-2 pb-2">
+        <div className="px-6 pb-2">
           <RadarChart
             domains={ALL_DOMAINS}
             ratings={ratingsMap}
             maxRating={4}
             size={200}
             exploredDomains={exploredDomains}
+            labels={RADAR_ABBREVIATED_LABELS}
           />
         </div>
       )}
