@@ -188,13 +188,24 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
     [sessionType, initialSessionState]
   )
 
-  // Scroll to bottom
-  const scrollToBottom = useCallback(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  // Scroll to bottom — proximity-aware: only auto-scroll if user is near bottom
+  const NEAR_BOTTOM_THRESHOLD = 100 // px
+  const scrollToBottom = useCallback((force = false) => {
+    if (!scrollRef.current) return
+    const el = scrollRef.current
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    if (force || distanceFromBottom < NEAR_BOTTOM_THRESHOLD) {
+      el.scrollTop = el.scrollHeight
     }
   }, [])
 
+  // Force-scroll on mount (initial load)
+  useEffect(() => {
+    scrollToBottom(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Proximity-aware scroll on new messages / streaming updates
   useEffect(() => {
     scrollToBottom()
   }, [messages, streamingText, scrollToBottom])
