@@ -120,6 +120,7 @@ export function OnboardingFlow() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [oauthName, setOauthName] = useState<string | undefined>(undefined)
   const isAdvancingDomainRef = useRef(false)
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Restore state from sessionStorage on mount
   useEffect(() => {
@@ -161,6 +162,13 @@ export function OnboardingFlow() {
     }, 300)
     return () => clearTimeout(timer)
   }, [initialized, step, domainIndex, ratings, intent, name, quickReplies])
+
+  // Clean up domain advance timer on unmount
+  useEffect(() => {
+    return () => {
+      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current)
+    }
+  }, [])
 
   const goForward = useCallback((nextStep: Step) => {
     setDirection(1)
@@ -214,7 +222,8 @@ export function OnboardingFlow() {
     if (showSageMessage) setShowSageMessage(false)
 
     // Auto-advance after 400ms
-    setTimeout(() => {
+    advanceTimerRef.current = setTimeout(() => {
+      advanceTimerRef.current = null
       if (domainIndex < PULSE_DOMAINS.length - 1) {
         setDirection(1)
         setDomainIndex((prev) => prev + 1)

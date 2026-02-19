@@ -25,8 +25,6 @@ interface FileIndexRow {
   last_updated: string
 }
 
-const supabase = createClient()
-
 interface LifeMapProgressPillProps {
   userId: string
   domainsExplored: Set<DomainName>
@@ -34,6 +32,7 @@ interface LifeMapProgressPillProps {
 }
 
 export function LifeMapProgressPill({ userId, domainsExplored, pulseCheckRatings }: LifeMapProgressPillProps) {
+  const supabase = useMemo(() => createClient(), [])
   const { isStreaming, lastCompletedDomain } = useSidebarContext()
   const [isExpanded, setIsExpanded] = useState(false)
   const [flashText, setFlashText] = useState<string | null>(null)
@@ -79,7 +78,7 @@ export function LifeMapProgressPill({ userId, domainsExplored, pulseCheckRatings
     }
 
     fetchData()
-  }, [userId])
+  }, [userId, supabase])
 
   // Realtime subscription for file_index changes
   useEffect(() => {
@@ -126,7 +125,7 @@ export function LifeMapProgressPill({ userId, domainsExplored, pulseCheckRatings
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [userId])
+  }, [userId, supabase])
 
   // Auto-expand on domain completion
   useEffect(() => {

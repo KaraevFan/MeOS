@@ -50,6 +50,7 @@ interface ChatViewProps {
   sessionType?: SessionType
   initialSessionState?: SessionStateResult
   initialCommitments?: Commitment[]
+  initialPulseRatings?: PulseCheckRating[]
   exploreDomain?: string
   nudgeContext?: string
   sessionContext?: string
@@ -151,7 +152,7 @@ function getSageOpening(state: string, userName?: string, hasOnboardingPulse?: b
   }
 }
 
-export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, exploreDomain, nudgeContext, sessionContext, precheckin, resumeSessionId, briefingData }: ChatViewProps) {
+export function ChatView({ userId, sessionType = 'life_mapping', initialSessionState, initialCommitments, initialPulseRatings, exploreDomain, nudgeContext, sessionContext, precheckin, resumeSessionId, briefingData }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -165,7 +166,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [showPulseCheck, setShowPulseCheck] = useState(false)
   const [pulseCheckSubmitting, setPulseCheckSubmitting] = useState(false)
   const [pulseCheckError, setPulseCheckError] = useState<string | null>(null)
-  const [pulseCheckRatings, setPulseCheckRatings] = useState<PulseCheckRating[] | null>(null)
+  const [pulseCheckRatings, setPulseCheckRatings] = useState<PulseCheckRating[] | null>(initialPulseRatings ?? null)
   const [sessionCompleted, setSessionCompleted] = useState(false)
   const [nextCheckinDate, setNextCheckinDate] = useState<string | null>(null)
   const [showCheckinPulse, setShowCheckinPulse] = useState(false)
@@ -182,14 +183,11 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
   // Sync session state to ActiveSessionContext so tab bar hides/shows correctly.
   // Any active session on /chat hides the tab bar — no need to wait for user messages.
+  // Cleanup on unmount resets to false so the tab bar reappears when navigating away.
   useEffect(() => {
     setHasActiveSession(!!sessionId && !sessionCompleted)
-  }, [sessionId, sessionCompleted, setHasActiveSession])
-
-  // Clean up on unmount — tab bar reappears when navigating away from chat
-  useEffect(() => {
     return () => setHasActiveSession(false)
-  }, [setHasActiveSession])
+  }, [sessionId, sessionCompleted, setHasActiveSession])
 
   // Stabilize pill ratings prop to avoid new array reference every render
   const pillRatings = useMemo(

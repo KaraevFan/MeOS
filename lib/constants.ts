@@ -27,3 +27,6 @@ export const RADAR_ABBREVIATED_LABELS: string[] = [
 ]
 
 export const SESSION_STALE_HOURS = 24
+
+/** Tab bar height in pixels — used by BottomTabBar (h-[84px]) and ChatContainer (bottom offset) */
+export const TAB_BAR_HEIGHT_PX = 84

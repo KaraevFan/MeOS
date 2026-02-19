@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useActiveSession } from '@/components/providers/active-session-provider'
+import { TAB_BAR_HEIGHT_PX } from '@/lib/constants'
 
 function getOrbHref(hour: number): string {
   if (hour < 11) return '/chat?type=open_day' // Morning → Open Day
@@ -149,7 +150,7 @@ export function BottomTabBar({ onboardingCompleted }: BottomTabBarProps) {
       </div>
 
       {/* Bar */}
-      <div className="h-[84px] bg-warm-bg/95 backdrop-blur-xl border-t border-warm-dark/[0.06] pb-[env(safe-area-inset-bottom)] pt-3">
+      <div style={{ height: TAB_BAR_HEIGHT_PX }} className="bg-warm-bg/95 backdrop-blur-xl border-t border-warm-dark/[0.06] pb-[env(safe-area-inset-bottom)] pt-3">
         <div className="flex justify-between items-start px-5 h-full">
           {/* Left Tabs */}
           <div className="flex-1 flex justify-around">

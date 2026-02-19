@@ -24,13 +24,12 @@ export default async function MainLayout({
       .select('email, display_name, onboarding_completed')
       .eq('id', user.id)
       .single(),
-    // Active session = status:active with at least one user message (same definition as ActiveSessionCard)
+    // Active session = status:active (matches client-side definition in ChatView)
     supabase
       .from('sessions')
-      .select('id, messages!inner(id)')
+      .select('id')
       .eq('user_id', user.id)
       .eq('status', 'active')
-      .eq('messages.role', 'user')
       .limit(1)
       .maybeSingle(),
   ])

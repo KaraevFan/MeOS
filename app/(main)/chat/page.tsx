@@ -6,6 +6,7 @@ import { ChatContainer } from '@/components/chat/chat-container'
 import { detectSessionState } from '@/lib/supabase/session-state'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { extractCommitments } from '@/lib/markdown/extract'
+import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { getDisplayName } from '@/lib/utils'
 import type { Commitment } from '@/lib/markdown/extract'
 import type { SessionType } from '@/types/chat'
@@ -163,6 +164,13 @@ export default async function ChatPage({
   // Pre-checkin warmup flag — instruction is defined server-side in the API route
   const precheckin = params.precheckin === '1' && sessionType === 'ad_hoc'
 
+  // Pre-fetch baseline pulse ratings for life_mapping sessions (powers the spider chart).
+  // Fetching server-side eliminates a client-side async round-trip that caused the spider
+  // chart to render empty on first paint.
+  const initialPulseRatings = sessionType === 'life_mapping'
+    ? await getBaselineRatings(supabase, user.id).catch(() => null)
+    : null
+
   // Fetch briefing data for open_day sessions
   let briefingData: { firstName: string | null; todayIntention: string | null; yesterdayIntention: string | null } | undefined
   if (sessionType === 'open_day') {
@@ -197,6 +205,7 @@ export default async function ChatPage({
           sessionType={sessionType}
           initialSessionState={sessionState}
           initialCommitments={commitments}
+          initialPulseRatings={initialPulseRatings ?? undefined}
           exploreDomain={params.explore}
           nudgeContext={nudgeContext}
           sessionContext={sessionContext}

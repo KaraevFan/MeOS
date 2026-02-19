@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useMemo } from 'react'
+import { createContext, useContext, useState } from 'react'
 
 interface ActiveSessionContextValue {
   hasActiveSession: boolean
@@ -23,18 +23,10 @@ export function ActiveSessionProvider({
   initialValue: boolean
   children: React.ReactNode
 }) {
-  const [hasActiveSession, setHasActiveSessionRaw] = useState(initialValue)
-  const setHasActiveSession = useCallback((v: boolean) => {
-    setHasActiveSessionRaw(v)
-  }, [])
-
-  const value = useMemo(
-    () => ({ hasActiveSession, setHasActiveSession }),
-    [hasActiveSession, setHasActiveSession]
-  )
+  const [hasActiveSession, setHasActiveSession] = useState(initialValue)
 
   return (
-    <ActiveSessionContext.Provider value={value}>
+    <ActiveSessionContext.Provider value={{ hasActiveSession, setHasActiveSession }}>
       {children}
     </ActiveSessionContext.Provider>
   )
