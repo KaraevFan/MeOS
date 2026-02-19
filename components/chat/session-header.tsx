@@ -20,9 +20,10 @@ interface SessionHeaderProps {
   sessionType: SessionType
   exploreDomain?: string
   nudgeContext?: string
+  onExit?: () => void
 }
 
-export function SessionHeader({ sessionType, exploreDomain, nudgeContext }: SessionHeaderProps) {
+export function SessionHeader({ sessionType, exploreDomain, nudgeContext, onExit }: SessionHeaderProps) {
   let label = SESSION_LABELS[sessionType] || 'Conversation'
 
   // Contextual labels for ad-hoc sessions
@@ -37,12 +38,26 @@ export function SessionHeader({ sessionType, exploreDomain, nudgeContext }: Sess
   const duration = SESSION_DURATIONS[sessionType]
 
   return (
-    <div className="flex items-center justify-center gap-2 py-3">
-      <div className="w-1.5 h-1.5 rounded-full bg-primary/40" />
-      <span className="text-[11px] text-text-secondary font-medium">{label}</span>
-      {duration && (
-        <span className="text-[11px] text-text-secondary/60">{duration}</span>
+    <div className="relative flex items-center justify-center py-3">
+      {onExit && (
+        <button
+          onClick={onExit}
+          className="absolute left-0 p-2 text-text-secondary/60 hover:text-text-secondary transition-colors active:scale-95 min-w-[44px] min-h-[44px] flex items-center justify-center"
+          aria-label="Exit session"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
       )}
+      <div className="flex items-center gap-2">
+        <div className="w-1.5 h-1.5 rounded-full bg-primary/40" />
+        <span className="text-[11px] text-text-secondary font-medium">{label}</span>
+        {duration && (
+          <span className="text-[11px] text-text-secondary/60">{duration}</span>
+        )}
+      </div>
     </div>
   )
 }
