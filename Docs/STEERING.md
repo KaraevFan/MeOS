@@ -118,7 +118,9 @@ If daily utility is weak but check-ins are strong:
 
 ### Infrastructure
 
-- [ ] Google Calendar OAuth (consent screen, token management, refresh logic)
+- [ ] **Incremental calendar consent flow** — Move calendar.readonly scope out of login into a contextual "Connect your calendar" prompt during open-the-day or settings. Sign-in stays clean (email+profile only), calendar access requested when user opts in. Google best practice: request sensitive scopes in context, not upfront.
+- [ ] **Google OAuth verification** — Required before public launch to remove "unverified app" warning. Needs: verified domain, privacy policy URL, homepage, video demo of calendar usage, scope justification. Timeline: days to weeks. Annual re-verification required for sensitive scopes.
+- [ ] Google Calendar OAuth token management and refresh logic (existing infra works, needs testing at scale)
 - [ ] Calendar event CRUD with MeOS source tagging
 - [ ] Monitoring and error tracking (Sentry or similar)
 - [ ] Service worker refinement (offline support, cache strategy)
@@ -162,6 +164,7 @@ Amber breathing orb as visual identity, brighter warm color tokens.
 
 | Date | Decision | Rationale |
 |---|---|---|
+| Feb 19 | **Calendar scope stays at login for playtest, incremental consent for launch** | Google blocks unverified apps requesting sensitive scopes (calendar.readonly) when in Testing mode — caused 403 for all non-test users. Fix: published app to Production (users see "unverified" warning but can proceed). Post-playtest: build incremental consent flow (request calendar only when user opts in) + submit for Google verification before public launch. |
 | Feb 18 | **Ship "Close the Day" before Wave 1 testing** | Testing life mapping in isolation tells you if the conversation lands, but not if people come back. Leading with the evening daily rhythm session means Wave 1 validates both the kernel AND daily retention simultaneously. Evening first because it's closest to natural behavior and doesn't need calendar integration. Design: `Docs/plans/2026-02-18-milestone1-close-the-day-design.md` |
 | Feb 18 | **Daily rhythm reframe: journal is a byproduct, not a feature** | Users don't want to "journal." They want to close their day and wake up with clarity. The journaling happens as a side effect of rituals they already want to do. Designed as a bookend model (Open the Day + Close the Day) with captures in between. Full design: `Docs/feedback/20260218_MeOS_Daily_Rhythm.md` |
 | Feb 16 | **POS strategy: Staged validation with ring architecture** | Validate kernel (Wave 1) → daily utility modules (Wave 2-3) → system intelligence (Ring 3) → agentic execution (Ring 4). Don't build the next ring until the current one has its proof point. Day planner is the "holy shit" module — requires calendar from day one. Design doc: `Docs/plans/2026-02-16-pos-vision-strategy-design.md` |
