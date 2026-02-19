@@ -71,7 +71,7 @@ export function SummaryScreen({
   const commentary = blurb || getFallbackCommentary(ratings, domains)
 
   return (
-    <div className="flex flex-col items-center min-h-[100dvh] px-6 pt-16 pb-12 relative z-10">
+    <div className="flex flex-col items-center min-h-[100dvh] overflow-y-auto px-6 pt-12 pb-10">
       {/* Heading */}
       <motion.h1
         className="text-[32px] font-bold text-text mb-2 text-center"
@@ -83,7 +83,7 @@ export function SummaryScreen({
       </motion.h1>
 
       <motion.p
-        className="text-[15px] text-text-secondary/60 mb-8 italic"
+        className="text-[15px] text-text-secondary/60 mb-6 italic"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2, duration: 0.5 }}
@@ -91,9 +91,9 @@ export function SummaryScreen({
         a map, not a grade
       </motion.p>
 
-      {/* Radar Chart */}
+      {/* Radar Chart — self-contained fixed-height block so labels never overlap content below */}
       <motion.div
-        className="w-full max-w-[360px] mb-8"
+        className="w-full max-w-[340px] mb-6"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3, duration: 0.5 }}
@@ -101,13 +101,13 @@ export function SummaryScreen({
         <RadarChart domains={domains} ratings={ratings} maxRating={4} />
       </motion.div>
 
-      {/* Sage observation — AI-generated blurb or fallback */}
-      <div className="h-16 flex items-center justify-center mb-10">
+      {/* Sage observation — natural height, never overlaps chart */}
+      <div className="w-full max-w-[300px] mb-8 min-h-[3rem] flex items-start justify-center">
         <AnimatePresence mode="wait">
           {blurbLoading ? (
             <motion.p
               key="loading"
-              className="text-[15px] text-text-secondary/50 italic text-center max-w-[280px] leading-relaxed"
+              className="text-[15px] text-text-secondary/50 italic text-center leading-relaxed"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -118,7 +118,7 @@ export function SummaryScreen({
           ) : (
             <motion.p
               key="blurb"
-              className="text-[15px] text-text-secondary italic text-center max-w-[280px] leading-relaxed"
+              className="text-[15px] text-text-secondary italic text-center leading-relaxed"
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
@@ -166,6 +166,8 @@ export function SummaryScreen({
       >
         Edit ratings
       </motion.button>
+
+      <div className="h-6" />
     </div>
   )
 }

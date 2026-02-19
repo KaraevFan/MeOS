@@ -260,30 +260,41 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           // (handles page refresh, HMR, and StrictMode double-mount)
           const isNewUser = initialSessionState?.state === 'new_user'
           if (isNewUser && sessionType === 'life_mapping') {
-            // Check messages table directly — loadSessionMessages may have set state asynchronously
+            // Check for user messages — if none exist we're still in "opening state"
+            // regardless of whether a Sage opener was already saved
+            const { data: userMsgs } = await supabase
+              .from('messages')
+              .select('id')
+              .eq('session_id', activeSession.id)
+              .eq('role', 'user')
+              .limit(1)
+
+            const hasNoUserMessages = !userMsgs || userMsgs.length === 0
+
+            // Also check all messages to determine whether to insert an opener
             const { data: allMsgs } = await supabase
               .from('messages')
               .select('id')
               .eq('session_id', activeSession.id)
               .limit(1)
-
             const hasNoMessages = !allMsgs || allMsgs.length === 0
 
-            if (hasNoMessages) {
-              const { data: ratings } = await supabase
-                .from('pulse_check_ratings')
-                .select('id')
-                .eq('session_id', activeSession.id)
-                .limit(1)
+            const { data: ratings } = await supabase
+              .from('pulse_check_ratings')
+              .select('id')
+              .eq('session_id', activeSession.id)
+              .limit(1)
 
-              if (!ratings || ratings.length === 0) {
-                // No pulse data yet — show pulse check UI
+            if (!ratings || ratings.length === 0) {
+              // No pulse data yet — show pulse check UI (only if no messages either)
+              if (hasNoMessages) {
                 setShowPulseCheck(true)
-              } else {
-                // Post-onboarding: session has pulse data but no messages
-                // Generate opening message and auto-trigger Sage with server-reconstructed pulse context
+              }
+            } else if (hasNoUserMessages) {
+              // Pulse data exists and user hasn't replied yet — ensure Sage opens with rating context
+              if (hasNoMessages) {
+                // Insert the opening acknowledgment message
                 const openingMessage = getSageOpening('new_user', initialSessionState?.userName, true)
-
                 const { data: savedMsg, error: insertError } = await supabase
                   .from('messages')
                   .insert({
@@ -306,12 +317,13 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
                     hasStructuredBlock: false,
                     createdAt: savedMsg.created_at,
                   }])
-
-                  setTimeout(() => {
-                    triggerSageResponse('onboarding_baseline')
-                  }, 100)
                 }
               }
+
+              // Always trigger onboarding_baseline when pulse data exists and user hasn't replied
+              setTimeout(() => {
+                triggerSageResponse('onboarding_baseline')
+              }, 100)
             }
           }
         } else {

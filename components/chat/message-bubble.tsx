@@ -15,7 +15,23 @@ interface MessageBubbleProps {
   onCorrectDomain?: (domain: DomainName) => void
 }
 
+function renderInlineMarkdown(text: string): React.ReactNode {
+  // Support **bold** and *italic* only — no headers, code blocks, or tables in chat
+  const parts = text.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={i}>{part.slice(1, -1)}</em>
+    }
+    return part
+  })
+}
+
 function TextSegment({ content, isUser }: { content: string; isUser: boolean }) {
+  // Split into paragraphs on blank lines for Sage messages; preserve raw for user messages
+  const paragraphs = isUser ? [content] : content.split(/\n\n+/)
   return (
     <div
       className={cn(
@@ -25,7 +41,15 @@ function TextSegment({ content, isUser }: { content: string; isUser: boolean }) 
           : 'bg-bg-sage border-l-[3px] border-l-accent-sage'
       )}
     >
-      <p className="text-text whitespace-pre-wrap">{content}</p>
+      {isUser ? (
+        <p className="text-text whitespace-pre-wrap">{content}</p>
+      ) : (
+        paragraphs.map((para, i) => (
+          <p key={i} className={cn('text-text', i > 0 && 'mt-3')}>
+            {renderInlineMarkdown(para)}
+          </p>
+        ))
+      )}
     </div>
   )
 }

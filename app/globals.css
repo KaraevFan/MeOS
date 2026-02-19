@@ -12,6 +12,13 @@
   }
 }
 
+/* Desktop: warm neutral surround behind the centered phone container */
+@media (min-width: 481px) {
+  body {
+    background-color: #F0EDE8;
+  }
+}
+
 /* ── Breathing Orb Animations ── */
 
 @keyframes orb-breathe {

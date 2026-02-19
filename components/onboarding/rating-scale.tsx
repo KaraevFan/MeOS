@@ -10,13 +10,13 @@ interface RatingScaleProps {
 
 const LABELS = ['Rough', 'Struggling', 'Okay', 'Good', 'Thriving']
 
-// Gradient hint colors (unselected state) — subtle status preview
+// Gradient hint colors (unselected state) — visible color gradient across scale
 const HINT_COLORS = [
-  'bg-status-crisis/15',     // Rough
-  'bg-status-attention/15',  // Struggling
-  'bg-primary/15',           // Okay
-  'bg-accent-sage/15',       // Good
-  'bg-accent-sage/20',       // Thriving
+  'bg-status-crisis/35',     // Rough
+  'bg-status-attention/35',  // Struggling
+  'bg-primary/30',           // Okay
+  'bg-accent-sage/35',       // Good
+  'bg-accent-sage/45',       // Thriving
 ]
 
 // Selected state colors
@@ -51,10 +51,10 @@ export function RatingScale({ value, onSelect }: RatingScaleProps) {
     <div className="flex flex-col items-center gap-2.5">
       {/* End labels */}
       <div className="flex justify-between w-full max-w-[280px] px-1">
-        <span className="text-[10px] uppercase tracking-[0.08em] text-text-secondary font-medium">
+        <span className="text-[10px] uppercase tracking-[0.08em] text-text font-semibold">
           Rough
         </span>
-        <span className="text-[10px] uppercase tracking-[0.08em] text-text-secondary font-medium">
+        <span className="text-[10px] uppercase tracking-[0.08em] text-text font-semibold">
           Thriving
         </span>
       </div>
@@ -89,18 +89,20 @@ export function RatingScale({ value, onSelect }: RatingScaleProps) {
                 )}
               />
 
-              {/* Selected indicator — status color + matching glow */}
+              {/* Selected indicator — status color + number + glow */}
               {isSelected && (
                 <motion.div
                   className="absolute inset-0 flex items-center justify-center"
-                  initial={{ scale: 0, opacity: 0 }}
+                  initial={{ scale: 0.7, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: 'spring', damping: 14, stiffness: 220 }}
                 >
                   <div
-                    className={cn('w-[44px] h-[44px] rounded-full', SELECTED_COLORS[i])}
+                    className={cn('w-[44px] h-[44px] rounded-full flex items-center justify-center', SELECTED_COLORS[i])}
                     style={{ boxShadow: SELECTED_SHADOWS[i] }}
-                  />
+                  >
+                    <span className="text-white text-sm font-semibold leading-none">{i + 1}</span>
+                  </div>
                 </motion.div>
               )}
             </button>

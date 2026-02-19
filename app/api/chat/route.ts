@@ -154,6 +154,8 @@ async function buildPulseContext(
     return `The user just completed their onboarding pulse check. Here are their self-ratings:
 ${ratingsText}
 ${onboardingContext}
+CRITICAL: The user has ALREADY rated all 8 domains. DO NOT ask them to rate anything. Never say "Rate each of these areas" or ask them to score or evaluate domains. You have their ratings — use them.
+
 Your job now:
 1. Briefly reflect back the overall pattern you see (1-2 sentences). Note any contrasts.
 2. Propose starting with the domain that seems most pressing (lowest rated), but give the user choice.

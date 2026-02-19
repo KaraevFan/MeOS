@@ -85,15 +85,32 @@ function TabLink({ tab }: { tab: { label: string; href: string; icon: (active: b
   )
 }
 
-export function BottomTabBar() {
+interface BottomTabBarProps {
+  onboardingCompleted: boolean
+}
+
+export function BottomTabBar({ onboardingCompleted }: BottomTabBarProps) {
   const [hour, setHour] = useState(12) // Default to midday for SSR
+  const pathname = usePathname()
 
   useEffect(() => {
     setHour(new Date().getHours())
   }, [])
 
+  // State machine:
+  // - pre-onboarding: hide tab bar + FAB entirely
+  // - active session (/chat route): hide tab bar + FAB (session header takes over)
+  // - otherwise: show tab bar + FAB
+  const isActiveSession = pathname.startsWith('/chat')
+
+  if (!onboardingCompleted || isActiveSession) {
+    return null
+  }
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50">
+    // Patch 8: centered within 430px container, constrained on desktop
+    // Patch 9: z-10 (tab bar layer), bottom sheets are z-[50] and render above
+    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-10">
       {/* Orb — protruding above the bar */}
       <div className="absolute left-1/2 -translate-x-1/2 -top-7 z-30">
         {/* Background mask to blend orb into bar */}
@@ -129,7 +146,7 @@ export function BottomTabBar() {
 
       {/* Bar */}
       <div className="h-[84px] bg-warm-bg/95 backdrop-blur-xl border-t border-warm-dark/[0.06] pb-[env(safe-area-inset-bottom)] pt-3">
-        <div className="flex justify-between items-start px-5 h-full max-w-lg mx-auto">
+        <div className="flex justify-between items-start px-5 h-full">
           {/* Left Tabs */}
           <div className="flex-1 flex justify-around">
             {leftTabs.map((tab) => (
