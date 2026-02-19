@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { parseMessage, parseStreamingChunk } from '@/lib/ai/parser'
@@ -183,6 +183,11 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const parsedCache = useRef<Map<string, ReturnType<typeof parseMessage>>>(new Map())
   const supabase = createClient()
 
+  const isOnboarding = useMemo(
+    () => sessionType === 'life_mapping' && initialSessionState?.state === 'new_user',
+    [sessionType, initialSessionState]
+  )
+
   // Scroll to bottom
   const scrollToBottom = useCallback(() => {
     if (scrollRef.current) {
@@ -199,7 +204,6 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   // - 0-2 user messages: silent discard → abandon session, navigate home
   // - 3+ user messages: show pause confirmation sheet
   const handleExit = useCallback(() => {
-    const isOnboarding = sessionType === 'life_mapping' && initialSessionState?.state === 'new_user'
     const userMessageCount = messagesRef.current.filter((m) => m.role === 'user').length
 
     if (isOnboarding) {
@@ -211,7 +215,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
     if (userMessageCount < 3) {
       // Barely started — discard silently
       if (sessionIdRef.current) {
-        abandonSession(supabase, sessionIdRef.current).catch(() => {})
+        const client = createClient()
+        abandonSession(client, sessionIdRef.current, userId).catch((err) => {
+          captureException(err, { tags: { component: 'chat-view', stage: 'abandon_session' } })
+        })
       }
       router.push('/home')
       return
@@ -219,12 +226,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
     // Substantive session — ask user to pause or continue
     setShowExitSheet(true)
-  }, [sessionType, initialSessionState?.state, supabase, router])
-
-  const handlePauseAndExit = useCallback(() => {
-    // Leave session active (resume via ActiveSessionCard on home screen)
-    router.push('/home')
-  }, [router])
+  }, [isOnboarding, userId, router])
 
   // Keep refs in sync with state for use in closures
   useEffect(() => { messagesRef.current = messages }, [messages])
@@ -968,8 +970,6 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   // Computed once per render — prevents O(n²) scan if placed inside messages.map()
   const hasNoUserMessages = !messages.some((m) => m.role === 'user')
 
-  const isOnboarding = sessionType === 'life_mapping' && initialSessionState?.state === 'new_user'
-
   return (
     <div className="flex flex-col h-full">
       {/* Session header — always visible at top; exit button triggers decision tree */}
@@ -977,7 +977,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
         sessionType={sessionType}
         exploreDomain={exploreDomain}
         nudgeContext={nudgeContext}
-        onExit={handleExit}
+        onExit={sessionCompleted ? undefined : handleExit}
       />
 
       {/* Pinned context card for weekly check-ins */}
@@ -1189,7 +1189,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
       <ExitConfirmationSheet
         open={showExitSheet}
         isOnboarding={isOnboarding}
-        onPause={handlePauseAndExit}
+        onPause={() => router.push('/home')}
         onContinue={() => setShowExitSheet(false)}
       />
     </div>

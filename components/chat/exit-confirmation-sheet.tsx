@@ -31,6 +31,7 @@ export function ExitConfirmationSheet({ open, isOnboarding, onPause, onContinue 
       )}
 
       {/* Bottom sheet — constrained to 430px container */}
+      {/* aria-hidden + inert prevent keyboard/AT access when visually hidden */}
       <div
         className={cn(
           'fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-[50]',
@@ -39,6 +40,8 @@ export function ExitConfirmationSheet({ open, isOnboarding, onPause, onContinue 
           open ? 'translate-y-0' : 'translate-y-full'
         )}
         style={{ paddingBottom: 'max(32px, env(safe-area-inset-bottom))' }}
+        aria-hidden={!open}
+        inert={!open}
       >
         {/* Handle */}
         <div className="flex justify-center mb-5">

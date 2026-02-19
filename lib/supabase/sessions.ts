@@ -103,12 +103,14 @@ export async function completeSession(
 
 export async function abandonSession(
   supabase: SupabaseClient,
-  sessionId: string
+  sessionId: string,
+  userId: string
 ) {
   const { error } = await supabase
     .from('sessions')
     .update({ status: 'abandoned' })
     .eq('id', sessionId)
+    .eq('user_id', userId)
 
   if (error) throw error
 }
