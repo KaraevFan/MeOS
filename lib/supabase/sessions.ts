@@ -101,6 +101,18 @@ export async function completeSession(
   }
 }
 
+export async function abandonSession(
+  supabase: SupabaseClient,
+  sessionId: string
+) {
+  const { error } = await supabase
+    .from('sessions')
+    .update({ status: 'abandoned' })
+    .eq('id', sessionId)
+
+  if (error) throw error
+}
+
 export async function updateDomainsExplored(
   supabase: SupabaseClient,
   sessionId: string,

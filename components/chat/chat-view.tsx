@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { parseMessage, parseStreamingChunk } from '@/lib/ai/parser'
 import { MessageBubble } from './message-bubble'
@@ -11,7 +12,7 @@ import { QuickReplyButtons } from './quick-reply-buttons'
 import { ErrorMessage } from './error-message'
 import { PulseCheckCard } from './pulse-check-card'
 import { getOrCreateLifeMap, upsertDomain, updateLifeMapSynthesis } from '@/lib/supabase/life-map'
-import { completeSession, updateDomainsExplored, updateSessionSummary } from '@/lib/supabase/sessions'
+import { completeSession, updateDomainsExplored, updateSessionSummary, abandonSession } from '@/lib/supabase/sessions'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { handleAllFileUpdates } from '@/lib/markdown/file-write-handler'
 import type { FileUpdateData } from '@/types/chat'
@@ -21,6 +22,7 @@ import { scheduleMidDayNudge } from '@/lib/notifications/schedule-nudge'
 import { PinnedContextCard } from './pinned-context-card'
 import { SessionCompleteCard } from './session-complete-card'
 import { SessionHeader } from './session-header'
+import { ExitConfirmationSheet } from './exit-confirmation-sheet'
 import { SuggestedReplyButtons } from './suggested-reply-buttons'
 import { IntentionCard } from './intention-card'
 import { BriefingCard } from './briefing-card'
@@ -168,7 +170,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [checkinPulseSubmitting, setCheckinPulseSubmitting] = useState(false)
   const [previousRatings, setPreviousRatings] = useState<PulseCheckRating[]>([])
   const [showBriefing, setShowBriefing] = useState(sessionType === 'open_day' && !!briefingData)
+  const [showExitSheet, setShowExitSheet] = useState(false)
 
+  const router = useRouter()
   const { setActiveDomain } = useSidebarContext()
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -189,6 +193,38 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   useEffect(() => {
     scrollToBottom()
   }, [messages, streamingText, scrollToBottom])
+
+  // Exit session handler — decision tree:
+  // - Onboarding (life_mapping + new_user): always "Save & finish later" → leave active, navigate home
+  // - 0-2 user messages: silent discard → abandon session, navigate home
+  // - 3+ user messages: show pause confirmation sheet
+  const handleExit = useCallback(() => {
+    const isOnboarding = sessionType === 'life_mapping' && initialSessionState?.state === 'new_user'
+    const userMessageCount = messagesRef.current.filter((m) => m.role === 'user').length
+
+    if (isOnboarding) {
+      // Always save onboarding progress — show "Save & finish later" sheet
+      setShowExitSheet(true)
+      return
+    }
+
+    if (userMessageCount < 3) {
+      // Barely started — discard silently
+      if (sessionIdRef.current) {
+        abandonSession(supabase, sessionIdRef.current).catch(() => {})
+      }
+      router.push('/home')
+      return
+    }
+
+    // Substantive session — ask user to pause or continue
+    setShowExitSheet(true)
+  }, [sessionType, initialSessionState?.state, supabase, router])
+
+  const handlePauseAndExit = useCallback(() => {
+    // Leave session active (resume via ActiveSessionCard on home screen)
+    router.push('/home')
+  }, [router])
 
   // Keep refs in sync with state for use in closures
   useEffect(() => { messagesRef.current = messages }, [messages])
@@ -932,8 +968,18 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   // Computed once per render — prevents O(n²) scan if placed inside messages.map()
   const hasNoUserMessages = !messages.some((m) => m.role === 'user')
 
+  const isOnboarding = sessionType === 'life_mapping' && initialSessionState?.state === 'new_user'
+
   return (
     <div className="flex flex-col h-full">
+      {/* Session header — always visible at top; exit button triggers decision tree */}
+      <SessionHeader
+        sessionType={sessionType}
+        exploreDomain={exploreDomain}
+        nudgeContext={nudgeContext}
+        onExit={handleExit}
+      />
+
       {/* Pinned context card for weekly check-ins */}
       {sessionType === 'weekly_checkin' && initialCommitments && initialCommitments.length > 0 && (
         <PinnedContextCard commitments={initialCommitments} />
@@ -942,7 +988,6 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
         <div className="min-h-full flex flex-col justify-end space-y-4">
-        <SessionHeader sessionType={sessionType} exploreDomain={exploreDomain} nudgeContext={nudgeContext} />
 
         {/* Morning briefing card (open_day only, before first message) */}
         {showBriefing && briefingData && messages.length === 0 && !isStreaming && (
@@ -1139,6 +1184,14 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           placeholder={showPulseCheck ? 'Rate your life areas above to begin.' : showCheckinPulse ? 'Update your pulse ratings above, or skip.' : undefined}
         />
       )}
+
+      {/* Exit confirmation sheet — pause or save-and-finish-later */}
+      <ExitConfirmationSheet
+        open={showExitSheet}
+        isOnboarding={isOnboarding}
+        onPause={handlePauseAndExit}
+        onContinue={() => setShowExitSheet(false)}
+      />
     </div>
   )
 }

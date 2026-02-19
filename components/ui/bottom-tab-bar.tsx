@@ -87,9 +87,10 @@ function TabLink({ tab }: { tab: { label: string; href: string; icon: (active: b
 
 interface BottomTabBarProps {
   onboardingCompleted: boolean
+  hasActiveSession: boolean
 }
 
-export function BottomTabBar({ onboardingCompleted }: BottomTabBarProps) {
+export function BottomTabBar({ onboardingCompleted, hasActiveSession }: BottomTabBarProps) {
   const [hour, setHour] = useState(12) // Default to midday for SSR
   const pathname = usePathname()
 
@@ -99,11 +100,11 @@ export function BottomTabBar({ onboardingCompleted }: BottomTabBarProps) {
 
   // State machine:
   // - pre-onboarding: hide tab bar + FAB entirely
-  // - active session (/chat* routes): hide tab bar — chat page renders its own session header.
-  //   Any route that starts with '/chat' triggers this hide. Add a new prefix here if a
-  //   future chat sub-route should also suppress the tab bar.
+  // - active session on /chat: hide tab bar — session header replaces it with an exit affordance
+  //   "Active session" = status:active with ≥1 user message (same definition as ActiveSessionCard)
+  //   Idle /chat (no active session) shows the tab bar — user can navigate away freely
   // - otherwise: show tab bar + FAB
-  const isActiveSession = pathname.startsWith('/chat')
+  const isActiveSession = pathname.startsWith('/chat') && hasActiveSession
 
   if (!onboardingCompleted || isActiveSession) {
     return null
