@@ -8,7 +8,8 @@ import { MessageBubble } from './message-bubble'
 import { TypingIndicator } from './typing-indicator'
 import { ChatInput } from './chat-input'
 import { BuildingCardPlaceholder } from './building-card-placeholder'
-import { QuickReplyButtons } from './quick-reply-buttons'
+import { SuggestionPills } from './suggestion-pills'
+import type { SuggestionPill } from './suggestion-pills'
 import { ErrorMessage } from './error-message'
 import { PulseCheckCard } from './pulse-check-card'
 import { getOrCreateLifeMap, upsertDomain, updateLifeMapSynthesis } from '@/lib/supabase/life-map'
@@ -24,7 +25,6 @@ import { PinnedContextCard } from './pinned-context-card'
 import { SessionCompleteCard } from './session-complete-card'
 import { SessionHeader } from './session-header'
 import { ExitConfirmationSheet } from './exit-confirmation-sheet'
-import { SuggestedReplyButtons } from './suggested-reply-buttons'
 import { IntentionCard } from './intention-card'
 import { BriefingCard } from './briefing-card'
 import { PulseRatingCard } from './pulse-rating-card'
@@ -59,22 +59,8 @@ interface ChatViewProps {
   briefingData?: BriefingData
 }
 
-function StateQuickReplies({
-  state,
-  unexploredDomains,
-  onSelect,
-  disabled,
-  pulseCheckRatings: ratings,
-}: {
-  state: SessionState
-  unexploredDomains?: DomainName[]
-  onSelect: (text: string) => void
-  disabled: boolean
-  pulseCheckRatings?: PulseCheckRating[] | null
-}) {
-  const buttonClass = 'flex-shrink-0 px-3 py-1.5 min-h-[44px] rounded-full text-sm font-medium bg-bg-card/50 border border-text-secondary/25 text-text shadow-sm hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
-  const primaryClass = 'flex-shrink-0 px-3 py-1.5 min-h-[44px] rounded-full text-sm bg-primary/10 border border-primary/30 text-primary font-medium hover:bg-primary hover:text-white hover:border-primary active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
-
+/** Build state-based suggestion pills for opening messages */
+function getStatePills(state: SessionState, unexploredDomains?: DomainName[], ratings?: PulseCheckRating[] | null): SuggestionPill[] {
   switch (state) {
     case 'mapping_in_progress': {
       let domains = unexploredDomains || []
@@ -82,41 +68,35 @@ function StateQuickReplies({
         const ratingMap = new Map(ratings.map((r) => [r.domain, r.ratingNumeric]))
         domains = [...domains].sort((a, b) => (ratingMap.get(a) ?? 3) - (ratingMap.get(b) ?? 3))
       }
-      return (
-        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
-          {domains.map((d) => (
-            <button key={d} onClick={() => onSelect(`Let's explore ${d}`)} disabled={disabled} className={buttonClass}>{d}</button>
-          ))}
-          <button onClick={() => onSelect("Just want to talk.")} disabled={disabled} className={buttonClass}>Just talk</button>
-          <button onClick={() => onSelect("Let's wrap up and synthesize what we've covered.")} disabled={disabled} className={primaryClass}>Wrap up</button>
-        </div>
-      )
+      const suggestWrapUp = (unexploredDomains?.length ?? 0) < ALL_DOMAINS.length - 2
+      const domainPills: SuggestionPill[] = domains.slice(0, suggestWrapUp ? 2 : 3).map((d) => ({
+        label: d,
+        value: `Let's explore ${d}`,
+      }))
+      if (suggestWrapUp) {
+        domainPills.push({ label: 'Wrap up', value: "Let's wrap up and synthesize what we've covered.", variant: 'primary' as const })
+      }
+      return domainPills
     }
     case 'mapping_complete':
-      return (
-        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
-          <button onClick={() => onSelect("I'd like to start my check-in early.")} disabled={disabled} className={primaryClass}>Start check-in early</button>
-          <button onClick={() => onSelect("Something's on my mind.")} disabled={disabled} className={buttonClass}>Something on my mind</button>
-          <button onClick={() => onSelect("I'd like to update my life map.")} disabled={disabled} className={buttonClass}>Update my life map</button>
-        </div>
-      )
+      return [
+        { label: 'Start check-in early', value: "I'd like to start my check-in early.", variant: 'primary' as const },
+        { label: 'Something on my mind', value: "Something's on my mind." },
+        { label: 'Update my life map', value: "I'd like to update my life map." },
+      ]
     case 'checkin_due':
     case 'checkin_overdue':
-      return (
-        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
-          <button onClick={() => onSelect("Let's do it.")} disabled={disabled} className={primaryClass}>Let&apos;s do it</button>
-          <button onClick={() => onSelect("Not right now.")} disabled={disabled} className={buttonClass}>Not right now</button>
-        </div>
-      )
+      return [
+        { label: "Let's do it", value: "Let's do it.", variant: 'primary' as const },
+        { label: 'Not right now', value: 'Not right now.' },
+      ]
     case 'mid_conversation':
-      return (
-        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
-          <button onClick={() => onSelect("Let's continue.")} disabled={disabled} className={primaryClass}>Continue</button>
-          <button onClick={() => onSelect("Start fresh.")} disabled={disabled} className={buttonClass}>Start fresh</button>
-        </div>
-      )
+      return [
+        { label: 'Continue', value: "Let's continue.", variant: 'primary' as const },
+        { label: 'Start fresh', value: 'Start fresh.' },
+      ]
     default:
-      return null
+      return []
   }
 }
 
@@ -1103,6 +1083,30 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           const isOpeningMessage = index === 0 && message.role === 'assistant'
           const showStateQuickReplies = isLastMessage && isOpeningMessage && hasNoUserMessages && !isStreaming && !showPulseCheck && !hasSuggestedReplies
 
+          // Build pills for the active suggestion source (priority: AI > domain > state)
+          // Only compute for the last message to avoid unnecessary work
+          let activePills: SuggestionPill[] = []
+          if (isLastMessage && !isStreaming && !sessionCompleted && !hasIntentionCard) {
+            if (hasSuggestedReplies && suggestedReplies.type === 'block' && suggestedReplies.blockType === 'suggested_replies') {
+              activePills = suggestedReplies.data.replies.map((r) => ({ label: r, value: r }))
+            } else if (showDomainQuickReplies) {
+              // Top 3 unexplored domains by pulse rating
+              let remaining = ALL_DOMAINS.filter((d) => !domainsExplored.has(d))
+              if (pulseCheckRatings && pulseCheckRatings.length > 0) {
+                const ratingMap = new Map(pulseCheckRatings.map((r) => [r.domain, r.ratingNumeric]))
+                remaining = [...remaining].sort((a, b) => (ratingMap.get(a) ?? 3) - (ratingMap.get(b) ?? 3))
+              }
+              const suggestWrapUp = domainsExplored.size >= 3
+              const top = remaining.slice(0, suggestWrapUp ? 2 : 3)
+              activePills = top.map((d) => ({ label: d, value: `Let's explore ${d}` }))
+              if (suggestWrapUp) {
+                activePills.push({ label: 'Wrap up & synthesize', value: "Let's wrap up and synthesize what we've covered.", variant: 'primary' as const })
+              }
+            } else if (showStateQuickReplies && initialSessionState) {
+              activePills = getStatePills(initialSessionState.state, initialSessionState.unexploredDomains, pulseCheckRatings)
+            }
+          }
+
           return (
             <div key={message.id}>
               <MessageBubble
@@ -1120,33 +1124,14 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
                   />
                 </div>
               )}
-              {hasSuggestedReplies && suggestedReplies.type === 'block' && suggestedReplies.blockType === 'suggested_replies' && (
+              {activePills.length > 0 && (
                 <div className="mt-2">
-                  <SuggestedReplyButtons
-                    data={suggestedReplies.data}
+                  <SuggestionPills
+                    pills={activePills}
                     onSelect={handleSend}
                     disabled={isStreaming}
                   />
                 </div>
-              )}
-              {showDomainQuickReplies && (
-                <div className="mt-2">
-                  <QuickReplyButtons
-                    domainsExplored={domainsExplored}
-                    onSelect={handleSend}
-                    disabled={isStreaming}
-                    pulseCheckRatings={pulseCheckRatings}
-                  />
-                </div>
-              )}
-              {showStateQuickReplies && initialSessionState && (
-                <StateQuickReplies
-                  state={initialSessionState.state}
-                  unexploredDomains={initialSessionState.unexploredDomains}
-                  onSelect={handleSend}
-                  disabled={isStreaming}
-                  pulseCheckRatings={pulseCheckRatings}
-                />
               )}
             </div>
           )

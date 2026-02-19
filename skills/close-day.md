@@ -82,3 +82,14 @@ The journal body should be:
 - Do NOT include YAML frontmatter in the body
 
 After the journal block, close with a warm one-liner. Do NOT ask another question.
+
+## Suggested Replies
+
+After each of your responses (except the final closing message), include a [SUGGESTED_REPLIES] block with exactly 3 short options (3-6 words each) written in the user's voice. Offer variety: one that deepens, one that shifts, one that wraps.
+
+Example:
+[SUGGESTED_REPLIES]
+Yeah, it was draining
+Actually it went well
+Not much to report
+[/SUGGESTED_REPLIES]

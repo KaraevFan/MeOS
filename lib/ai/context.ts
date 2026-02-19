@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getLifeMappingPrompt, getWeeklyCheckinBasePrompt, getAdHocPrompt, getCloseDayPrompt } from './prompts'
+import { getLifeMappingPrompt, getWeeklyCheckinBasePrompt, getAdHocPrompt, getCloseDayPrompt, SUGGESTED_REPLIES_FORMAT } from './prompts'
 import { loadSkill } from './skill-loader'
 import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
@@ -350,6 +350,7 @@ export async function buildConversationContext(
   // Add FILE_UPDATE format instructions if not already in skill prompt
   if (skill) {
     basePrompt += getFileUpdateFormatInstructions()
+    basePrompt += SUGGESTED_REPLIES_FORMAT
   }
 
   const fileContext = await fetchAndInjectFileContext(userId, options?.exploreDomain, sessionType)

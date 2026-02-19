@@ -1,6 +1,23 @@
 import type { LifeMap, LifeMapDomain, Pattern } from '@/types/database'
 
 /**
+ * SUGGESTED_REPLIES format instructions shared by all prompt types.
+ * Appended to every prompt so Sage always offers 3 quick-tap reply options.
+ */
+export const SUGGESTED_REPLIES_FORMAT = `
+SUGGESTED REPLIES FORMAT:
+Always end your response with a [SUGGESTED_REPLIES] block containing exactly 3 short suggested user replies (3-6 words each). Write them in the user's voice — what they might naturally say next. Offer variety: one that deepens the current topic, one that shifts direction, and one that acknowledges or wraps the point.
+
+Exception: Do NOT include [SUGGESTED_REPLIES] if your message is a session wrap-up, final synthesis, or closing message (i.e., when you are ending the conversation and told not to ask another question).
+
+Example:
+[SUGGESTED_REPLIES]
+Tell me more about that
+Let's switch to relationships
+Yeah, that resonates
+[/SUGGESTED_REPLIES]`
+
+/**
  * FILE_UPDATE format instructions shared by all prompt types.
  * Sage outputs markdown body in [FILE_UPDATE] blocks; system generates frontmatter.
  */
@@ -129,6 +146,7 @@ Critical rules:
 - For domains rated "thriving" or "good" in the pulse check, offer a quick confirmation: "You rated [domain] as [rating] — want to spend time here or is that a quick confirm?"
 - The north star MUST include a "because" clause: not just "Career transition" but "Career transition — because financial independence unlocks everything else." If you can't articulate why, probe deeper.
 - Life plan commitments MUST follow this exact structure: ### heading, **Why it matters:** line, **Status:** line (exactly one of: not_started, in_progress, complete), #### Next Steps with - [ ] checkboxes annotated with *(upcoming)*, *(active)*, or *(done)*. The app parses this structure programmatically.
+${SUGGESTED_REPLIES_FORMAT}
 
 Domain card attributes:
 When generating [FILE_UPDATE type="domain"] blocks, include preview_line and status attributes in the opening tag:
@@ -303,7 +321,8 @@ The journal body should be:
 - Do NOT include YAML frontmatter in the body
 
 After the journal block, close with a warm one-liner. Do NOT ask another question.
-${FILE_UPDATE_FORMAT}`
+${FILE_UPDATE_FORMAT}
+${SUGGESTED_REPLIES_FORMAT}`
 }
 
 export function getWeeklyCheckinBasePrompt(): string {
@@ -341,6 +360,7 @@ Critical rules:
 - When updating the life plan, preserve exact commitment heading text (### headings) unless the user explicitly renames or replaces a commitment. Changing headings breaks continuity tracking.
 - Commitment status must be exactly one of: not_started, in_progress, complete. Use *(upcoming)*, *(active)*, or *(done)* annotations on next step checkboxes.
 ${FILE_UPDATE_FORMAT}
+${SUGGESTED_REPLIES_FORMAT}
 
 Session closing sequence:
 When the check-in feels complete (you've reviewed commitments, checked energy, and set one intention for next week):
@@ -450,7 +470,8 @@ ${isExploring ? `- You are focused on the ${exploreDomain} domain. Explore it na
 
 ${writePermissions}
 
-${FILE_UPDATE_FORMAT}`
+${FILE_UPDATE_FORMAT}
+${SUGGESTED_REPLIES_FORMAT}`
 }
 
 export function getWeeklyCheckinPrompt(
