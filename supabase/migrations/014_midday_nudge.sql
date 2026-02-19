@@ -54,6 +54,7 @@ ALTER TABLE sessions ADD CONSTRAINT sessions_session_type_check
 ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS timezone text;
 
 -- 4. Composite index for nudge duplicate check
+-- Table uses sent_at/cancelled_at columns for pending state (no status column)
 CREATE INDEX IF NOT EXISTS idx_sched_notif_user_type_date
   ON scheduled_notifications (user_id, notification_type, scheduled_for)
-  WHERE status = 'pending';
+  WHERE sent_at IS NULL AND cancelled_at IS NULL;
