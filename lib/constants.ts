@@ -11,20 +11,17 @@ export const ALL_DOMAINS: DomainName[] = [
   'Meaning / Purpose',
 ]
 
-/**
- * Abbreviated domain labels for spider chart display.
- * Order matches ALL_DOMAINS. Full names are used everywhere else.
- */
-export const RADAR_ABBREVIATED_LABELS: string[] = [
-  'Career',
-  'Relationships',
-  'Health',
-  'Finances',
-  'Learning',
-  'Creative',
-  'Play',
-  'Purpose',
-]
+/** Canonical short names for all domains. Use everywhere abbreviated names are needed. */
+export const DOMAIN_SHORT_NAMES: Record<DomainName, string> = {
+  'Career / Work': 'Career',
+  'Relationships': 'Relations',
+  'Health / Body': 'Health',
+  'Finances': 'Finances',
+  'Learning / Growth': 'Learning',
+  'Creative Pursuits': 'Creative',
+  'Play / Fun / Adventure': 'Play',
+  'Meaning / Purpose': 'Purpose',
+}
 
 export const SESSION_STALE_HOURS = 24
 

@@ -108,11 +108,17 @@ export async function handleFileUpdate(
       case FILE_TYPES.DOMAIN: {
         const filename = DOMAIN_FILE_MAP[update.name as DomainName]
         if (filename) {
+          const ratingStr = update.attributes?.updated_rating
+          const updatedRating = ratingStr ? Number(ratingStr) : undefined
+          const validRating = updatedRating && updatedRating >= 1 && updatedRating <= 5
+            ? updatedRating : undefined
+
           await ufs.writeDomain(filename, update.content, {
             domain: filename,
             updated_by: 'sage',
             ...(update.status ? { status: update.status } : {}),
             ...(update.previewLine ? { preview_line: update.previewLine } : {}),
+            ...(validRating ? { score: validRating } : {}),
           })
         }
         break

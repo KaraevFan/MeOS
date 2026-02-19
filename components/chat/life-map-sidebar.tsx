@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 import { RadarChart } from '@/components/ui/radar-chart'
 import { useSidebarContext } from './sidebar-context'
-import { ALL_DOMAINS, RADAR_ABBREVIATED_LABELS } from '@/lib/constants'
+import { ALL_DOMAINS, DOMAIN_SHORT_NAMES } from '@/lib/constants'
 import { STORAGE_BUCKET } from '@/lib/markdown/constants'
 import { cn } from '@/lib/utils'
 import type { DomainName, DomainStatus } from '@/types/chat'
@@ -263,7 +263,7 @@ export function LifeMapSidebar({ userId }: LifeMapSidebarProps) {
             maxRating={4}
             size={200}
             exploredDomains={exploredDomains}
-            labels={RADAR_ABBREVIATED_LABELS}
+            labels={ALL_DOMAINS.map(d => DOMAIN_SHORT_NAMES[d])}
           />
         </div>
       )}

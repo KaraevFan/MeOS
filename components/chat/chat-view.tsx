@@ -883,6 +883,39 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             })
           }
 
+          // Handle updated_rating from domain file updates — update live UI + persist
+          for (const block of fileUpdateBlocks) {
+            if (block.data.fileType === 'domain' && block.data.name && block.data.attributes?.updated_rating) {
+              const newRating = Number(block.data.attributes.updated_rating)
+              if (newRating >= 1 && newRating <= 5) {
+                const domainName = block.data.name
+                // Update pulse ratings state for live shelf/spider chart update
+                setPulseCheckRatings((prev) => {
+                  if (!prev) return prev
+                  const existing = prev.find((r) => r.domain === domainName)
+                  if (existing) {
+                    return prev.map((r) =>
+                      r.domain === domainName ? { ...r, ratingNumeric: newRating } : r
+                    )
+                  }
+                  return prev
+                })
+                // Persist to pulse_check_ratings for trend tracking (fire-and-forget)
+                const ratingLabel = (['in_crisis', 'struggling', 'okay', 'good', 'thriving'] as const)[newRating - 1]
+                supabase.from('pulse_check_ratings').insert({
+                  session_id: sessionId,
+                  user_id: userId,
+                  domain_name: domainName,
+                  rating: ratingLabel,
+                  rating_numeric: newRating,
+                  is_baseline: false,
+                }).then(({ error }) => {
+                  if (error) console.error('[ChatView] Failed to persist updated rating:', error.message)
+                })
+              }
+            }
+          }
+
           // Handle [REFLECTION_PROMPT] blocks — store for home screen display
           const reflectionBlock = parsed.segments.find(
             (s): s is Extract<typeof s, { type: 'block'; blockType: 'reflection_prompt' }> =>

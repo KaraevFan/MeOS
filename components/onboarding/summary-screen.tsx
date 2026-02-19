@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { RadarChart } from '@/components/ui/radar-chart'
-import { RADAR_ABBREVIATED_LABELS } from '@/lib/constants'
+import { DOMAIN_SHORT_NAMES } from '@/lib/constants'
 
 interface SummaryScreenProps {
   domains: string[]
@@ -99,7 +99,7 @@ export function SummaryScreen({
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3, duration: 0.5 }}
       >
-        <RadarChart domains={domains} ratings={ratings} maxRating={4} labels={RADAR_ABBREVIATED_LABELS} />
+        <RadarChart domains={domains} ratings={ratings} maxRating={4} labels={domains.map((d: string) => DOMAIN_SHORT_NAMES[d as keyof typeof DOMAIN_SHORT_NAMES] ?? d)} />
       </motion.div>
 
       {/* Sage observation — natural height, never overlaps chart */}

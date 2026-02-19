@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { RadarChart } from '@/components/ui/radar-chart'
 import { DomainSlotCompact } from './domain-slot-compact'
-import { ALL_DOMAINS, RADAR_ABBREVIATED_LABELS } from '@/lib/constants'
+import { ALL_DOMAINS, DOMAIN_SHORT_NAMES } from '@/lib/constants'
 import type { DomainName } from '@/types/chat'
 
 export interface PillDomain {
@@ -88,7 +88,7 @@ export function LifeMapPillShelf({
           maxRating={4}
           size={180}
           exploredDomains={exploredDomains}
-          labels={RADAR_ABBREVIATED_LABELS}
+          labels={ALL_DOMAINS.map(d => DOMAIN_SHORT_NAMES[d])}
         />
       </div>
 

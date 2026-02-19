@@ -51,10 +51,10 @@ export function RatingScale({ value, onSelect }: RatingScaleProps) {
     <div className="flex flex-col items-center gap-2.5">
       {/* End labels */}
       <div className="flex justify-between w-full max-w-[280px] px-1">
-        <span className="text-[10px] uppercase tracking-[0.08em] text-text font-semibold">
+        <span className="text-[11px] uppercase tracking-[0.08em] text-status-crisis font-semibold">
           Rough
         </span>
-        <span className="text-[10px] uppercase tracking-[0.08em] text-text font-semibold">
+        <span className="text-[11px] uppercase tracking-[0.08em] text-accent-sage font-semibold">
           Thriving
         </span>
       </div>

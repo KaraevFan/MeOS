@@ -2,6 +2,8 @@
 
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { DOMAIN_SHORT_NAMES } from '@/lib/constants'
+import type { DomainName } from '@/types/chat'
 
 interface DomainSlotCompactProps {
   name: string
@@ -11,16 +13,10 @@ interface DomainSlotCompactProps {
   justCompleted: boolean
 }
 
-// Truncate to first word if > 8 chars, otherwise use full name
-function abbreviateName(name: string): string {
-  if (name.length <= 8) return name
-  return name.split(/[\s/]/)[0]
-}
-
 const SLOT_SPRING = { stiffness: 300, damping: 15 }
 
 export function DomainSlotCompact({ name, iconName, rating, explored, justCompleted }: DomainSlotCompactProps) {
-  const displayName = abbreviateName(name)
+  const displayName = DOMAIN_SHORT_NAMES[name as DomainName] ?? name
 
   return (
     <motion.div
