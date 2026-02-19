@@ -109,8 +109,8 @@ export async function handleFileUpdate(
         const filename = DOMAIN_FILE_MAP[update.name as DomainName]
         if (filename) {
           const ratingStr = update.attributes?.updated_rating
-          const updatedRating = ratingStr ? Number(ratingStr) : undefined
-          const validRating = updatedRating && updatedRating >= 1 && updatedRating <= 5
+          const updatedRating = ratingStr ? Math.round(Number(ratingStr)) : undefined
+          const validRating = updatedRating && Number.isInteger(updatedRating) && updatedRating >= 1 && updatedRating <= 5
             ? updatedRating : undefined
 
           await ufs.writeDomain(filename, update.content, {

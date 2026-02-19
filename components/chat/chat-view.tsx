@@ -886,8 +886,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           // Handle updated_rating from domain file updates — update live UI + persist
           for (const block of fileUpdateBlocks) {
             if (block.data.fileType === 'domain' && block.data.name && block.data.attributes?.updated_rating) {
-              const newRating = Number(block.data.attributes.updated_rating)
-              if (newRating >= 1 && newRating <= 5) {
+              const newRating = Math.round(Number(block.data.attributes.updated_rating))
+              if (Number.isInteger(newRating) && newRating >= 1 && newRating <= 5 && sessionId) {
                 const domainName = block.data.name
                 // Update pulse ratings state for live shelf/spider chart update
                 setPulseCheckRatings((prev) => {
