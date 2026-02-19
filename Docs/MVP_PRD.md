@@ -418,6 +418,33 @@ last_active_session_id: uuid (nullable)
 
 # App Screens
 
+## 0. Navigation Visibility State Machine
+
+The bottom tab bar is for navigating between modes. During an active session, it is replaced by a session header — not merely hidden. This prevents users from feeling trapped without providing an escape route.
+
+**Tab bar VISIBLE:**
+- Home screen (post-onboarding)
+- Life Map view (browsing)
+- History view
+- Chat view with no active session (idle / viewing past conversations)
+
+**Tab bar HIDDEN, replaced by session header:**
+- During onboarding (from intake question through life mapping completion)
+- During any active session: life mapping, open the day, close the day, weekly check-in
+- During the pulse check flow
+
+**Session header layout (minimal bar at top of screen):**
+- Left: Exit affordance (chevron, ×, or pause icon)
+- Center: Session context label (e.g., "Life Mapping · ~25 min")
+- Right: Optional elapsed time or "…" menu
+
+**Mid-session exit decision tree (triggered by tapping the exit button):**
+- 0–2 messages: Exit silently, discard session — no confirmation needed.
+- 3+ messages: Show confirmation: "Want to pause this session? You can pick up where you left off." Options: "Pause & Exit" / "Keep Going." Pause saves state; home screen shows a "Resume session" card.
+- During onboarding: Exit reads "Save & finish later." Progress is preserved; next app open resumes exactly where they left off.
+
+**FAB (floating voice orb) follows the tab bar** — hidden whenever the tab bar is hidden. During sessions, voice input is in the chat input bar only.
+
 ## 1. Welcome / Onboarding
 
 - Brief (1-2 screens max): "MeOS is your AI life partner. Talk to Sage, build your life map, check in weekly."

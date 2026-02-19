@@ -162,6 +162,41 @@ Bottom tab bar with 4 tabs:
 - **Life Map:** Structured view of the full life map + identity/direction content (north star, commitments, boundaries, priorities). Richer than before — absorbs content that previously lived on the home screen.
 - **History:** Past sessions listed chronologically with AI summaries. Daily sessions grouped by date.
 
+## Tab Bar Visibility State Machine
+
+The tab bar is for navigation between modes. When you're inside a mode (active session), navigation is replaced by session controls — not just hidden.
+
+**Tab bar VISIBLE:**
+- Home screen (post-onboarding)
+- Life Map view (browsing, not in session)
+- History view
+- Chat view with no active session (idle, viewing past conversations)
+
+**Tab bar HIDDEN, replaced by session header:**
+- During onboarding (entire flow from intake question through life mapping completion)
+- During any active session: life mapping, open the day, close the day, weekly check-in
+- During the pulse check flow
+
+**FAB (floating voice orb) follows the tab bar** — it hides whenever the tab bar hides. During sessions, voice input lives in the chat input bar. The FAB's job is only to quick-launch conversation from non-conversation screens.
+
+## Session Header
+
+When the tab bar is hidden, a minimal session header appears at the top of the screen:
+
+- **Left:** Exit affordance — chevron, "×", or "pause" icon
+- **Center:** Session context label (e.g., "Life Mapping · ~25 min" or "Closing Your Day")
+- **Right:** Optional — elapsed time or "..." menu (can be empty)
+
+This prevents the "trapped" feeling that pure tab bar hiding creates.
+
+## Mid-Session Exit Decision Tree
+
+When the user taps the exit button in the session header:
+
+- **0–2 messages exchanged:** Exit cleanly, no confirmation. Discard the session silently.
+- **3+ messages exchanged:** Show brief confirmation: "Want to pause this session? You can pick up where you left off." Two options: "Pause & Exit" and "Keep Going." Pause saves state and returns to home. Home screen shows a "Resume session" card.
+- **During onboarding specifically:** Exit affordance says "Save & finish later." If tapped, save progress and return to onboarding entry point on next open — no half-state confusion.
+
 ---
 
 # Key Screen Specifications
