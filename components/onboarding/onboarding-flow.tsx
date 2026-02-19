@@ -42,6 +42,7 @@ function isValidOnboardingState(value: unknown): value is OnboardingState {
   return (
     typeof obj.step === 'string' && VALID_STEPS.includes(obj.step as Step) &&
     typeof obj.domainIndex === 'number' &&
+    obj.domainIndex >= 0 && obj.domainIndex < PULSE_DOMAINS.length &&
     typeof obj.ratings === 'object' && obj.ratings !== null &&
     (obj.intent === null || typeof obj.intent === 'string') &&
     typeof obj.name === 'string' &&
@@ -118,6 +119,7 @@ export function OnboardingFlow() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [oauthName, setOauthName] = useState<string | undefined>(undefined)
+  const isAdvancingDomainRef = useRef(false)
 
   // Restore state from sessionStorage on mount
   useEffect(() => {
@@ -203,6 +205,9 @@ export function OnboardingFlow() {
   }
 
   function handleDomainRate(value: number) {
+    if (isAdvancingDomainRef.current) return
+    isAdvancingDomainRef.current = true
+
     setRatings((prev) => ({ ...prev, [domainIndex]: value }))
 
     // Hide sage message after first rating
@@ -216,6 +221,7 @@ export function OnboardingFlow() {
       } else {
         goForward('summary')
       }
+      isAdvancingDomainRef.current = false
     }, 400)
   }
 
