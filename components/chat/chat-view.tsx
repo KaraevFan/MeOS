@@ -213,14 +213,21 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
     setSidebarStreaming(isStreaming)
   }, [isStreaming, setSidebarStreaming])
 
-  // Scroll to bottom — proximity-aware: only auto-scroll if user is near bottom
+  // Track whether user is near bottom via scroll events (before content updates change scrollHeight)
   const NEAR_BOTTOM_THRESHOLD = 100 // px
-  const scrollToBottom = useCallback((force = false) => {
+  const isNearBottomRef = useRef(true)
+
+  const handleScroll = useCallback(() => {
     if (!scrollRef.current) return
     const el = scrollRef.current
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    if (force || distanceFromBottom < NEAR_BOTTOM_THRESHOLD) {
-      el.scrollTop = el.scrollHeight
+    isNearBottomRef.current = distanceFromBottom < NEAR_BOTTOM_THRESHOLD
+  }, [])
+
+  const scrollToBottom = useCallback((force = false) => {
+    if (!scrollRef.current) return
+    if (force || isNearBottomRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [])
 
@@ -693,6 +700,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
   async function sendMessage(text: string, retry = false) {
     if (!sessionId || isStreaming) return
+    // User just sent — ensure auto-scroll to show their message and the response
+    isNearBottomRef.current = true
     const controller = new AbortController()
     streamAbortRef.current = controller
 
@@ -1052,7 +1061,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
       )}
 
       {/* Messages area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4">
         <div className="min-h-full flex flex-col justify-end space-y-4">
 
         {/* Morning briefing card (open_day only, before first message) */}
