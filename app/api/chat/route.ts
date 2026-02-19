@@ -74,7 +74,7 @@ function extractOnboardingMeta(metadata: unknown): {
   }
   return {
     intent: typeof meta.onboarding_intent === 'string' ? meta.onboarding_intent : null,
-    name: typeof meta.onboarding_name === 'string' ? meta.onboarding_name : null,
+    name: typeof meta.onboarding_name === 'string' ? meta.onboarding_name.replace(/[<>]/g, '').slice(0, 50) : null,
     quickReplies,
   }
 }
@@ -154,6 +154,8 @@ async function buildPulseContext(
     return `The user just completed their onboarding pulse check. Here are their self-ratings:
 ${ratingsText}
 ${onboardingContext}
+CRITICAL: The user has ALREADY rated all 8 domains. DO NOT ask them to rate anything. Never say "Rate each of these areas" or ask them to score or evaluate domains. You have their ratings — use them.
+
 Your job now:
 1. Briefly reflect back the overall pattern you see (1-2 sentences). Note any contrasts.
 2. Propose starting with the domain that seems most pressing (lowest rated), but give the user choice.
@@ -282,7 +284,7 @@ export async function POST(request: Request) {
     if (sessionType === 'ad_hoc' && !precheckin) {
       const meta = sessionCheck?.metadata as Record<string, unknown> | null
       if (meta?.ad_hoc_context && typeof meta.ad_hoc_context === 'string') {
-        systemPrompt += `\n\n${(meta.ad_hoc_context as string).slice(0, 2000)}`
+        systemPrompt += `\n\n<user_data>\n${meta.ad_hoc_context.slice(0, 2000)}\n</user_data>`
       }
     }
   } catch (error) {

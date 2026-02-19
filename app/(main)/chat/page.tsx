@@ -49,7 +49,7 @@ export default async function ChatPage({
       }
 
       return (
-        <div className="fixed inset-0 bottom-[84px] pb-[env(safe-area-inset-bottom)]">
+        <div className="fixed top-0 bottom-[84px] left-1/2 -translate-x-1/2 w-full max-w-[430px] pb-[env(safe-area-inset-bottom)]">
           <ChatLayout userId={user.id} sessionType={targetType}>
             <ChatView
               userId={user.id}
@@ -189,7 +189,7 @@ export default async function ChatPage({
   }
 
   return (
-    <div className="fixed inset-0 bottom-[84px] pb-[env(safe-area-inset-bottom)]">
+    <div className="fixed top-0 bottom-[84px] left-1/2 -translate-x-1/2 w-full max-w-[430px] pb-[env(safe-area-inset-bottom)]">
       <ChatLayout userId={user.id} sessionType={sessionType}>
         <ChatView
           userId={user.id}

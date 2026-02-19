@@ -19,7 +19,7 @@ export default async function MainLayout({
 
   const { data: profile } = await supabase
     .from('users')
-    .select('email, display_name')
+    .select('email, display_name, onboarding_completed')
     .eq('id', user.id)
     .single()
 
@@ -28,15 +28,16 @@ export default async function MainLayout({
     display_name: profile?.display_name,
     email: profile?.email,
   })
+  const onboardingCompleted = profile?.onboarding_completed ?? false
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="mx-auto max-w-[430px] min-h-[100dvh] bg-bg relative shadow-[0_0_60px_rgba(0,0,0,0.07)]">
       <ActivityTracker />
       <AppHeader email={email} displayName={displayName} />
       <main className="pb-24">
         {children}
       </main>
-      <BottomTabBar />
+      <BottomTabBar onboardingCompleted={onboardingCompleted} />
     </div>
   )
 }

@@ -35,19 +35,20 @@ export function UserMenuSheet({ email, initial }: UserMenuSheetProps) {
         {initial}
       </button>
 
-      {/* Backdrop */}
+      {/* Backdrop — above tab bar (z-10), below sheet (z-[50]) */}
       {open && (
         <div
-          className="fixed inset-0 z-50 bg-text/20 animate-fade-up"
-          style={{ animation: 'none', opacity: 1, transition: 'opacity 150ms ease-out' }}
+          className="fixed inset-0 z-[40] bg-text/20"
+          style={{ opacity: 1, transition: 'opacity 150ms ease-out' }}
           onClick={() => setOpen(false)}
         />
       )}
 
-      {/* Bottom sheet */}
+      {/* Bottom sheet — constrained to 430px container, above backdrop */}
       <div
         className={cn(
-          'fixed bottom-0 left-0 right-0 z-50 bg-bg-card rounded-t-lg shadow-md px-lg pt-lg pb-2xl',
+          'fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-[50]',
+          'bg-bg-card rounded-t-lg shadow-md px-lg pt-lg pb-2xl',
           'transition-transform duration-200 ease-out',
           open ? 'translate-y-0' : 'translate-y-full'
         )}
