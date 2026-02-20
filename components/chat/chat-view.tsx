@@ -17,6 +17,8 @@ import { completeSession, updateDomainsExplored, updateSessionSummary, abandonSe
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { handleAllFileUpdates } from '@/lib/markdown/file-write-handler'
 import type { FileUpdateData } from '@/types/chat'
+import { getOrCreateTodayDayPlan, updateDayPlan } from '@/lib/supabase/day-plan-queries'
+import type { DayPlan } from '@/types/day-plan'
 import { savePulseCheckRatings, pulseRatingToDomainStatus, getLatestRatingsPerDomain, getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { useActiveSession } from '@/components/providers/active-session-provider'
 import { isPushSupported, requestPushPermission } from '@/lib/notifications/push'
@@ -964,6 +966,41 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               }
             }).catch(() => {
               console.error('Failed to complete open_day session')
+            })
+
+            // Write structured day plan data to Postgres (fire-and-forget)
+            const dayPlanDataBlock = parsed.segments.find(
+              (s): s is Extract<typeof s, { type: 'block'; blockType: 'day_plan_data' }> =>
+                s.type === 'block' && s.blockType === 'day_plan_data'
+            )
+            const dayPlanFileUpdate = updates.find((u) => u.fileType === 'day-plan')
+            const dayPlanIntention = dayPlanDataBlock?.data.intention ?? dayPlanFileUpdate?.attributes?.intention ?? null
+
+            getOrCreateTodayDayPlan(supabase, userId).then((dayPlan) => {
+              const updateData: Partial<Pick<DayPlan,
+                'intention' | 'energy_level' | 'morning_session_id' | 'morning_completed_at' |
+                'priorities' | 'open_threads'
+              >> = {
+                morning_session_id: sessionId,
+                morning_completed_at: new Date().toISOString(),
+              }
+              if (dayPlanIntention) updateData.intention = dayPlanIntention
+              if (dayPlanDataBlock?.data.energy_level) updateData.energy_level = dayPlanDataBlock.data.energy_level
+              if (dayPlanDataBlock?.data.priorities) updateData.priorities = dayPlanDataBlock.data.priorities
+              if (dayPlanDataBlock?.data.open_threads) updateData.open_threads = dayPlanDataBlock.data.open_threads.map((t) => ({
+                text: t.text,
+                source_session_type: t.source_session_type ?? 'open_day',
+                source_date: t.source_date ?? new Date().toLocaleDateString('en-CA'),
+                provenance_label: t.provenance_label ?? '',
+                status: t.status,
+                resolved_at: null,
+              }))
+
+              updateDayPlan(supabase, userId, dayPlan.date, updateData).catch((err) => {
+                console.error('[ChatView] Failed to update day_plans:', err)
+              })
+            }).catch((err) => {
+              console.error('[ChatView] Failed to get/create day plan:', err)
             })
           }
 

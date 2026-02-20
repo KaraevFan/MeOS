@@ -32,6 +32,11 @@ const config: Config = {
         sage: '#7D8E7B',
         terracotta: '#CCA59E',
         'blue-gray': '#98A2B3',
+        // Day Plan artifact tokens
+        'dp-amber': '#C9963A',
+        'dp-card': '#F3EDE4',
+        'dp-earth': '#2C2825',
+        clay: '#B07B5F',
       },
       spacing: {
         xs: '4px',
@@ -51,6 +56,8 @@ const config: Config = {
         sm: '0 1px 3px rgba(61, 56, 50, 0.06)',
         md: '0 4px 12px rgba(61, 56, 50, 0.08)',
         glow: '0 0 20px rgba(245, 158, 11, 0.25)',
+        stone: '0 2px 4px rgba(44,40,37,0.05), 0 6px 12px rgba(44,40,37,0.06), 0 12px 24px rgba(44,40,37,0.04)',
+        pebble: '0 1px 2px rgba(44,40,37,0.03), 0 3px 6px rgba(44,40,37,0.03)',
       },
       fontFamily: {
         satoshi: ['Satoshi', 'DM Sans', 'sans-serif'],
