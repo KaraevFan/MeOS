@@ -1138,7 +1138,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             yesterdayIntention={briefingData.yesterdayIntention}
             onStart={() => {
               setShowBriefing(false)
-              handleSend("Let's open the day")
+              // Auto-trigger Claude (same pattern as close_day) — no user message
+              // so Claude starts clean at Step 1 (energy check + pills)
+              triggerSageResponse('none')
             }}
           />
         )}

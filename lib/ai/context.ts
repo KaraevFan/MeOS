@@ -26,6 +26,12 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
 
   const parts: string[] = ["=== USER'S LIFE CONTEXT ==="]
 
+  // Inject today's date for temporal grounding (all session types)
+  const today = new Date()
+  const todayStr = today.toLocaleDateString('en-CA')
+  const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' })
+  parts.push(`\nTODAY: ${dayOfWeek}, ${todayStr}`)
+
   // Read all context sources in parallel
   const [sageContext, overview, lifePlan, checkInFilenames, patterns, pulseBaseline, dailyLogFilenames] =
     await Promise.allSettled([
@@ -183,6 +189,37 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
     } catch {
       // No yesterday day plan — that's fine
     }
+
+    // Yesterday's captures for the morning briefing (carry-forward)
+    try {
+      const yesterdayForCaptures = new Date()
+      yesterdayForCaptures.setDate(yesterdayForCaptures.getDate() - 1)
+      const yesterdayCaptureDate = yesterdayForCaptures.toLocaleDateString('en-CA')
+      const captureFilenames = await ufs.listCaptures(yesterdayCaptureDate, 10)
+      if (captureFilenames.length > 0) {
+        const captureResults = await Promise.allSettled(
+          captureFilenames.map((filename) => ufs.readCapture(filename))
+        )
+        const validCaptures = captureResults
+          .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof ufs.readCapture>>> =>
+            r.status === 'fulfilled' && r.value !== null
+          )
+          .map((r) => r.value!)
+
+        if (validCaptures.length > 0) {
+          parts.push(`\n=== YESTERDAY'S CAPTURES (${validCaptures.length}) ===`)
+          for (const capture of validCaptures) {
+            const time = new Date(capture.frontmatter.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+            const mode = capture.frontmatter.input_mode === 'voice' ? ' [voice]' : ''
+            // Strip block tags to prevent prompt injection (documented pattern from M3 review)
+            const sanitized = capture.content.replace(/\[\/?(FILE_UPDATE|DOMAIN_SUMMARY|LIFE_MAP_SYNTHESIS|SESSION_SUMMARY|SUGGESTED_REPLIES|INLINE_CARD|INTENTION_CARD|DAY_PLAN_DATA)[^\]]*\]/g, '')
+            parts.push(`- ${time}${mode}: "${sanitized}"`)
+          }
+        }
+      }
+    } catch {
+      // No yesterday captures — that's fine
+    }
   }
 
   // 8b. Today's day plan (close_day: reference the morning intention)
@@ -239,7 +276,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
 
     if (sessionType === 'close_day') {
       // For close_day: inject yesterday's journal for continuity (skip today's log)
-      const todayStr = new Date().toISOString().split('T')[0]
+      // Reuses todayStr from top of function (local timezone, not UTC)
       const yesterdayLog = logFilenames.find((f) => {
         const dateFromFile = f.replace('-journal.md', '')
         return dateFromFile !== todayStr
