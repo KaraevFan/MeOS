@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
+import { updateCaptureClassification } from '@/lib/supabase/day-plan-queries'
+import type { CaptureClassification } from '@/types/day-plan'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -18,18 +20,34 @@ interface ClassificationResult {
 export async function classifyCapture(
   userId: string,
   captureFilename: string,
-  captureText: string
+  captureText: string,
+  captureId: string | null = null
 ): Promise<void> {
   try {
     const result = await callClassifier(captureText)
     if (!result) return
 
     const supabase = await createClient()
+
+    // Write to markdown frontmatter (primary store)
     const ufs = new UserFileSystem(supabase, userId)
     await ufs.updateCaptureFrontmatter(captureFilename, {
       classification: result.classification,
       auto_tags: result.tags,
     })
+
+    // Write to Postgres captures table (if captureId provided)
+    if (captureId) {
+      await updateCaptureClassification(
+        supabase,
+        captureId,
+        userId,
+        result.classification as CaptureClassification,
+        result.tags
+      ).catch((err) => {
+        console.warn('[classify-capture] Postgres update failed:', err instanceof Error ? err.message : String(err))
+      })
+    }
   } catch (error) {
     // Fire-and-forget: log but don't throw. Capture is already saved.
     console.error('[classify-capture] Classification failed:', error instanceof Error ? error.message : String(error))

@@ -197,11 +197,11 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             title={data.openDayCompleted ? 'Day Plan Set' : hasActiveOpenDay ? 'Morning Session' : 'Open Your Day'}
             sageText={
               data.openDayCompleted && data.todayIntention
-                ? `Your intention: "${data.todayIntention}"`
+                ? `Your intention: "${data.todayIntention}"${data.todayCaptureCount > 0 ? ` \u00B7 ${data.todayCaptureCount} capture${data.todayCaptureCount === 1 ? '' : 's'}` : ''}`
                 : getMorningSageText(data)
             }
             ctaText={data.openDayCompleted ? 'View day plan' : hasActiveOpenDay ? 'Resume morning session' : 'Begin morning session'}
-            ctaHref={data.openDayCompleted ? '/life-map' : hasActiveOpenDay ? activeSessionHref! : '/chat?type=open_day'}
+            ctaHref={data.openDayCompleted ? '/day' : hasActiveOpenDay ? activeSessionHref! : '/chat?type=open_day'}
             contextualLinePayload={data.openDayCompleted ? undefined : morningLinePayload}
           />
           <CaptureBar />

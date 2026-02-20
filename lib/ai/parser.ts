@@ -11,6 +11,7 @@ import type {
   SuggestedRepliesData,
   InlineCardData,
   IntentionCardData,
+  DayPlanDataBlock,
 } from '@/types/chat'
 import { FILE_TYPES } from '@/lib/markdown/constants'
 import type { FileType } from '@/lib/markdown/constants'
@@ -61,6 +62,10 @@ const INLINE_CARD_CLOSE = '[/INLINE_CARD]'
 /** [INTENTION_CARD] block markers */
 const INTENTION_CARD_OPEN = '[INTENTION_CARD]'
 const INTENTION_CARD_CLOSE = '[/INTENTION_CARD]'
+
+/** [DAY_PLAN_DATA] block markers — structured JSON for Postgres writes */
+const DAY_PLAN_DATA_OPEN = '[DAY_PLAN_DATA]'
+const DAY_PLAN_DATA_CLOSE = '[/DAY_PLAN_DATA]'
 
 function parseFileUpdateBlock(openTag: string, body: string): FileUpdateData | null {
   const tagMatch = openTag.match(FILE_UPDATE_TAG_REGEX)
@@ -211,7 +216,7 @@ export function parseMessage(content: string): ParsedMessage {
   while (remaining.length > 0) {
     // Find the earliest opening tag
     let earliestOpen = -1
-    let matchType: 'file_update' | 'reflection_prompt' | 'suggested_replies' | 'inline_card' | 'intention_card' | 'legacy' = 'legacy'
+    let matchType: 'file_update' | 'reflection_prompt' | 'suggested_replies' | 'inline_card' | 'intention_card' | 'day_plan_data' | 'legacy' = 'legacy'
     let matchedLegacyTag: (typeof LEGACY_BLOCK_TAGS)[number] | null = null
     let fileUpdateOpenMatch: RegExpExecArray | null = null
     let inlineCardOpenMatch: RegExpExecArray | null = null
@@ -263,6 +268,16 @@ export function parseMessage(content: string): ParsedMessage {
     if (intentIdx !== -1 && (earliestOpen === -1 || intentIdx < earliestOpen)) {
       earliestOpen = intentIdx
       matchType = 'intention_card'
+      fileUpdateOpenMatch = null
+      matchedLegacyTag = null
+      inlineCardOpenMatch = null
+    }
+
+    // Check for [DAY_PLAN_DATA] tag
+    const dpdIdx = remaining.indexOf(DAY_PLAN_DATA_OPEN)
+    if (dpdIdx !== -1 && (earliestOpen === -1 || dpdIdx < earliestOpen)) {
+      earliestOpen = dpdIdx
+      matchType = 'day_plan_data'
       fileUpdateOpenMatch = null
       matchedLegacyTag = null
       inlineCardOpenMatch = null
@@ -400,6 +415,27 @@ export function parseMessage(content: string): ParsedMessage {
       }
 
       remaining = remaining.slice(closeIndex + INTENTION_CARD_CLOSE.length)
+    } else if (matchType === 'day_plan_data') {
+      // Parse [DAY_PLAN_DATA] block — JSON payload for Postgres writes (not rendered in UI)
+      const closeIndex = remaining.indexOf(DAY_PLAN_DATA_CLOSE, earliestOpen + DAY_PLAN_DATA_OPEN.length)
+      if (closeIndex === -1) {
+        const text = remaining.trim()
+        if (text) segments.push({ type: 'text', content: text })
+        break
+      }
+
+      const textBefore = remaining.slice(0, earliestOpen).trim()
+      if (textBefore) segments.push({ type: 'text', content: textBefore })
+
+      const jsonStr = remaining.slice(earliestOpen + DAY_PLAN_DATA_OPEN.length, closeIndex).trim()
+      try {
+        const data = JSON.parse(jsonStr) as DayPlanDataBlock
+        segments.push({ type: 'block', blockType: 'day_plan_data', data })
+      } catch {
+        console.warn('[Parser] Failed to parse DAY_PLAN_DATA JSON:', jsonStr.slice(0, 100))
+      }
+
+      remaining = remaining.slice(closeIndex + DAY_PLAN_DATA_CLOSE.length)
     } else if (matchType === 'legacy' && matchedLegacyTag) {
       // Parse legacy block
       const closeIndex = remaining.indexOf(matchedLegacyTag.close, earliestOpen + matchedLegacyTag.open.length)
@@ -562,6 +598,32 @@ export function parseStreamingChunk(accumulated: string): {
       displayText: textBefore,
       pendingBlock: false,
       completedBlock: intention ? { type: 'intention_card', data: { intention } } : null,
+    }
+  }
+
+  // Check [DAY_PLAN_DATA] block
+  const dpdOpenIdx = accumulated.indexOf(DAY_PLAN_DATA_OPEN)
+  if (dpdOpenIdx !== -1) {
+    const dpdCloseIdx = accumulated.indexOf(DAY_PLAN_DATA_CLOSE, dpdOpenIdx)
+    if (dpdCloseIdx === -1) {
+      return {
+        displayText: accumulated.slice(0, dpdOpenIdx).trim(),
+        pendingBlock: true,
+        completedBlock: null,
+      }
+    }
+
+    const textBefore = accumulated.slice(0, dpdOpenIdx).trim()
+    const jsonStr = accumulated.slice(dpdOpenIdx + DAY_PLAN_DATA_OPEN.length, dpdCloseIdx).trim()
+    try {
+      const data = JSON.parse(jsonStr) as DayPlanDataBlock
+      return {
+        displayText: textBefore,
+        pendingBlock: false,
+        completedBlock: { type: 'day_plan_data', data },
+      }
+    } catch {
+      // Malformed JSON — skip the block
     }
   }
 

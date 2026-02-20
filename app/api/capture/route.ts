@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { classifyCapture } from '@/lib/ai/classify-capture'
+import { createCapture } from '@/lib/supabase/day-plan-queries'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -10,8 +11,8 @@ const CaptureRequestSchema = z.object({
 })
 
 /**
- * POST /api/capture — Save a quick capture to the user's file system.
- * Quick captures are direct writes, not chat sessions.
+ * POST /api/capture — Save a quick capture to both markdown Storage and Postgres.
+ * Dual-write: markdown for Sage context, Postgres for Day Plan queryability.
  */
 export async function POST(request: Request) {
   try {
@@ -33,16 +34,30 @@ export async function POST(request: Request) {
     // HHmmss format — safe for filenames (no colons)
     const timestamp = now.toTimeString().slice(0, 8).replace(/:/g, '')
 
+    // Write 1: Markdown file (existing pipeline — for Sage context)
     const ufs = new UserFileSystem(supabase, user.id)
     const filename = await ufs.writeCapture(date, timestamp, text, {
       input_mode: inputMode,
       timestamp: now.toISOString(),
     })
 
-    // Fire-and-forget: classify capture asynchronously
-    classifyCapture(user.id, filename, text).catch(() => {})
+    // Write 2: Postgres captures table (new — for Day Plan queryability)
+    let captureId: string | null = null
+    try {
+      const captureRow = await createCapture(supabase, user.id, {
+        content: text,
+        source: 'manual',
+      })
+      captureId = captureRow.id
+    } catch (err) {
+      // Non-fatal: markdown write succeeded, Postgres is supplementary
+      console.error('[capture] Postgres write failed:', err)
+    }
 
-    return NextResponse.json({ filename, path: `captures/${filename}` })
+    // Fire-and-forget: classify capture asynchronously (updates both markdown + Postgres)
+    classifyCapture(user.id, filename, text, captureId).catch(() => {})
+
+    return NextResponse.json({ filename, path: `captures/${filename}`, captureId })
   } catch (error) {
     console.error('[capture] Error:', error)
     return NextResponse.json({ error: 'Failed to save capture' }, { status: 500 })

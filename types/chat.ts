@@ -89,6 +89,14 @@ export interface IntentionCardData {
   intention: string
 }
 
+/** Structured day plan data emitted by Sage at end of morning session (parsed from [DAY_PLAN_DATA] blocks) */
+export interface DayPlanDataBlock {
+  energy_level?: 'fired_up' | 'focused' | 'neutral' | 'low' | 'stressed'
+  intention?: string
+  priorities?: { rank: number; text: string; completed: boolean }[]
+  open_threads?: { text: string; source_session_type?: string; source_date?: string; provenance_label?: string; status: 'open' | 'resolved' }[]
+}
+
 export type StructuredBlock =
   | { type: 'domain_summary'; data: DomainSummary }
   | { type: 'life_map_synthesis'; data: LifeMapSynthesis }
@@ -98,6 +106,7 @@ export type StructuredBlock =
   | { type: 'suggested_replies'; data: SuggestedRepliesData }
   | { type: 'inline_card'; data: InlineCardData }
   | { type: 'intention_card'; data: IntentionCardData }
+  | { type: 'day_plan_data'; data: DayPlanDataBlock }
 
 export type ParsedSegment =
   | { type: 'text'; content: string }
@@ -109,6 +118,7 @@ export type ParsedSegment =
   | { type: 'block'; blockType: 'suggested_replies'; data: SuggestedRepliesData }
   | { type: 'block'; blockType: 'inline_card'; data: InlineCardData }
   | { type: 'block'; blockType: 'intention_card'; data: IntentionCardData }
+  | { type: 'block'; blockType: 'day_plan_data'; data: DayPlanDataBlock }
 
 export interface ParsedMessage {
   segments: ParsedSegment[]
