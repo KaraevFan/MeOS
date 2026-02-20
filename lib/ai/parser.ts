@@ -15,6 +15,25 @@ import type {
 } from '@/types/chat'
 import { FILE_TYPES } from '@/lib/markdown/constants'
 import type { FileType } from '@/lib/markdown/constants'
+import { z } from 'zod'
+
+/** Zod schema for runtime validation of AI-generated [DAY_PLAN_DATA] JSON */
+const DayPlanDataSchema = z.object({
+  energy_level: z.enum(['fired_up', 'focused', 'neutral', 'low', 'stressed']).optional(),
+  intention: z.string().optional(),
+  priorities: z.array(z.object({
+    rank: z.number(),
+    text: z.string(),
+    completed: z.boolean(),
+  })).optional(),
+  open_threads: z.array(z.object({
+    text: z.string(),
+    source_session_type: z.string().optional(),
+    source_date: z.string().optional(),
+    provenance_label: z.string().optional(),
+    status: z.enum(['open', 'resolved']),
+  })).optional(),
+})
 
 const VALID_FILE_TYPES: Set<string> = new Set(Object.values(FILE_TYPES))
 const VALID_STATUSES: DomainStatus[] = ['thriving', 'stable', 'needs_attention', 'in_crisis']
@@ -429,8 +448,13 @@ export function parseMessage(content: string): ParsedMessage {
 
       const jsonStr = remaining.slice(earliestOpen + DAY_PLAN_DATA_OPEN.length, closeIndex).trim()
       try {
-        const data = JSON.parse(jsonStr) as DayPlanDataBlock
-        segments.push({ type: 'block', blockType: 'day_plan_data', data })
+        const raw = JSON.parse(jsonStr)
+        const result = DayPlanDataSchema.safeParse(raw)
+        if (result.success) {
+          segments.push({ type: 'block', blockType: 'day_plan_data', data: result.data as DayPlanDataBlock })
+        } else {
+          console.warn('[Parser] DAY_PLAN_DATA failed validation:', result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '))
+        }
       } catch {
         console.warn('[Parser] Failed to parse DAY_PLAN_DATA JSON:', jsonStr.slice(0, 100))
       }
@@ -616,11 +640,16 @@ export function parseStreamingChunk(accumulated: string): {
     const textBefore = accumulated.slice(0, dpdOpenIdx).trim()
     const jsonStr = accumulated.slice(dpdOpenIdx + DAY_PLAN_DATA_OPEN.length, dpdCloseIdx).trim()
     try {
-      const data = JSON.parse(jsonStr) as DayPlanDataBlock
-      return {
-        displayText: textBefore,
-        pendingBlock: false,
-        completedBlock: { type: 'day_plan_data', data },
+      const raw = JSON.parse(jsonStr)
+      const result = DayPlanDataSchema.safeParse(raw)
+      if (result.success) {
+        return {
+          displayText: textBefore,
+          pendingBlock: false,
+          completedBlock: { type: 'day_plan_data', data: result.data as DayPlanDataBlock },
+        }
+      } else {
+        console.warn('[Parser] Streaming DAY_PLAN_DATA failed validation:', result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '))
       }
     } catch {
       // Malformed JSON — skip the block

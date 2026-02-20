@@ -3,8 +3,6 @@ import type {
   DayPlan,
   Capture,
   DayPlanWithCaptures,
-  Priority,
-  OpenThread,
   CaptureClassification,
   CaptureSource,
 } from '@/types/day-plan'
@@ -216,6 +214,7 @@ export async function toggleCaptureCompleted(
 
 /**
  * Toggle a priority's completed state in the day_plans.priorities JSONB.
+ * Uses an atomic Postgres RPC to avoid read-modify-write race conditions.
  */
 export async function togglePriorityCompleted(
   supabase: SupabaseClient,
@@ -223,25 +222,22 @@ export async function togglePriorityCompleted(
   date: string,
   rank: number
 ): Promise<boolean> {
-  const dayPlan = await getDayPlan(supabase, userId, date)
-  if (!dayPlan) return false
+  const { data, error } = await supabase.rpc('toggle_priority_completed', {
+    p_user_id: userId,
+    p_date: date,
+    p_rank: rank,
+  })
 
-  const priorities = (dayPlan.priorities ?? []) as Priority[]
-  const updated = priorities.map((p) =>
-    p.rank === rank ? { ...p, completed: !p.completed } : p
-  )
-
-  const { error } = await supabase
-    .from('day_plans')
-    .update({ priorities: updated, updated_at: new Date().toISOString() })
-    .eq('id', dayPlan.id)
-    .eq('user_id', userId)
-
-  return !error
+  if (error) {
+    console.error('[togglePriorityCompleted] RPC error:', error.message)
+    return false
+  }
+  return data === true
 }
 
 /**
  * Resolve an open thread in the day_plans.open_threads JSONB.
+ * Uses an atomic Postgres RPC to avoid read-modify-write race conditions.
  */
 export async function resolveThread(
   supabase: SupabaseClient,
@@ -249,23 +245,17 @@ export async function resolveThread(
   date: string,
   threadText: string
 ): Promise<boolean> {
-  const dayPlan = await getDayPlan(supabase, userId, date)
-  if (!dayPlan) return false
+  const { data, error } = await supabase.rpc('resolve_open_thread', {
+    p_user_id: userId,
+    p_date: date,
+    p_thread_text: threadText,
+  })
 
-  const threads = (dayPlan.open_threads ?? []) as OpenThread[]
-  const updated = threads.map((t) =>
-    t.text === threadText
-      ? { ...t, status: 'resolved' as const, resolved_at: new Date().toISOString() }
-      : t
-  )
-
-  const { error } = await supabase
-    .from('day_plans')
-    .update({ open_threads: updated, updated_at: new Date().toISOString() })
-    .eq('id', dayPlan.id)
-    .eq('user_id', userId)
-
-  return !error
+  if (error) {
+    console.error('[resolveThread] RPC error:', error.message)
+    return false
+  }
+  return data === true
 }
 
 /**
