@@ -10,6 +10,7 @@ import { CaptureBar } from './capture-bar'
 import { AmbientCard } from './ambient-card'
 import { ActiveSessionCard } from './active-session-card'
 import { CalendarCard } from './calendar-card'
+import { CalendarConnectCard } from './calendar-connect-card'
 import { YesterdayIntentionCard } from './yesterday-intention-card'
 import { CheckinCard } from './checkin-card'
 import { BreadcrumbsCard } from './breadcrumbs-card'
@@ -32,6 +33,7 @@ export interface HomeScreenData {
   yesterdayIntention: string | null
   calendarEvents: CalendarEvent[]
   calendarSummary: string | null
+  hasCalendarIntegration: boolean
   activeSessionId: string | null
   activeSessionType: SessionType | null
   checkinResponse: 'yes' | 'not-yet' | 'snooze' | null
@@ -139,9 +141,11 @@ function CheckinDueCard() {
 
 export function HomeScreen({ data }: { data: HomeScreenData }) {
   const [timeState, setTimeState] = useState<TimeState>('morning')
+  const [calendarToast, setCalendarToast] = useState<string | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const captureAutoExpand = searchParams.get('capture') === '1'
+  const calendarStatus = searchParams.get('calendar')
 
   const handleReflectionTap = useCallback((prompt: string) => {
     router.push(`/chat?mode=reflection&prompt=${encodeURIComponent(prompt)}`)
@@ -150,6 +154,27 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
   useEffect(() => {
     setTimeState(detectTimeState())
   }, [])
+
+  // Show calendar connection feedback toast
+  useEffect(() => {
+    if (calendarStatus === 'connected') {
+      setCalendarToast('Calendar connected')
+      // Clean up URL
+      const url = new URL(window.location.href)
+      url.searchParams.delete('calendar')
+      window.history.replaceState({}, '', url.pathname)
+      const timer = setTimeout(() => setCalendarToast(null), 3000)
+      return () => clearTimeout(timer)
+    }
+    if (calendarStatus === 'error') {
+      setCalendarToast('Could not connect calendar')
+      const url = new URL(window.location.href)
+      url.searchParams.delete('calendar')
+      window.history.replaceState({}, '', url.pathname)
+      const timer = setTimeout(() => setCalendarToast(null), 4000)
+      return () => clearTimeout(timer)
+    }
+  }, [calendarStatus])
 
   // Stable payload for LLM contextual line — only for morning/evening with data
   const morningLinePayload = useMemo(() => {
@@ -180,6 +205,13 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
 
   return (
     <div className="pb-28">
+      {/* Calendar connection toast */}
+      {calendarToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] px-4 py-2.5 bg-warm-dark text-white text-sm font-medium rounded-xl shadow-md animate-fade-in-up">
+          {calendarToast}
+        </div>
+      )}
+
       <Greeting timeState={timeState} displayName={data.displayName} />
       <SessionChips activeState={timeState} />
 
@@ -225,13 +257,15 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             </InfoCard>
           )}
 
-          {/* Calendar — conditional on integration */}
-          {data.calendarSummary && (
+          {/* Calendar — show events if connected, or nudge to connect */}
+          {data.calendarSummary ? (
             <CalendarCard
               summary={data.calendarSummary}
               events={data.calendarEvents}
             />
-          )}
+          ) : !data.hasCalendarIntegration ? (
+            <CalendarConnectCard />
+          ) : null}
 
           {/* Yesterday's Intention — conditional on day plan data */}
           {data.yesterdayIntention && (

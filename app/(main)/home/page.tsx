@@ -48,6 +48,7 @@ export default async function HomePage() {
           yesterdayIntention: homeData.yesterdayIntention,
           calendarEvents: homeData.calendarEvents,
           calendarSummary: homeData.calendarSummary,
+          hasCalendarIntegration: homeData.hasCalendarIntegration,
           activeSessionId: homeData.activeSessionId,
           activeSessionType: homeData.activeSessionType,
           checkinResponse: homeData.checkinResponse,
