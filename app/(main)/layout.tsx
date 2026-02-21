@@ -4,6 +4,7 @@ import { BottomTabBar } from '@/components/ui/bottom-tab-bar'
 import { AppHeader } from '@/components/ui/app-header'
 import { ActivityTracker } from '@/components/activity-tracker'
 import { ActiveSessionProvider } from '@/components/providers/active-session-provider'
+import { TimezoneSync } from '@/components/timezone-sync'
 import { getDisplayName } from '@/lib/utils'
 
 export default async function MainLayout({
@@ -44,6 +45,7 @@ export default async function MainLayout({
 
   return (
     <ActiveSessionProvider initialValue={hasActiveSession}>
+      <TimezoneSync />
       <div className="mx-auto max-w-[430px] min-h-[100dvh] bg-bg relative shadow-[0_0_60px_rgba(0,0,0,0.07)]">
         <ActivityTracker />
         <AppHeader email={email} displayName={displayName} />

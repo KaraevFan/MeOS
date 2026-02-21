@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
+import { getUserTimezone } from '@/lib/get-user-timezone'
+import { getLocalDateString } from '@/lib/dates'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -27,8 +29,9 @@ export async function POST(request: Request) {
     }
 
     const { response } = parsed.data
+    const tz = await getUserTimezone(supabase, user.id)
     const ufs = new UserFileSystem(supabase, user.id)
-    const todayStr = new Date().toLocaleDateString('en-CA')
+    const todayStr = getLocalDateString(tz)
 
     // Read today's day plan to update frontmatter
     const dayPlan = await ufs.readDayPlan(todayStr)
@@ -47,7 +50,8 @@ export async function POST(request: Request) {
         ? `On track with: ${intention}`
         : `Not on track with: ${intention}`
       const now = new Date()
-      const timestamp = now.toTimeString().slice(0, 8).replace(/:/g, '')
+      const timeParts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(now)
+      const timestamp = timeParts.filter((p) => p.type !== 'literal').map((p) => p.value).join('')
       await ufs.writeCapture(todayStr, timestamp, captureText, {
         input_mode: 'text' as const,
         timestamp: now.toISOString(),

@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import { getLocalHour } from '@/lib/dates'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -31,16 +32,11 @@ export function addDaysIso(from: Date | string, days: number): string {
 }
 
 /** Time-of-day greeting string (used by home screen and briefing card). */
-export function getTimeGreeting(): string {
-  const hour = new Date().getHours()
+export function getTimeGreeting(timezone?: string): string {
+  const hour = timezone ? getLocalHour(timezone) : new Date().getHours()
   if (hour < 12) return 'Good morning'
   if (hour < 17) return 'Good afternoon'
   return 'Good evening'
-}
-
-/** Today's date as YYYY-MM-DD in local time (avoids toLocaleDateString locale quirks). */
-export function todayLocalDate(): string {
-  return new Date().toLocaleDateString('en-CA')
 }
 
 /** Day-diff based on local calendar days for user-facing labels like "Tomorrow". */

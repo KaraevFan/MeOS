@@ -1,24 +1,27 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getLocalDateString, getLocalMidnight, getHourInTimezone } from '@/lib/dates'
 
 /**
- * Schedule a mid-day nudge notification for 2pm local time.
+ * Schedule a mid-day nudge notification for 2pm in the user's timezone.
  * Fire-and-forget — failures are logged, not thrown to the caller.
  * Only schedules if 2pm is still in the future today.
  */
 export async function scheduleMidDayNudge(
   supabase: SupabaseClient,
   userId: string,
-  intention: string
+  intention: string,
+  timezone: string = 'UTC'
 ): Promise<void> {
   const now = new Date()
-  const todayStr = now.toLocaleDateString('en-CA')
+  const todayStr = getLocalDateString(timezone)
 
-  // Compute 2pm local time today
-  const nudgeTime = new Date(now)
-  nudgeTime.setHours(14, 0, 0, 0)
+  // Don't schedule if 2pm has already passed in user's timezone
+  if (getHourInTimezone(now, timezone) >= 14) return
 
-  // Don't schedule if 2pm has already passed
-  if (nudgeTime <= now) return
+  // Compute 2pm in user's timezone by parsing the midnight offset
+  const midnightStr = getLocalMidnight(todayStr, timezone) // e.g. "2026-02-21T00:00:00+09:00"
+  const nudgeTime = new Date(midnightStr)
+  nudgeTime.setTime(nudgeTime.getTime() + 14 * 60 * 60 * 1000) // Add 14 hours to midnight
 
   // Check if a midday_nudge is already scheduled for today (prevent duplicates)
   const { data: existing } = await supabase
@@ -26,7 +29,7 @@ export async function scheduleMidDayNudge(
     .select('id')
     .eq('user_id', userId)
     .eq('notification_type', 'midday_nudge')
-    .gte('scheduled_for', `${todayStr}T00:00:00`)
+    .gte('scheduled_for', midnightStr)
     .is('cancelled_at', null)
     .limit(1)
     .maybeSingle()

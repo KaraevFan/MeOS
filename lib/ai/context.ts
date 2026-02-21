@@ -5,6 +5,7 @@ import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { getCalendarEvents } from '@/lib/calendar/google-calendar'
+import { getLocalDateString, getLocalDayOfWeek, getYesterdayDateString, getLocalMidnight, formatTimeInTimezone } from '@/lib/dates'
 import type { SessionType, DomainName } from '@/types/chat'
 
 /**
@@ -20,16 +21,15 @@ import type { SessionType, DomainName } from '@/types/chat'
  * 6. Flagged domain files (needs_attention / in_crisis only)
  * 7. Active patterns
  */
-async function fetchAndInjectFileContext(userId: string, exploreDomain?: string, sessionType?: SessionType): Promise<string | null> {
+async function fetchAndInjectFileContext(userId: string, exploreDomain?: string, sessionType?: SessionType, timezone: string = 'UTC'): Promise<string | null> {
   const supabase = await createClient()
   const ufs = new UserFileSystem(supabase, userId)
 
   const parts: string[] = ["=== USER'S LIFE CONTEXT ==="]
 
   // Inject today's date for temporal grounding (all session types)
-  const today = new Date()
-  const todayStr = today.toLocaleDateString('en-CA')
-  const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' })
+  const todayStr = getLocalDateString(timezone)
+  const dayOfWeek = getLocalDayOfWeek(timezone)
   parts.push(`\nTODAY: ${dayOfWeek}, ${todayStr}`)
 
   // Read all context sources in parallel
@@ -151,13 +151,12 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
   // 8. Calendar events (open_day only)
   if (sessionType === 'open_day') {
     try {
-      const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD in local time
-      const events = await getCalendarEvents(userId, today)
+      const events = await getCalendarEvents(userId, todayStr, timezone)
       if (events.length > 0) {
         parts.push('\nTODAY\'S CALENDAR:')
         for (const event of events) {
-          const start = event.allDay ? 'All day' : new Date(event.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-          const end = event.allDay ? '' : ` – ${new Date(event.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+          const start = event.allDay ? 'All day' : formatTimeInTimezone(event.startTime, timezone)
+          const end = event.allDay ? '' : ` – ${formatTimeInTimezone(event.endTime, timezone)}`
           parts.push(`- ${start}${end}  ${event.title}`)
         }
       }
@@ -167,9 +166,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
 
     // Yesterday's day plan + journal cross-reference (for carry-forward)
     try {
-      const yesterday = new Date()
-      yesterday.setDate(yesterday.getDate() - 1)
-      const yesterdayStr = yesterday.toLocaleDateString('en-CA')
+      const yesterdayStr = getYesterdayDateString(timezone)
       const [yesterdayDayPlan, yesterdayLog] = await Promise.all([
         ufs.readDayPlan(yesterdayStr).catch(() => null),
         ufs.readDailyLog(yesterdayStr).catch(() => null),
@@ -192,9 +189,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
 
     // Yesterday's captures for the morning briefing (carry-forward)
     try {
-      const yesterdayForCaptures = new Date()
-      yesterdayForCaptures.setDate(yesterdayForCaptures.getDate() - 1)
-      const yesterdayCaptureDate = yesterdayForCaptures.toLocaleDateString('en-CA')
+      const yesterdayCaptureDate = getYesterdayDateString(timezone)
       const captureFilenames = await ufs.listCaptures(yesterdayCaptureDate, 10)
       if (captureFilenames.length > 0) {
         const captureResults = await Promise.allSettled(
@@ -209,7 +204,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
         if (validCaptures.length > 0) {
           parts.push(`\n=== YESTERDAY'S CAPTURES (${validCaptures.length}) ===`)
           for (const capture of validCaptures) {
-            const time = new Date(capture.frontmatter.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+            const time = formatTimeInTimezone(capture.frontmatter.timestamp, timezone)
             const mode = capture.frontmatter.input_mode === 'voice' ? ' [voice]' : ''
             // Strip block tags to prevent prompt injection (documented pattern from M3 review)
             const sanitized = capture.content.replace(/\[\/?(FILE_UPDATE|DOMAIN_SUMMARY|LIFE_MAP_SYNTHESIS|SESSION_SUMMARY|SUGGESTED_REPLIES|INLINE_CARD|INTENTION_CARD|DAY_PLAN_DATA)[^\]]*\]/g, '')
@@ -225,7 +220,6 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
   // 8b. Today's day plan (close_day: reference the morning intention)
   if (sessionType === 'close_day') {
     try {
-      const todayStr = new Date().toLocaleDateString('en-CA')
       const todayDayPlan = await ufs.readDayPlan(todayStr)
       if (todayDayPlan) {
         parts.push(`\n=== TODAY'S DAY PLAN (${todayStr}) ===`)
@@ -242,7 +236,6 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
   // 8b2. Today's captures (close_day: fold into evening synthesis)
   if (sessionType === 'close_day') {
     try {
-      const todayStr = new Date().toLocaleDateString('en-CA')
       const captureFilenames = await ufs.listCaptures(todayStr, 10) // max 10 for token budget
       if (captureFilenames.length > 0) {
         const captureResults = await Promise.allSettled(
@@ -257,7 +250,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
         if (validCaptures.length > 0) {
           parts.push(`\n=== TODAY'S QUICK CAPTURES (${validCaptures.length} shown) ===`)
           for (const capture of validCaptures) {
-            const time = new Date(capture.frontmatter.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+            const time = formatTimeInTimezone(capture.frontmatter.timestamp, timezone)
             const mode = capture.frontmatter.input_mode === 'voice' ? ' [voice]' : ''
             // Strip block tags to prevent prompt injection from user content
             const sanitized = capture.content.replace(/\[\/?(FILE_UPDATE|DOMAIN_SUMMARY|LIFE_MAP_SYNTHESIS|SESSION_SUMMARY|SUGGESTED_REPLIES|INLINE_CARD|INTENTION_CARD)[^\]]*\]/g, '')
@@ -340,16 +333,17 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
  * before building close_day context, separated from prompt building to
  * keep buildConversationContext free of write side-effects.
  */
-export async function expireStaleOpenDaySessions(userId: string): Promise<void> {
+export async function expireStaleOpenDaySessions(userId: string, timezone: string = 'UTC'): Promise<void> {
   const supabase = await createClient()
-  const todayStr = new Date().toLocaleDateString('en-CA')
+  const todayStr = getLocalDateString(timezone)
+  const todayStart = getLocalMidnight(todayStr, timezone)
   await supabase
     .from('sessions')
     .update({ status: 'expired' })
     .eq('user_id', userId)
     .eq('session_type', 'open_day')
     .eq('status', 'active')
-    .lt('created_at', `${todayStr}T23:59:59Z`)
+    .lt('created_at', todayStart)
 }
 
 /**
@@ -363,7 +357,7 @@ export async function expireStaleOpenDaySessions(userId: string): Promise<void> 
 export async function buildConversationContext(
   sessionType: SessionType,
   userId: string,
-  options?: { exploreDomain?: string }
+  options?: { exploreDomain?: string; timezone?: string }
 ): Promise<string> {
   // Try skill file first, fall back to prompts.ts
   const skill = loadSkill(sessionType)
@@ -374,7 +368,7 @@ export async function buildConversationContext(
   } else if (sessionType === 'life_mapping') {
     basePrompt = getLifeMappingPrompt()
   } else if (sessionType === 'close_day') {
-    basePrompt = getCloseDayPrompt()
+    basePrompt = getCloseDayPrompt(options?.timezone)
   } else if (sessionType === 'open_day') {
     // Shouldn't reach here if skill file exists, but safety fallback
     basePrompt = 'You are Sage, conducting a morning "Open the Day" session. Help the user commit to one clear intention for the day.'
@@ -390,7 +384,7 @@ export async function buildConversationContext(
     basePrompt += SUGGESTED_REPLIES_FORMAT
   }
 
-  const fileContext = await fetchAndInjectFileContext(userId, options?.exploreDomain, sessionType)
+  const fileContext = await fetchAndInjectFileContext(userId, options?.exploreDomain, sessionType, options?.timezone)
 
   if (!fileContext) {
     return basePrompt // New user, no context to inject

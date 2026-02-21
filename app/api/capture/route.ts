@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { classifyCapture } from '@/lib/ai/classify-capture'
 import { createCapture } from '@/lib/supabase/day-plan-queries'
+import { getUserTimezone } from '@/lib/get-user-timezone'
+import { getLocalDateString } from '@/lib/dates'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -29,10 +31,12 @@ export async function POST(request: Request) {
     }
 
     const { text, inputMode } = parsed.data
+    const tz = await getUserTimezone(supabase, user.id)
     const now = new Date()
-    const date = now.toLocaleDateString('en-CA') // YYYY-MM-DD in local time
+    const date = getLocalDateString(tz)
     // HHmmss format — safe for filenames (no colons)
-    const timestamp = now.toTimeString().slice(0, 8).replace(/:/g, '')
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(now)
+    const timestamp = parts.filter((p) => p.type !== 'literal').map((p) => p.value).join('')
 
     // Write 1: Markdown file (existing pipeline — for Sage context)
     const ufs = new UserFileSystem(supabase, user.id)
@@ -47,7 +51,7 @@ export async function POST(request: Request) {
       const captureRow = await createCapture(supabase, user.id, {
         content: text,
         source: 'manual',
-      })
+      }, tz)
       captureId = captureRow.id
     } catch (err) {
       // Non-fatal: markdown write succeeded, Postgres is supplementary

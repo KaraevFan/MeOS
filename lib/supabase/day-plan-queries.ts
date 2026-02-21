@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getLocalDateString, getYesterdayDateString, getLocalMidnight, getLocalEndOfDay } from '@/lib/dates'
 import type {
   DayPlan,
   Capture,
@@ -13,9 +14,10 @@ import type {
  */
 export async function getOrCreateTodayDayPlan(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  timezone: string = 'UTC'
 ): Promise<DayPlan> {
-  const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local time
+  const today = getLocalDateString(timezone)
 
   // Try to fetch first (avoids unnecessary writes)
   const { data: existing } = await supabase
@@ -90,14 +92,15 @@ export async function updateDayPlan(
 export async function getDayPlanWithCaptures(
   supabase: SupabaseClient,
   userId: string,
-  date: string
+  date: string,
+  timezone: string = 'UTC'
 ): Promise<DayPlanWithCaptures> {
-  const today = date || new Date().toLocaleDateString('en-CA')
+  const today = date || getLocalDateString(timezone)
 
   const [dayPlanResult, capturesResult, streakCount] = await Promise.all([
     getDayPlan(supabase, userId, today),
-    getCapturesForDate(supabase, userId, today),
-    getStreak(supabase, userId),
+    getCapturesForDate(supabase, userId, today, timezone),
+    getStreak(supabase, userId, timezone),
   ])
 
   return {
@@ -113,8 +116,12 @@ export async function getDayPlanWithCaptures(
 export async function getCapturesForDate(
   supabase: SupabaseClient,
   userId: string,
-  date: string
+  date: string,
+  timezone: string = 'UTC'
 ): Promise<Capture[]> {
+  const dayStart = getLocalMidnight(date, timezone)
+  const dayEnd = getLocalEndOfDay(date, timezone)
+
   // First try via day_plan_id
   const dayPlan = await getDayPlan(supabase, userId, date)
 
@@ -131,8 +138,8 @@ export async function getCapturesForDate(
       .select('*')
       .eq('user_id', userId)
       .is('day_plan_id', null)
-      .gte('created_at', `${date}T00:00:00`)
-      .lt('created_at', `${date}T23:59:59.999`)
+      .gte('created_at', dayStart)
+      .lt('created_at', dayEnd)
       .order('created_at', { ascending: true })
 
     return [...(data ?? []), ...(orphans ?? [])] as Capture[]
@@ -143,8 +150,8 @@ export async function getCapturesForDate(
     .from('captures')
     .select('*')
     .eq('user_id', userId)
-    .gte('created_at', `${date}T00:00:00`)
-    .lt('created_at', `${date}T23:59:59.999`)
+    .gte('created_at', dayStart)
+    .lt('created_at', dayEnd)
     .order('created_at', { ascending: true })
 
   return (data ?? []) as Capture[]
@@ -161,9 +168,10 @@ export async function createCapture(
     source?: CaptureSource
     classification?: CaptureClassification
     auto_tags?: string[]
-  }
+  },
+  timezone: string = 'UTC'
 ): Promise<Capture> {
-  const today = new Date().toLocaleDateString('en-CA')
+  const today = getLocalDateString(timezone)
 
   // Link to today's day plan if it exists
   const dayPlan = await getDayPlan(supabase, userId, today)
@@ -264,7 +272,8 @@ export async function resolveThread(
  */
 export async function getStreak(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  timezone: string = 'UTC'
 ): Promise<number> {
   // Fetch recent day plans with morning_completed_at, ordered by date descending
   const { data } = await supabase
@@ -278,15 +287,13 @@ export async function getStreak(
   if (!data || data.length === 0) return 0
 
   // Check if today is in the list
-  const today = new Date().toLocaleDateString('en-CA')
+  const today = getLocalDateString(timezone)
   const dates = data.map((d) => d.date as string)
 
   // Start counting from today (or yesterday if today's session hasn't happened yet)
   let startDate = today
   if (!dates.includes(today)) {
-    const yesterday = new Date()
-    yesterday.setDate(yesterday.getDate() - 1)
-    startDate = yesterday.toLocaleDateString('en-CA')
+    startDate = getYesterdayDateString(timezone)
     if (!dates.includes(startDate)) return 0
   }
 
@@ -295,6 +302,7 @@ export async function getStreak(
   const checkDate = new Date(startDate + 'T12:00:00') // Noon to avoid DST issues
 
   while (streak < dates.length) {
+    // eslint-disable-next-line no-restricted-syntax -- Formatting an absolute Date, not computing "today"
     const dateStr = checkDate.toLocaleDateString('en-CA')
     if (!dates.includes(dateStr)) break
     streak++

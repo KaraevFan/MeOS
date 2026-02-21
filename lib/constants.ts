@@ -25,5 +25,8 @@ export const DOMAIN_SHORT_NAMES: Record<DomainName, string> = {
 
 export const SESSION_STALE_HOURS = 24
 
+/** Cookie name for user timezone — shared between server (get-user-timezone.ts) and client (timezone-sync.tsx). */
+export const TIMEZONE_COOKIE_NAME = 'user_timezone'
+
 /** Tab bar height in pixels — used by BottomTabBar (h-[84px]) and ChatContainer (bottom offset) */
 export const TAB_BAR_HEIGHT_PX = 84

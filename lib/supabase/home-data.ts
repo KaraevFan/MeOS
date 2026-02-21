@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { diffLocalCalendarDays, getDisplayName, getTimeGreeting } from '@/lib/utils'
+import { getLocalDateString, getYesterdayDateString, getLocalMidnight, getHourInTimezone, formatTimeInTimezone } from '@/lib/dates'
 import { getCalendarEvents } from '@/lib/calendar/google-calendar'
 import type { CalendarEvent } from '@/lib/calendar/types'
 import type { SessionType } from '@/types/chat'
@@ -27,7 +28,8 @@ export interface HomeData {
 
 export async function getHomeData(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  timezone: string = 'UTC',
 ): Promise<HomeData> {
   // Get user profile
   const { data: user } = await supabase
@@ -68,11 +70,8 @@ export async function getHomeData(
   if (onboardingCompleted) {
     const ufs = new UserFileSystem(supabase, userId)
 
-    const todayStr = new Date().toISOString().split('T')[0]
-    // DST-safe yesterday: subtract 1 calendar day via Date methods
-    const yesterdayDate = new Date()
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1)
-    const yesterday = yesterdayDate.toISOString().split('T')[0]
+    const todayStr = getLocalDateString(timezone)
+    const yesterday = getYesterdayDateString(timezone)
 
     const [
       activeSessionResult,
@@ -99,7 +98,7 @@ export async function getHomeData(
         .eq('user_id', userId)
         .eq('session_type', 'close_day')
         .eq('status', 'completed')
-        .gte('completed_at', `${todayStr}T00:00:00`)
+        .gte('completed_at', getLocalMidnight(todayStr, timezone))
         .limit(1)
         .maybeSingle(),
       supabase
@@ -108,13 +107,13 @@ export async function getHomeData(
         .eq('user_id', userId)
         .eq('session_type', 'open_day')
         .eq('status', 'completed')
-        .gte('completed_at', `${todayStr}T00:00:00`)
+        .gte('completed_at', getLocalMidnight(todayStr, timezone))
         .limit(1)
         .maybeSingle(),
       ufs.readDailyLog(yesterday),
       ufs.readDayPlan(todayStr),
       ufs.readDayPlan(yesterday),
-      getCalendarEvents(userId, todayStr),
+      getCalendarEvents(userId, todayStr, timezone),
       ufs.listCaptures(todayStr),
     ])
 
@@ -164,9 +163,9 @@ export async function getHomeData(
         const firstEvent = calendarEvents[0]
         const firstTime = firstEvent.allDay
           ? 'all day'
-          : new Date(firstEvent.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+          : formatTimeInTimezone(firstEvent.startTime, timezone)
         const afternoon = calendarEvents.filter((e) => {
-          const h = new Date(e.startTime).getHours()
+          const h = getHourInTimezone(e.startTime, timezone)
           return h >= 12
         })
         calendarSummary = `${calendarEvents.length} meeting${calendarEvents.length === 1 ? '' : 's'} today · First at ${firstTime}${afternoon.length === 0 ? ' · Afternoon clear' : ''}`
@@ -190,7 +189,7 @@ export async function getHomeData(
   }
 
   return {
-    greeting: getTimeGreeting(),
+    greeting: getTimeGreeting(timezone),
     firstName,
     onboardingCompleted,
     nextCheckinDate,

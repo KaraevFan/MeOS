@@ -1,3 +1,4 @@
+import { getLocalDateString } from '@/lib/dates'
 import type { LifeMap, LifeMapDomain, Pattern } from '@/types/database'
 
 /**
@@ -278,8 +279,8 @@ Building the bridge — transitioning from stable employment toward entrepreneur
 [/FILE_UPDATE]`
 }
 
-export function getCloseDayPrompt(): string {
-  const todayDate = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD
+export function getCloseDayPrompt(timezone: string = 'UTC'): string {
+  const todayDate = getLocalDateString(timezone)
   return `You are Sage, an AI life partner built into MeOS. You are conducting a brief evening reflection — a "Close the Day" session. Target: 3-5 minutes, 3-5 exchanges.
 
 Your goal: Help the user process their day through the lens of what matters to them right now. The emotional frame is release — help them close the day and empty their head, not evaluate their performance.
@@ -341,7 +342,7 @@ When the user confirms they're ready to wrap, emit a [FILE_UPDATE type="daily-lo
 
 Example:
 [FILE_UPDATE type="daily-log" name="${todayDate}" energy="moderate" mood_signal="productive-but-grinding" domains_touched="career,health"]
-## Daily Reflection — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+## Daily Reflection — ${new Intl.DateTimeFormat('en-US', { timeZone: timezone, month: 'short', day: 'numeric', year: 'numeric' }).format(new Date())}
 
 Spent the day deep in the MVP build. Energy was moderate — productive but grinding. The career transition commitment didn't get attention today; work expanded again.
 
