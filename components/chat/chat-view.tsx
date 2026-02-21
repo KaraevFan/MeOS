@@ -851,7 +851,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
           // Fire writes asynchronously — don't block the UI
           const writeSessionType = (sessionType === 'ad_hoc' && exploreDomain) ? 'ad_hoc_explore' : sessionType
-          handleAllFileUpdates(ufs, updates, writeSessionType).then((results) => {
+          const fileWriteTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+          handleAllFileUpdates(ufs, updates, writeSessionType, fileWriteTimezone).then((results) => {
             for (const r of results) {
               if (!r.success) {
                 console.error(`[ChatView] File write failed: ${r.path} — ${r.error}`)
@@ -960,7 +961,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               const dayPlanUpdate = updates.find((u) => u.fileType === 'day-plan')
               const intention = dayPlanUpdate?.attributes?.intention ?? null
               if (intention) {
-                scheduleMidDayNudge(supabase, userId, intention).catch(() => {
+                scheduleMidDayNudge(supabase, userId, intention, Intl.DateTimeFormat().resolvedOptions().timeZone).catch(() => {
                   console.error('Failed to schedule mid-day nudge')
                 })
               }
@@ -976,7 +977,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             const dayPlanFileUpdate = updates.find((u) => u.fileType === 'day-plan')
             const dayPlanIntention = dayPlanDataBlock?.data.intention ?? dayPlanFileUpdate?.attributes?.intention ?? null
 
-            getOrCreateTodayDayPlan(supabase, userId).then((dayPlan) => {
+            const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+            getOrCreateTodayDayPlan(supabase, userId, clientTimezone).then((dayPlan) => {
               const updateData: Partial<Pick<DayPlan,
                 'intention' | 'energy_level' | 'morning_session_id' | 'morning_completed_at' |
                 'priorities' | 'open_threads'
@@ -990,7 +992,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               if (dayPlanDataBlock?.data.open_threads) updateData.open_threads = dayPlanDataBlock.data.open_threads.map((t) => ({
                 text: t.text,
                 source_session_type: t.source_session_type ?? 'open_day',
-                source_date: t.source_date ?? new Date().toLocaleDateString('en-CA'),
+                source_date: t.source_date ?? new Intl.DateTimeFormat('en-CA', { timeZone: clientTimezone }).format(new Date()),
                 provenance_label: t.provenance_label ?? '',
                 status: t.status,
                 resolved_at: null,

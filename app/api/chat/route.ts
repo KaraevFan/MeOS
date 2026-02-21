@@ -3,6 +3,7 @@ import { buildConversationContext, expireStaleOpenDaySessions } from '@/lib/ai/c
 import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
 import { captureException } from '@/lib/monitoring/sentry'
+import { getUserTimezone } from '@/lib/get-user-timezone'
 import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import type { PulseContextMode } from '@/types/chat'
@@ -253,9 +254,12 @@ export async function POST(request: Request) {
     })
   }
 
+  // Resolve user timezone for date-aware context injection
+  const timezone = await getUserTimezone(supabase, user.id)
+
   // Expire stale open_day sessions before building close_day context
   if (sessionType === 'close_day') {
-    await expireStaleOpenDaySessions(user.id)
+    await expireStaleOpenDaySessions(user.id, timezone)
   }
 
   // Build system prompt with context (session type already validated by Zod schema)
@@ -267,6 +271,7 @@ export async function POST(request: Request) {
       : undefined
     systemPrompt = await buildConversationContext(sessionType, user.id, {
       exploreDomain: validatedExploreDomain,
+      timezone,
     })
 
     const mode = pulseContextMode ?? 'none'

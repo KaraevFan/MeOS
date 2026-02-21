@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCalendarEvents } from '@/lib/calendar/google-calendar'
+import { getUserTimezone } from '@/lib/get-user-timezone'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -25,7 +26,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Invalid date parameter. Use YYYY-MM-DD format.' }, { status: 400 })
     }
 
-    const events = await getCalendarEvents(user.id, parsed.data.date)
+    const tz = await getUserTimezone(supabase, user.id)
+    const events = await getCalendarEvents(user.id, parsed.data.date, tz)
     return NextResponse.json({ events })
   } catch {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

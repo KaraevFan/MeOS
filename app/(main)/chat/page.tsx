@@ -8,6 +8,8 @@ import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { extractCommitments } from '@/lib/markdown/extract'
 import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { getDisplayName } from '@/lib/utils'
+import { getLocalDateString, getYesterdayDateString } from '@/lib/dates'
+import { getUserTimezone } from '@/lib/get-user-timezone'
 import type { Commitment } from '@/lib/markdown/extract'
 import type { SessionType } from '@/types/chat'
 
@@ -174,11 +176,10 @@ export default async function ChatPage({
   // Fetch briefing data for open_day sessions
   let briefingData: { firstName: string | null; todayIntention: string | null; yesterdayIntention: string | null } | undefined
   if (sessionType === 'open_day') {
+    const tz = await getUserTimezone(supabase, user.id)
     const ufs = new UserFileSystem(supabase, user.id)
-    const todayStr = new Date().toISOString().split('T')[0]
-    const yesterdayDate = new Date()
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1)
-    const yesterday = yesterdayDate.toISOString().split('T')[0]
+    const todayStr = getLocalDateString(tz)
+    const yesterday = getYesterdayDateString(tz)
 
     const [userResult, todayPlan, yesterdayPlan] = await Promise.allSettled([
       supabase.from('users').select('email, display_name').eq('id', user.id).single(),

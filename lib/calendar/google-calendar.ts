@@ -1,5 +1,6 @@
 import { google } from 'googleapis'
 import { createClient } from '@/lib/supabase/server'
+import { getLocalMidnight, getLocalEndOfDay } from '@/lib/dates'
 import { CalendarIntegrationSchema } from './types'
 import type { CalendarEvent, CalendarIntegration } from './types'
 
@@ -13,7 +14,7 @@ const oauth2Client = new google.auth.OAuth2(
  * Returns empty array if no integration exists, token is expired and can't refresh,
  * or any API error occurs. Never throws — callers can always safely call this.
  */
-export async function getCalendarEvents(userId: string, date: string): Promise<CalendarEvent[]> {
+export async function getCalendarEvents(userId: string, date: string, timezone: string = 'UTC'): Promise<CalendarEvent[]> {
   try {
     const supabase = await createClient()
 
@@ -41,8 +42,8 @@ export async function getCalendarEvents(userId: string, date: string): Promise<C
     oauth2Client.setCredentials({ access_token: token })
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
 
-    const startOfDay = `${date}T00:00:00.000Z`
-    const endOfDay = `${date}T23:59:59.999Z`
+    const startOfDay = getLocalMidnight(date, timezone)
+    const endOfDay = getLocalEndOfDay(date, timezone)
 
     const response = await calendar.events.list({
       calendarId: 'primary',

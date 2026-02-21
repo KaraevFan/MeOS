@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getHomeData } from '@/lib/supabase/home-data'
+import { getUserTimezone } from '@/lib/get-user-timezone'
 import { PreOnboardingHero } from '@/components/home/pre-onboarding-hero'
 import { HomeScreen } from '@/components/home/home-screen'
 
@@ -12,7 +13,8 @@ export default async function HomePage() {
     redirect('/login')
   }
 
-  const homeData = await getHomeData(supabase, user.id)
+  const tz = await getUserTimezone(supabase, user.id)
+  const homeData = await getHomeData(supabase, user.id, tz)
 
   const displayName = homeData.firstName
     ? homeData.firstName.charAt(0).toUpperCase() + homeData.firstName.slice(1)

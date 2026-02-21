@@ -6,6 +6,7 @@ import {
   MAX_FILE_UPDATE_BLOCKS_PER_MESSAGE,
   FILE_TYPES,
 } from './constants'
+import { getLocalDateString } from '@/lib/dates'
 import type { DomainName } from '@/types/chat'
 import type { DailyLogFrontmatter, DayPlanFrontmatter } from '@/types/markdown-files'
 
@@ -19,7 +20,9 @@ export interface FileWriteResult {
  * Resolve a semantic file update identifier to a concrete file path.
  * Keeps resolution logic out of the parser.
  */
-export function resolveFileUpdatePath(update: FileUpdateData): string | null {
+export function resolveFileUpdatePath(update: FileUpdateData, timezone: string = 'UTC'): string | null {
+  const todayFallback = () => getLocalDateString(timezone)
+
   switch (update.fileType) {
     case FILE_TYPES.DOMAIN: {
       if (!update.name) return null
@@ -35,8 +38,7 @@ export function resolveFileUpdatePath(update: FileUpdateData): string | null {
     case FILE_TYPES.LIFE_PLAN:
       return 'life-plan/current.md'
     case FILE_TYPES.CHECK_IN: {
-      // Check-in files need a date-based name
-      const date = new Date().toISOString().split('T')[0]
+      const date = todayFallback()
       const type = update.name ?? 'weekly'
       return `check-ins/${date}-${type}.md`
     }
@@ -47,11 +49,11 @@ export function resolveFileUpdatePath(update: FileUpdateData): string | null {
     case FILE_TYPES.SESSION_INSIGHTS:
       return 'sage/session-insights.md'
     case FILE_TYPES.DAILY_LOG: {
-      const date = update.name ?? new Date().toISOString().split('T')[0]
+      const date = update.name ?? todayFallback()
       return `daily-logs/${date}-journal.md`
     }
     case FILE_TYPES.DAY_PLAN: {
-      const date = update.name ?? new Date().toISOString().split('T')[0]
+      const date = update.name ?? todayFallback()
       return `day-plans/${date}.md`
     }
     default:
@@ -80,10 +82,11 @@ function isWritePermitted(path: string, sessionType: SessionType | string): bool
 export async function handleFileUpdate(
   ufs: UserFileSystem,
   update: FileUpdateData,
-  sessionType: SessionType | string
+  sessionType: SessionType | string,
+  timezone: string = 'UTC'
 ): Promise<FileWriteResult> {
   // Resolve semantic identifier to file path
-  const resolvedPath = resolveFileUpdatePath(update)
+  const resolvedPath = resolveFileUpdatePath(update, timezone)
   if (!resolvedPath) {
     return {
       success: false,
@@ -130,7 +133,7 @@ export async function handleFileUpdate(
         await ufs.writeLifePlan(update.content, { updated_by: 'sage' })
         break
       case FILE_TYPES.CHECK_IN: {
-        const date = new Date().toISOString().split('T')[0]
+        const date = getLocalDateString(timezone)
         await ufs.writeCheckIn(date, update.content, {
           type: 'weekly-check-in',
           date,
@@ -147,7 +150,7 @@ export async function handleFileUpdate(
         await ufs.writeSessionInsights(update.content)
         break
       case FILE_TYPES.DAILY_LOG: {
-        const date = update.name ?? new Date().toISOString().split('T')[0]
+        const date = update.name ?? getLocalDateString(timezone)
         const overrides: Partial<DailyLogFrontmatter> = {}
         const VALID_ENERGY = new Set<DailyLogFrontmatter['energy']>(['high', 'moderate', 'low'])
         if (update.attributes?.energy && VALID_ENERGY.has(update.attributes.energy as DailyLogFrontmatter['energy'])) {
@@ -163,7 +166,7 @@ export async function handleFileUpdate(
         break
       }
       case FILE_TYPES.DAY_PLAN: {
-        const date = update.name ?? new Date().toISOString().split('T')[0]
+        const date = update.name ?? getLocalDateString(timezone)
         const planOverrides: Partial<DayPlanFrontmatter> = {}
         if (update.attributes?.intention) {
           planOverrides.intention = update.attributes.intention
@@ -197,7 +200,8 @@ export async function handleFileUpdate(
 export async function handleAllFileUpdates(
   ufs: UserFileSystem,
   updates: FileUpdateData[],
-  sessionType: SessionType | string
+  sessionType: SessionType | string,
+  timezone: string = 'UTC'
 ): Promise<FileWriteResult[]> {
   // Rate limit: max blocks per message
   if (updates.length > MAX_FILE_UPDATE_BLOCKS_PER_MESSAGE) {
@@ -209,7 +213,7 @@ export async function handleAllFileUpdates(
 
   // Execute all writes in parallel
   const results = await Promise.allSettled(
-    updates.map((update) => handleFileUpdate(ufs, update, sessionType))
+    updates.map((update) => handleFileUpdate(ufs, update, sessionType, timezone))
   )
 
   const writeResults = results.map((result, i) => {
@@ -218,7 +222,7 @@ export async function handleAllFileUpdates(
     }
     return {
       success: false,
-      path: resolveFileUpdatePath(updates[i]) ?? 'unknown',
+      path: resolveFileUpdatePath(updates[i], timezone) ?? 'unknown',
       error: String(result.reason),
     }
   })
@@ -230,7 +234,7 @@ export async function handleAllFileUpdates(
     )
     if (journalWritten) {
       // Fire-and-forget: don't block the response for capture fold updates
-      markCapturesFolded(ufs).catch((err) => {
+      markCapturesFolded(ufs, timezone).catch((err) => {
         console.warn('[FileWriteHandler] Capture fold marking failed:', err instanceof Error ? err.message : String(err))
       })
     }
@@ -243,8 +247,8 @@ export async function handleAllFileUpdates(
  * Mark all of today's captures as folded into the journal.
  * Fire-and-forget — failures are logged, not thrown to the caller.
  */
-async function markCapturesFolded(ufs: UserFileSystem): Promise<void> {
-  const today = new Date().toLocaleDateString('en-CA')
+async function markCapturesFolded(ufs: UserFileSystem, timezone: string = 'UTC'): Promise<void> {
+  const today = getLocalDateString(timezone)
   const filenames = await ufs.listCaptures(today)
   if (filenames.length === 0) return
 
