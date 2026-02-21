@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { diffLocalCalendarDays, getDisplayName, getTimeGreeting } from '@/lib/utils'
 import { getLocalDateString, getYesterdayDateString, getLocalMidnight, getHourInTimezone, formatTimeInTimezone } from '@/lib/dates'
-import { getCalendarEvents } from '@/lib/calendar/google-calendar'
+import { getCalendarEvents, hasCalendarIntegration as checkCalendarIntegration } from '@/lib/calendar/google-calendar'
 import type { CalendarEvent } from '@/lib/calendar/types'
 import type { SessionType } from '@/types/chat'
 
@@ -23,6 +23,7 @@ export interface HomeData {
   yesterdayIntention: string | null
   calendarEvents: CalendarEvent[]
   calendarSummary: string | null
+  hasCalendarIntegration: boolean
   checkinResponse: 'yes' | 'not-yet' | 'snooze' | null
 }
 
@@ -65,6 +66,7 @@ export async function getHomeData(
   let yesterdayIntention: string | null = null
   let calendarEvents: CalendarEvent[] = []
   let calendarSummary: string | null = null
+  let hasCalendar = false
   let checkinResponse: 'yes' | 'not-yet' | 'snooze' | null = null
 
   if (onboardingCompleted) {
@@ -82,6 +84,7 @@ export async function getHomeData(
       yesterdayDayPlanResult,
       calendarResult,
       captureFilenamesResult,
+      calendarIntegrationResult,
     ] = await Promise.allSettled([
       supabase
         .from('sessions')
@@ -115,6 +118,7 @@ export async function getHomeData(
       ufs.readDayPlan(yesterday),
       getCalendarEvents(userId, todayStr, timezone),
       ufs.listCaptures(todayStr),
+      checkCalendarIntegration(userId),
     ])
 
     // Extract active session from parallel result
@@ -154,6 +158,11 @@ export async function getHomeData(
     // Extract yesterday's intention for carry-forward
     if (yesterdayDayPlanResult.status === 'fulfilled' && yesterdayDayPlanResult.value) {
       yesterdayIntention = yesterdayDayPlanResult.value.frontmatter.intention ?? null
+    }
+
+    // Check calendar integration status
+    if (calendarIntegrationResult.status === 'fulfilled') {
+      hasCalendar = calendarIntegrationResult.value
     }
 
     // Extract calendar events
@@ -205,6 +214,7 @@ export async function getHomeData(
     yesterdayIntention,
     calendarEvents,
     calendarSummary,
+    hasCalendarIntegration: hasCalendar,
     checkinResponse,
   }
 }

@@ -6,6 +6,7 @@ import { ActivityTracker } from '@/components/activity-tracker'
 import { ActiveSessionProvider } from '@/components/providers/active-session-provider'
 import { TimezoneSync } from '@/components/timezone-sync'
 import { getDisplayName } from '@/lib/utils'
+import { hasCalendarIntegration } from '@/lib/calendar/google-calendar'
 
 export default async function MainLayout({
   children,
@@ -19,7 +20,7 @@ export default async function MainLayout({
     redirect('/login')
   }
 
-  const [{ data: profile }, { data: activeSessionData }] = await Promise.all([
+  const [{ data: profile }, { data: activeSessionData }, hasCalendar] = await Promise.all([
     supabase
       .from('users')
       .select('email, display_name, onboarding_completed')
@@ -33,6 +34,7 @@ export default async function MainLayout({
       .eq('status', 'active')
       .limit(1)
       .maybeSingle(),
+    hasCalendarIntegration(user.id),
   ])
 
   const email = profile?.email || user.email || ''
@@ -48,7 +50,7 @@ export default async function MainLayout({
       <TimezoneSync />
       <div className="mx-auto max-w-[430px] min-h-[100dvh] bg-bg relative shadow-[0_0_60px_rgba(0,0,0,0.07)]">
         <ActivityTracker />
-        <AppHeader email={email} displayName={displayName} />
+        <AppHeader email={email} displayName={displayName} hasCalendar={hasCalendar} />
         <main className="pb-24">
           {children}
         </main>
