@@ -1230,8 +1230,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               {activePills.length > 0 && (
                 <div className="mt-2">
                   {/* Use EnergyCheckChips for open_day energy check (5 options at start of session) */}
-                  {sessionType === 'open_day' && activePills.length === 5 && messages.length <= 3 ? (
+                  {sessionType === 'open_day' && activePills.length >= 4 && messages.length <= 3 ? (
                     <EnergyCheckChips
+                      pills={activePills}
                       onSelect={handleSend}
                       disabled={isStreaming}
                     />

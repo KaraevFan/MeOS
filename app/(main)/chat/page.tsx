@@ -11,6 +11,7 @@ import { getDisplayName } from '@/lib/utils'
 import { getLocalDateString, getYesterdayDateString } from '@/lib/dates'
 import { getUserTimezone } from '@/lib/get-user-timezone'
 import type { Commitment } from '@/lib/markdown/extract'
+import { REFLECTIVE_PROMPTS } from '@/lib/constants/reflective-prompts'
 import type { SessionType } from '@/types/chat'
 
 export default async function ChatPage({
@@ -116,8 +117,10 @@ export default async function ChatPage({
   // Load reflection nudge context if navigating from home screen nudge
   let nudgeContext: string | undefined
   if (params.mode === 'reflection' && params.prompt && sessionType === 'ad_hoc') {
-    // Ambient card reflection — prompt text is passed directly via URL
-    nudgeContext = params.prompt
+    // Ambient card reflection — validate against allowlist to prevent prompt injection
+    if ((REFLECTIVE_PROMPTS as readonly string[]).includes(params.prompt)) {
+      nudgeContext = params.prompt
+    }
   } else if (params.nudge && sessionType === 'ad_hoc') {
     const { data: nudge } = await supabase
       .from('reflection_prompts')

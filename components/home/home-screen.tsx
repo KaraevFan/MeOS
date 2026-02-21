@@ -149,8 +149,6 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
 
   useEffect(() => {
     setTimeState(detectTimeState())
-    // Diagnostic: verify Home always mounts as the landing page (Issue 5 — auto-start investigation)
-    console.log('[MeOS] Home page mounted at', new Date().toISOString(), window.location.pathname)
   }, [])
 
   // Stable payload for LLM contextual line — only for morning/evening with data

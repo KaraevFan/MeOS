@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { DayPlanView } from './day-plan-view'
+import { shiftDate } from '@/lib/dates'
 import type { DayPlanWithCaptures } from '@/types/day-plan'
 
 interface DayPlanSwipeContainerProps {
@@ -10,25 +11,27 @@ interface DayPlanSwipeContainerProps {
   initialData: DayPlanWithCaptures
 }
 
-/** Decrement a YYYY-MM-DD date string by one day (DST-safe via noon trick). */
-function prevDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number)
-  const date = new Date(Date.UTC(y, m - 1, d - 1))
-  return date.toISOString().split('T')[0]
-}
-
-/** Increment a YYYY-MM-DD date string by one day (DST-safe via noon trick). */
-function nextDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number)
-  const date = new Date(Date.UTC(y, m - 1, d + 1))
-  return date.toISOString().split('T')[0]
-}
-
 // Swipe gesture thresholds
 const SWIPE_THRESHOLD = 50
 const SWIPE_MAX_VERTICAL = 60
 // 30-day lookback max
 const MAX_LOOKBACK_DAYS = 30
+
+/** Format YYYY-MM-DD as "Feb 20" style short date. */
+function formatShortDate(dateStr: string): string {
+  const date = new Date(dateStr + 'T12:00:00')
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+/** Minimal runtime check that a fetch response looks like DayPlanWithCaptures. */
+function isDayPlanResponse(value: unknown): value is DayPlanWithCaptures {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'captures' in value &&
+    Array.isArray((value as DayPlanWithCaptures).captures)
+  )
+}
 
 export function DayPlanSwipeContainer({ initialDate, today, initialData }: DayPlanSwipeContainerProps) {
   const [currentDate, setCurrentDate] = useState(initialDate)
@@ -37,30 +40,54 @@ export function DayPlanSwipeContainer({ initialDate, today, initialData }: DayPl
 
   // Touch tracking refs
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+  // Abort in-flight requests when navigating to a new date
+  const abortRef = useRef<AbortController | null>(null)
+  // Client-side cache for visited dates (historical dates are immutable)
+  const cacheRef = useRef<Map<string, DayPlanWithCaptures>>(new Map())
 
-  // Compute earliest allowed date (30 days before today)
-  const earliestDate = (() => {
-    const [y, m, d] = today.split('-').map(Number)
-    const date = new Date(Date.UTC(y, m - 1, d - MAX_LOOKBACK_DAYS))
-    return date.toISOString().split('T')[0]
-  })()
+  // Seed cache with initial server data
+  useEffect(() => {
+    cacheRef.current.set(initialDate, initialData)
+  }, [initialDate, initialData])
+
+  // Compute earliest allowed date (30 days before today) — stable across renders
+  const earliestDate = useMemo(() => shiftDate(today, -MAX_LOOKBACK_DAYS), [today])
 
   const canGoBack = currentDate > earliestDate
   const canGoForward = currentDate < today
   const isToday = currentDate === today
 
   const fetchDayPlan = useCallback(async (date: string) => {
+    // Return cached data immediately if available
+    const cached = cacheRef.current.get(date)
+    if (cached) {
+      setData(cached)
+      return
+    }
+
+    // Cancel any in-flight request
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setIsLoading(true)
     try {
-      const res = await fetch(`/api/day-plan?date=${date}`)
+      const res = await fetch(`/api/day-plan?date=${date}`, { signal: controller.signal })
       if (res.ok) {
-        const json = await res.json()
-        setData(json)
+        const json: unknown = await res.json()
+        if (isDayPlanResponse(json)) {
+          cacheRef.current.set(date, json)
+          setData(json)
+        }
       }
-    } catch {
-      // Keep current data on error
+    } catch (err) {
+      // Ignore abort errors; keep current data on network errors
+      if (err instanceof DOMException && err.name === 'AbortError') return
     } finally {
-      setIsLoading(false)
+      // Only clear loading if this controller wasn't superseded
+      if (abortRef.current === controller) {
+        setIsLoading(false)
+      }
     }
   }, [])
 
@@ -71,11 +98,11 @@ export function DayPlanSwipeContainer({ initialDate, today, initialData }: DayPl
   }, [earliestDate, today, fetchDayPlan])
 
   const handlePrev = useCallback(() => {
-    if (canGoBack) navigateToDate(prevDate(currentDate))
+    if (canGoBack) navigateToDate(shiftDate(currentDate, -1))
   }, [canGoBack, currentDate, navigateToDate])
 
   const handleNext = useCallback(() => {
-    if (canGoForward) navigateToDate(nextDate(currentDate))
+    if (canGoForward) navigateToDate(shiftDate(currentDate, 1))
   }, [canGoForward, currentDate, navigateToDate])
 
   // Touch handlers for swipe
@@ -112,11 +139,10 @@ export function DayPlanSwipeContainer({ initialDate, today, initialData }: DayPl
     }
   }, [initialDate, initialData, currentDate])
 
-  // Format date for the "Return to today" button
-  const formatShortDate = (dateStr: string) => {
-    const date = new Date(dateStr + 'T12:00:00')
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  }
+  // Clean up abort controller on unmount
+  useEffect(() => {
+    return () => { abortRef.current?.abort() }
+  }, [])
 
   return (
     <div

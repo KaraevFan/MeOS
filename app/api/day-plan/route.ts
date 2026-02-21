@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getDayPlanWithCaptures } from '@/lib/supabase/day-plan-queries'
 import { getUserTimezone } from '@/lib/get-user-timezone'
+import { getLocalDateString } from '@/lib/dates'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -28,7 +29,15 @@ export async function GET(request: Request) {
 
     const tz = await getUserTimezone(supabase, user.id)
     const data = await getDayPlanWithCaptures(supabase, user.id, parsed.data.date, tz)
-    return NextResponse.json(data)
+
+    // Historical dates are immutable — allow browser caching to avoid refetches on swipe
+    const todayStr = getLocalDateString(tz)
+    const isHistorical = parsed.data.date < todayStr
+    const headers: HeadersInit = isHistorical
+      ? { 'Cache-Control': 'private, max-age=3600' }
+      : { 'Cache-Control': 'private, no-cache' }
+
+    return NextResponse.json(data, { headers })
   } catch {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
