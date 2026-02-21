@@ -160,8 +160,8 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
           parts.push(`- ${start}${end}  ${event.title}`)
         }
       }
-    } catch {
-      // Calendar not connected or error — graceful degradation
+    } catch (err) {
+      console.error('[context] Calendar fetch failed for open_day:', err)
     }
 
     // Yesterday's day plan + journal cross-reference (for carry-forward)

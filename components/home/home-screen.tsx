@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Greeting } from './greeting'
 import { SessionChips } from './session-chips'
 import { HeroCard } from './hero-card'
@@ -139,8 +139,13 @@ function CheckinDueCard() {
 
 export function HomeScreen({ data }: { data: HomeScreenData }) {
   const [timeState, setTimeState] = useState<TimeState>('morning')
+  const router = useRouter()
   const searchParams = useSearchParams()
   const captureAutoExpand = searchParams.get('capture') === '1'
+
+  const handleReflectionTap = useCallback((prompt: string) => {
+    router.push(`/chat?mode=reflection&prompt=${encodeURIComponent(prompt)}`)
+  }, [router])
 
   useEffect(() => {
     setTimeState(detectTimeState())
@@ -243,7 +248,7 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             />
           )}
 
-          <AmbientCard />
+          <AmbientCard onTap={handleReflectionTap} />
         </>
       )}
 
@@ -315,7 +320,7 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             </InfoCard>
           )}
 
-          <AmbientCard />
+          <AmbientCard onTap={handleReflectionTap} />
         </>
       )}
 

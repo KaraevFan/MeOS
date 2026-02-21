@@ -16,7 +16,7 @@ import type { SessionType } from '@/types/chat'
 export default async function ChatPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; explore?: string; nudge?: string; session_context?: string; session?: string; precheckin?: string }>
+  searchParams: Promise<{ type?: string; explore?: string; nudge?: string; session_context?: string; session?: string; precheckin?: string; mode?: string; prompt?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -88,8 +88,8 @@ export default async function ChatPage({
     sessionType = 'open_day'
   } else if (requestedType === 'quick_capture') {
     sessionType = 'quick_capture'
-  } else if (requestedType === 'ad_hoc' || params.explore) {
-    // Explicit ad-hoc OR domain exploration from Life Map
+  } else if (requestedType === 'ad_hoc' || params.explore || params.mode === 'reflection') {
+    // Explicit ad-hoc, domain exploration from Life Map, or reflection from ambient card
     sessionType = 'ad_hoc'
   } else if (sessionState.state === 'checkin_due' || sessionState.state === 'checkin_overdue') {
     sessionType = 'weekly_checkin'
@@ -115,7 +115,10 @@ export default async function ChatPage({
 
   // Load reflection nudge context if navigating from home screen nudge
   let nudgeContext: string | undefined
-  if (params.nudge && sessionType === 'ad_hoc') {
+  if (params.mode === 'reflection' && params.prompt && sessionType === 'ad_hoc') {
+    // Ambient card reflection — prompt text is passed directly via URL
+    nudgeContext = params.prompt
+  } else if (params.nudge && sessionType === 'ad_hoc') {
     const { data: nudge } = await supabase
       .from('reflection_prompts')
       .select('prompt_text')
