@@ -10,6 +10,7 @@ import { ChatInput } from './chat-input'
 import { BuildingCardPlaceholder } from './building-card-placeholder'
 import { SuggestionPills } from './suggestion-pills'
 import type { SuggestionPill } from './suggestion-pills'
+import { EnergyCheckChips } from './energy-check-chips'
 import { ErrorMessage } from './error-message'
 import { PulseCheckCard } from './pulse-check-card'
 import { getOrCreateLifeMap, upsertDomain, updateLifeMapSynthesis } from '@/lib/supabase/life-map'
@@ -457,6 +458,12 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               }, 100)
             } else if (sessionType === 'close_day') {
               // close_day: Sage opens with context-aware evening reflection prompt
+              setTimeout(() => {
+                triggerSageResponse('none')
+              }, 100)
+            } else if (sessionType === 'open_day' && !briefingData) {
+              // open_day without briefing: auto-trigger Sage to start Step 1 (energy check)
+              // When briefingData exists, the BriefingCard's onStart callback handles this
               setTimeout(() => {
                 triggerSageResponse('none')
               }, 100)
@@ -1175,7 +1182,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           // Show state-aware quick replies after opening message (first assistant msg, no user messages yet)
           // But only if there are no AI-driven suggested replies
           const isOpeningMessage = index === 0 && message.role === 'assistant'
+          // Suppress state pills for structured session types — they have their own flow (energy check, etc.)
           const showStateQuickReplies = isLastMessage && isOpeningMessage && hasNoUserMessages && !isStreaming && !showPulseCheck && !hasSuggestedReplies
+            && sessionType !== 'open_day' && sessionType !== 'close_day'
 
           // Build pills for the active suggestion source (priority: AI > domain > state)
           // Only compute for the last message to avoid unnecessary work
@@ -1220,11 +1229,20 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               )}
               {activePills.length > 0 && (
                 <div className="mt-2">
-                  <SuggestionPills
-                    pills={activePills}
-                    onSelect={handleSend}
-                    disabled={isStreaming}
-                  />
+                  {/* Use EnergyCheckChips for open_day energy check (5 options at start of session) */}
+                  {sessionType === 'open_day' && activePills.length >= 4 && messages.length <= 3 ? (
+                    <EnergyCheckChips
+                      pills={activePills}
+                      onSelect={handleSend}
+                      disabled={isStreaming}
+                    />
+                  ) : (
+                    <SuggestionPills
+                      pills={activePills}
+                      onSelect={handleSend}
+                      disabled={isStreaming}
+                    />
+                  )}
                 </div>
               )}
             </div>

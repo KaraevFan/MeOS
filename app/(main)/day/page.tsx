@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getDayPlanWithCaptures } from '@/lib/supabase/day-plan-queries'
-import { DayPlanView } from '@/components/day-plan/day-plan-view'
+import { DayPlanSwipeContainer } from '@/components/day-plan/day-plan-swipe-container'
 import { getUserTimezone } from '@/lib/get-user-timezone'
 import { getLocalDateString } from '@/lib/dates'
 
@@ -17,5 +17,5 @@ export default async function DayPage() {
   const today = getLocalDateString(tz)
   const data = await getDayPlanWithCaptures(supabase, user.id, today, tz)
 
-  return <DayPlanView data={data} />
+  return <DayPlanSwipeContainer initialDate={today} today={today} initialData={data} />
 }

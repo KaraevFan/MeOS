@@ -5,12 +5,16 @@ export function getLocalDateString(timezone: string = DEFAULT_TIMEZONE): string 
   return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date())
 }
 
+/** Shift a YYYY-MM-DD date string by N days (DST-safe via UTC calendar arithmetic). */
+export function shiftDate(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(Date.UTC(y, m - 1, d + days))
+  return date.toISOString().split('T')[0]
+}
+
 /** YYYY-MM-DD for yesterday in the given timezone (DST-safe via calendar arithmetic). */
 export function getYesterdayDateString(timezone: string = DEFAULT_TIMEZONE): string {
-  const todayStr = getLocalDateString(timezone)
-  const [y, m, d] = todayStr.split('-').map(Number)
-  const yesterday = new Date(Date.UTC(y, m - 1, d - 1))
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(yesterday)
+  return shiftDate(getLocalDateString(timezone), -1)
 }
 
 /** Day of week name in the given timezone */

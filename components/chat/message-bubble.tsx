@@ -8,6 +8,7 @@ import { MarkdownDomainCard } from './markdown-domain-card'
 import { MarkdownSynthesisCard } from './markdown-synthesis-card'
 import { JournalCard } from './journal-card'
 import { InlineCard } from './inline-card'
+import { DayPlanConfirmationCard } from './day-plan-confirmation-card'
 import type { ChatMessage, ParsedMessage, ParsedSegment, DomainName } from '@/types/chat'
 
 interface MessageBubbleProps {
@@ -109,6 +110,10 @@ function SegmentRenderer({
         </div>
       )
     }
+    if (segment.data.fileType === 'day-plan') {
+      // Day plan file updates are consumed silently — the DayPlanConfirmationCard from DAY_PLAN_DATA handles the UI
+      return null
+    }
     // Other file_update types (life-plan, check-in, sage-context, sage-patterns) are silently consumed
     return null
   }
@@ -117,6 +122,14 @@ function SegmentRenderer({
     return (
       <div className="w-full max-w-[95%]">
         <InlineCard data={segment.data} />
+      </div>
+    )
+  }
+
+  if (segment.blockType === 'day_plan_data') {
+    return (
+      <div className="w-full max-w-[95%]">
+        <DayPlanConfirmationCard data={segment.data} />
       </div>
     )
   }
