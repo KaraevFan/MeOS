@@ -79,6 +79,20 @@ export function getHourInTimezone(
   )
 }
 
+/**
+ * YYYY-MM-DD for the Monday of the current week in the given timezone.
+ * Uses ISO week convention (Monday = start of week).
+ */
+export function getStartOfWeek(timezone: string = DEFAULT_TIMEZONE): string {
+  const today = getLocalDateString(timezone)
+  const [y, m, d] = today.split('-').map(Number)
+  const date = new Date(Date.UTC(y, m - 1, d))
+  // getUTCDay: 0=Sun, 1=Mon ... 6=Sat → shift so Mon=0
+  const dayOfWeek = date.getUTCDay()
+  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+  return shiftDate(today, -daysToMonday)
+}
+
 /** Extract "+09:00" style offset for a given date in a timezone. */
 function getTimezoneOffset(date: string, timezone: string): string {
   const formatter = new Intl.DateTimeFormat('en-US', {

@@ -16,6 +16,7 @@ import {
   generatePatternsFrontmatter,
   generateDailyLogFrontmatter,
   generateDayPlanFrontmatter,
+  generateWeeklyPlanFrontmatter,
   generateCaptureFrontmatter,
 } from './frontmatter'
 import {
@@ -27,6 +28,7 @@ import {
   PatternsFrontmatterSchema,
   DailyLogFrontmatterSchema,
   DayPlanFrontmatterSchema,
+  WeeklyPlanFrontmatterSchema,
   CaptureFrontmatterSchema,
 } from '@/types/markdown-files'
 import type {
@@ -38,6 +40,7 @@ import type {
   PatternsFrontmatter,
   DailyLogFrontmatter,
   DayPlanFrontmatter,
+  WeeklyPlanFrontmatter,
   CaptureFrontmatter,
   ParsedMarkdownFile,
 } from '@/types/markdown-files'
@@ -325,6 +328,23 @@ export class UserFileSystem {
     return limit ? filenames.slice(0, limit) : filenames
   }
 
+  async readWeeklyPlan(): Promise<ParsedMarkdownFile<WeeklyPlanFrontmatter> | null> {
+    const file = await this.readFile('life-plan/weekly.md')
+    if (!file) return null
+
+    const parsed = WeeklyPlanFrontmatterSchema.safeParse(file.frontmatter)
+    if (!parsed.success) {
+      return {
+        frontmatter: { type: 'weekly-plan' as const, week_of: '', last_updated: '', status: 'active' as const, priorities: [], version: 1, schema_version: 1 },
+        content: file.content,
+      }
+    }
+    return {
+      frontmatter: parsed.data,
+      content: file.content,
+    }
+  }
+
   async readCapture(filename: string): Promise<ParsedMarkdownFile<CaptureFrontmatter> | null> {
     const file = await this.readFile(`captures/${filename}`)
     if (!file) return null
@@ -424,6 +444,16 @@ export class UserFileSystem {
     const filename = `${date}.md`
     await this.writeFile(`day-plans/${filename}`, frontmatter, content)
     await this.updateFileIndex(`day-plans/${filename}`, FILE_TYPES.DAY_PLAN, frontmatter)
+  }
+
+  async writeWeeklyPlan(content: string, weekOf: string, overrides?: Partial<WeeklyPlanFrontmatter>): Promise<void> {
+    const existing = (await this.readWeeklyPlan())?.frontmatter ?? null
+    const frontmatter = generateWeeklyPlanFrontmatter(
+      existing,
+      { week_of: weekOf, ...overrides }
+    )
+    await this.writeFile('life-plan/weekly.md', frontmatter, content)
+    await this.updateFileIndex('life-plan/weekly.md', FILE_TYPES.WEEKLY_PLAN, frontmatter)
   }
 
   async writeCapture(date: string, timeCode: string, content: string, overrides?: Partial<CaptureFrontmatter>): Promise<string> {
@@ -575,6 +605,7 @@ export class UserFileSystem {
   private inferFileType(filePath: string): string {
     if (filePath === 'life-map/_overview.md') return FILE_TYPES.OVERVIEW
     if (filePath.startsWith('life-map/')) return FILE_TYPES.DOMAIN
+    if (filePath === 'life-plan/weekly.md') return FILE_TYPES.WEEKLY_PLAN
     if (filePath.startsWith('life-plan/')) return FILE_TYPES.LIFE_PLAN
     if (filePath.startsWith('check-ins/')) return FILE_TYPES.CHECK_IN
     if (filePath === 'sage/context.md') return FILE_TYPES.SAGE_CONTEXT

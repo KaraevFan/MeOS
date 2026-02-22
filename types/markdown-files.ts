@@ -129,6 +129,27 @@ export const DayPlanFrontmatterSchema = z.object({
 export type DayPlanFrontmatter = z.infer<typeof DayPlanFrontmatterSchema>
 
 // ============================================
+// Weekly plan file frontmatter
+// ============================================
+
+export const WeeklyPlanFrontmatterSchema = z.object({
+  type: z.literal('weekly-plan'),
+  week_of: z.string(), // YYYY-MM-DD (Monday of the week)
+  reflection_day: z.string().optional(), // day name, e.g. "Sunday"
+  priorities: z.array(z.object({
+    text: z.string(),
+    domain: z.string().optional(),
+  })).default([]),
+  status: z.enum(['active', 'archived']).default('active'),
+  created_at: z.string().optional(),
+  last_updated: z.string(),
+  version: z.number().int().positive().default(1),
+  schema_version: z.number().int().positive().default(1),
+})
+
+export type WeeklyPlanFrontmatter = z.infer<typeof WeeklyPlanFrontmatterSchema>
+
+// ============================================
 // Capture file frontmatter
 // ============================================
 
@@ -157,6 +178,7 @@ export type AnyFrontmatter =
   | PatternsFrontmatter
   | DailyLogFrontmatter
   | DayPlanFrontmatter
+  | WeeklyPlanFrontmatter
   | CaptureFrontmatter
 
 // ============================================

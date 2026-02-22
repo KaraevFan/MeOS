@@ -5,8 +5,10 @@ import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { getCalendarEvents } from '@/lib/calendar/google-calendar'
-import { getLocalDateString, getLocalDayOfWeek, getYesterdayDateString, getLocalMidnight, formatTimeInTimezone } from '@/lib/dates'
+import { getDayPlan } from '@/lib/supabase/day-plan-queries'
+import { getLocalDateString, getLocalDayOfWeek, getYesterdayDateString, getLocalMidnight, formatTimeInTimezone, getStartOfWeek } from '@/lib/dates'
 import type { SessionType, DomainName } from '@/types/chat'
+import type { DayPlan } from '@/types/day-plan'
 
 /**
  * Fetch user context from markdown files and serialize for system prompt injection.
@@ -33,11 +35,12 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
   parts.push(`\nTODAY: ${dayOfWeek}, ${todayStr}`)
 
   // Read all context sources in parallel
-  const [sageContext, overview, lifePlan, checkInFilenames, patterns, pulseBaseline, dailyLogFilenames] =
+  const [sageContext, overview, lifePlan, weeklyPlan, checkInFilenames, patterns, pulseBaseline, dailyLogFilenames] =
     await Promise.allSettled([
       ufs.readSageContext(),
       ufs.readOverview(),
       ufs.readLifePlan(),
+      ufs.readWeeklyPlan(),
       ufs.listCheckIns(3),
       ufs.readPatterns(),
       getBaselineRatings(supabase, userId),
@@ -76,6 +79,26 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
     parts.push('<user_data>')
     parts.push(lifePlan.value.content)
     parts.push('</user_data>')
+  }
+
+  // 4b. Weekly plan (session-type dependent injection)
+  if (weeklyPlan.status === 'fulfilled' && weeklyPlan.value) {
+    const wp = weeklyPlan.value
+    const currentWeekMonday = getStartOfWeek(timezone)
+
+    if (sessionType === 'open_day' && wp.frontmatter.week_of === currentWeekMonday) {
+      // Current week's plan — inject as primary anchor for the morning briefing
+      parts.push(`\n=== THIS WEEK'S PLAN (week of ${wp.frontmatter.week_of}) ===`)
+      parts.push('<user_data>')
+      parts.push(wp.content)
+      parts.push('</user_data>')
+    } else if (sessionType === 'weekly_checkin') {
+      // Inject as last week's plan for review, regardless of staleness
+      parts.push(`\n=== LAST WEEK'S PLAN (week of ${wp.frontmatter.week_of}) ===`)
+      parts.push('<user_data>')
+      parts.push(wp.content)
+      parts.push('</user_data>')
+    }
   }
 
   // 5. Recent check-ins (parallel reads)
@@ -185,6 +208,38 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
       }
     } catch {
       // No yesterday day plan — that's fine
+    }
+
+    // Yesterday's structured priorities + open threads from day_plans DB table
+    try {
+      const yesterdayStr = getYesterdayDateString(timezone)
+      const yesterdayDbPlan = await getDayPlan(supabase, userId, yesterdayStr)
+      if (yesterdayDbPlan) {
+        const uncompleted = yesterdayDbPlan.priorities?.filter(p => !p.completed) ?? []
+        const unresolvedThreads = yesterdayDbPlan.open_threads?.filter(t => t.status !== 'resolved') ?? []
+
+        if (uncompleted.length > 0 || unresolvedThreads.length > 0) {
+          parts.push('\n=== CARRY FORWARD FROM YESTERDAY ===')
+          if (uncompleted.length > 0) {
+            parts.push('\n### Uncompleted Priorities')
+            for (const p of uncompleted) {
+              parts.push(`- [ ] ${p.text} (set yesterday, not completed)`)
+            }
+          }
+          if (unresolvedThreads.length > 0) {
+            parts.push('\n### Unresolved Open Threads')
+            for (const t of unresolvedThreads) {
+              parts.push(`- ${t.text} (from ${t.provenance_label || 'yesterday'})`)
+            }
+          }
+          parts.push('\nNote: These items were on yesterday\'s plan but weren\'t completed. Surface them naturally — the user should decide whether to carry forward, defer, or drop.')
+        } else if (yesterdayDbPlan.priorities && yesterdayDbPlan.priorities.length > 0) {
+          parts.push('\n=== YESTERDAY\'S PRIORITIES: ALL COMPLETED ===')
+          parts.push('The user completed everything on yesterday\'s plan. Acknowledge this positively.')
+        }
+      }
+    } catch {
+      // No day_plans DB data — fine, omit section
     }
 
     // Yesterday's captures for the morning briefing (carry-forward)
@@ -317,6 +372,65 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
           parts.push(log.content)
         }
       }
+
+      // Inject structured day_plans data (priorities, completion, energy, threads)
+      try {
+        const journalDates = logFilenames
+          .filter((filename) => {
+            if (!lastCheckInDate) return true
+            const logDate = filename.replace('-journal.md', '')
+            return logDate > lastCheckInDate
+          })
+          .map((filename) => filename.replace('-journal.md', ''))
+          .slice(0, 7) // Cap at 7 days for token budget
+
+        const weekDayPlans = await Promise.allSettled(
+          journalDates.map(date => getDayPlan(supabase, userId, date))
+        )
+        const validPlans = weekDayPlans
+          .filter((r): r is PromiseFulfilledResult<DayPlan | null> =>
+            r.status === 'fulfilled' && r.value != null)
+          .map(r => r.value!)
+
+        if (validPlans.length > 0) {
+          const totalPriorities = validPlans.reduce((sum, d) => sum + (d.priorities?.length || 0), 0)
+          const completedPriorities = validPlans.reduce((sum, d) =>
+            sum + (d.priorities?.filter(p => p.completed)?.length || 0), 0)
+
+          parts.push('\n=== WEEK IN NUMBERS ===')
+          parts.push(`Days with morning sessions: ${validPlans.length} / 7`)
+          parts.push(`Priorities set: ${totalPriorities} | Completed: ${completedPriorities}`)
+
+          parts.push('\n### Daily Intentions')
+          for (const plan of validPlans) {
+            const allDone = plan.priorities?.length > 0 && plan.priorities.every(p => p.completed)
+            const status = allDone ? '✅' : '—'
+            parts.push(`- **${plan.date}**: "${plan.intention || 'no intention set'}" ${status}`)
+          }
+
+          // Deduplicate unresolved threads by text
+          const seen = new Set<string>()
+          const unresolvedThreads = validPlans
+            .flatMap(d => (d.open_threads || []).filter(t => t.status !== 'resolved'))
+            .filter(t => {
+              const key = t.text.trim().toLowerCase()
+              if (seen.has(key)) return false
+              seen.add(key)
+              return true
+            })
+
+          if (unresolvedThreads.length > 0) {
+            parts.push('\n### Unresolved Threads (persisted across multiple days)')
+            for (const t of unresolvedThreads) {
+              parts.push(`- ${t.text} (first appeared: ${t.source_date || 'unknown'})`)
+            }
+          }
+
+          parts.push('\nUse this operational data alongside daily journals to close the loop on planned vs. actual.')
+        }
+      } catch {
+        // No day_plans data — fine
+      }
     }
   }
 
@@ -418,6 +532,7 @@ Available file types:
 - type="domain" name="<Domain Name>" — Update a life domain
 - type="overview" — Update the life map overview
 - type="life-plan" — Update the life plan
+- type="weekly-plan" name="{YYYY-MM-DD}" — Create/update this week's focus plan (name = Monday of the week)
 - type="check-in" — Create a check-in summary
 - type="daily-log" name="{YYYY-MM-DD}" — Create a daily journal entry (supports energy, mood_signal, domains_touched attributes)
 - type="day-plan" name="{YYYY-MM-DD}" — Create or update a day plan

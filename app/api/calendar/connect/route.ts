@@ -10,6 +10,14 @@ import { randomBytes } from 'crypto'
  * and redirects the user to Google's consent screen.
  */
 export async function GET(request: Request) {
+  // Guard: Calendar OAuth requires Google credentials
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    return NextResponse.json(
+      { error: 'Calendar integration is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.' },
+      { status: 503 }
+    )
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

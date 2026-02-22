@@ -7,6 +7,7 @@ import type {
   PatternsFrontmatter,
   DailyLogFrontmatter,
   DayPlanFrontmatter,
+  WeeklyPlanFrontmatter,
   CaptureFrontmatter,
 } from '@/types/markdown-files'
 
@@ -142,6 +143,23 @@ export function generateDayPlanFrontmatter(
     carried_forward_from: overrides?.carried_forward_from,
     checkin_response: overrides?.checkin_response,
     created_at: now(),
+  }
+}
+
+export function generateWeeklyPlanFrontmatter(
+  existing: Partial<WeeklyPlanFrontmatter> | null,
+  updates: Partial<WeeklyPlanFrontmatter> & { week_of: string }
+): WeeklyPlanFrontmatter {
+  return {
+    type: 'weekly-plan',
+    week_of: updates.week_of,
+    reflection_day: updates.reflection_day ?? existing?.reflection_day ?? 'Sunday',
+    priorities: updates.priorities ?? existing?.priorities ?? [],
+    status: updates.status ?? existing?.status ?? 'active',
+    created_at: existing?.created_at ?? now(),
+    last_updated: now(),
+    version: bumpVersion(existing?.version),
+    schema_version: 1,
   }
 }
 

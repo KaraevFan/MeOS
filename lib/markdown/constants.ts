@@ -45,6 +45,7 @@ export const FILE_TYPES = {
   SESSION_INSIGHTS: 'session-insights',
   DAILY_LOG: 'daily-log',
   DAY_PLAN: 'day-plan',
+  WEEKLY_PLAN: 'weekly-plan',
   CAPTURE: 'capture',
 } as const
 
@@ -60,6 +61,7 @@ export const SESSION_WRITE_PERMISSIONS: Record<string, string[]> = {
   weekly_checkin: [
     'check-ins/',
     'life-plan/current.md',
+    'life-plan/weekly.md',
     'life-map/',
     'sage/',
   ],

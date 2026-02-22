@@ -8,7 +8,7 @@ import {
 } from './constants'
 import { getLocalDateString } from '@/lib/dates'
 import type { DomainName } from '@/types/chat'
-import type { DailyLogFrontmatter, DayPlanFrontmatter } from '@/types/markdown-files'
+import type { DailyLogFrontmatter, DayPlanFrontmatter, WeeklyPlanFrontmatter } from '@/types/markdown-files'
 
 export interface FileWriteResult {
   success: boolean
@@ -56,6 +56,8 @@ export function resolveFileUpdatePath(update: FileUpdateData, timezone: string =
       const date = update.name ?? todayFallback()
       return `day-plans/${date}.md`
     }
+    case FILE_TYPES.WEEKLY_PLAN:
+      return 'life-plan/weekly.md'
     default:
       console.warn(`[FileWriteHandler] Unknown file type: ${update.fileType}`)
       return null
@@ -175,6 +177,15 @@ export async function handleFileUpdate(
           planOverrides.carried_forward_from = update.attributes.carried_forward_from
         }
         await ufs.writeDayPlan(date, update.content, planOverrides)
+        break
+      }
+      case FILE_TYPES.WEEKLY_PLAN: {
+        const weekOf = update.name ?? getLocalDateString(timezone)
+        const weeklyOverrides: Partial<WeeklyPlanFrontmatter> = {}
+        if (update.attributes?.reflection_day) {
+          weeklyOverrides.reflection_day = update.attributes.reflection_day
+        }
+        await ufs.writeWeeklyPlan(update.content, weekOf, weeklyOverrides)
         break
       }
       default:

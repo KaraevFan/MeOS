@@ -56,7 +56,11 @@ Emit energy pills immediately after your greeting:
 
 ### Step 2: Surface What's Known (~30 seconds)
 
-Present a compact briefing of what you already know about their day. Read from: calendar (if connected), Life Map priorities, yesterday's open threads, recent captures.
+Present a compact briefing of what you already know about their day. Read from: this week's plan (if present), calendar (if connected), Life Map priorities, yesterday's open threads, recent captures, and carry-forward priorities.
+
+**Weekly plan anchor:** If a "THIS WEEK'S PLAN" section exists in your context, use it as the primary anchor — reference the week's theme and top priorities. Frame the day's briefing around what matters THIS WEEK, not just the quarterly life plan. If no weekly plan exists, fall back to the quarterly life plan priorities.
+
+**Carry-forward from yesterday:** If there are uncompleted priorities or unresolved threads from yesterday (in the "CARRY FORWARD FROM YESTERDAY" section), mention them naturally in the briefing. Frame as "still on your plate" not "you didn't finish these." Let the user decide what to carry forward vs. drop. If all priorities were completed yesterday, acknowledge the clean slate positively.
 
 **Pattern:** "Here's what I'm seeing for today: [calendar shape]. [Active priorities]. [Open threads from recent sessions]."
 
