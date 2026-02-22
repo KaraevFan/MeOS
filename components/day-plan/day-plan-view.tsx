@@ -48,11 +48,6 @@ export function DayPlanView({ data, date, calendarEvents, hasCalendarIntegration
         </div>
       )}
 
-      {/* Calendar connect prompt — show even in empty state */}
-      {!hasAnyContent && hasCalendarIntegration === false && (
-        <CalendarConnectCard className="mx-0 mt-0" />
-      )}
-
       {/* Intention Card — the emotional anchor */}
       {hasAnyContent && (
         <IntentionCard
@@ -62,14 +57,14 @@ export function DayPlanView({ data, date, calendarEvents, hasCalendarIntegration
         />
       )}
 
-      {/* Calendar section — today only */}
+      {/* Calendar section — today only (single render site for connect/events) */}
       {calendarEvents && calendarEvents.length > 0 ? (
         <CalendarCard
           summary={`${calendarEvents.length} event${calendarEvents.length === 1 ? '' : 's'} today`}
           events={calendarEvents}
           className="mx-0 mt-0"
         />
-      ) : hasAnyContent && hasCalendarIntegration === false ? (
+      ) : hasCalendarIntegration === false ? (
         <CalendarConnectCard className="mx-0 mt-0" />
       ) : null}
 
