@@ -20,7 +20,10 @@ export default async function DayPage() {
   const [data, hasCalendar, calendarEvents] = await Promise.all([
     getDayPlanWithCaptures(supabase, user.id, today, tz),
     hasCalendarIntegration(user.id),
-    getCalendarEvents(user.id, today, tz).catch(() => []),
+    getCalendarEvents(user.id, today, tz).catch((error) => {
+      console.error('[day] Calendar fetch failed:', error)
+      return [] as Awaited<ReturnType<typeof getCalendarEvents>>
+    }),
   ])
 
   return (

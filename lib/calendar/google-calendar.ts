@@ -6,10 +6,12 @@ import type { CalendarEvent, CalendarIntegration } from './types'
 
 const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly'
 
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET
-)
+function createOAuth2Client() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+  )
+}
 
 /**
  * Fetch today's calendar events for a user.
@@ -40,9 +42,10 @@ export async function getCalendarEvents(userId: string, date: string, timezone: 
     const token = await getValidToken(parsed.data, userId)
     if (!token) return []
 
-    // Set credentials and fetch events
-    oauth2Client.setCredentials({ access_token: token })
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
+    // Per-request client to avoid credential leaks between concurrent users
+    const client = createOAuth2Client()
+    client.setCredentials({ access_token: token })
+    const calendar = google.calendar({ version: 'v3', auth: client })
 
     const startOfDay = getLocalMidnight(date, timezone)
     const endOfDay = getLocalEndOfDay(date, timezone)
@@ -113,8 +116,9 @@ async function getValidToken(
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      oauth2Client.setCredentials({ refresh_token: integration.refresh_token })
-      const { credentials } = await oauth2Client.refreshAccessToken()
+      const client = createOAuth2Client()
+      client.setCredentials({ refresh_token: integration.refresh_token })
+      const { credentials } = await client.refreshAccessToken()
 
       if (!credentials.access_token) {
         console.warn('[calendar] Refresh returned no access token, removing integration')
