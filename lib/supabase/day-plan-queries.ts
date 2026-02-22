@@ -62,6 +62,27 @@ export async function getDayPlan(
 }
 
 /**
+ * Get day plans for a date range (inclusive). Single query instead of N individual fetches.
+ * Results are sorted by date ascending.
+ */
+export async function getDayPlansForDateRange(
+  supabase: SupabaseClient,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<DayPlan[]> {
+  const { data } = await supabase
+    .from('day_plans')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date', { ascending: true })
+
+  return (data ?? []) as DayPlan[]
+}
+
+/**
  * Partial update of a day plan row.
  */
 export async function updateDayPlan(

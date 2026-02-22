@@ -5,7 +5,7 @@ import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { getCalendarEvents } from '@/lib/calendar/google-calendar'
-import { getDayPlan } from '@/lib/supabase/day-plan-queries'
+import { getDayPlan, getDayPlansForDateRange } from '@/lib/supabase/day-plan-queries'
 import { getLocalDateString, getLocalDayOfWeek, getYesterdayDateString, getLocalMidnight, formatTimeInTimezone, getStartOfWeek } from '@/lib/dates'
 import type { SessionType, DomainName } from '@/types/chat'
 import type { DayPlan } from '@/types/day-plan'
@@ -187,9 +187,11 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
       console.error('[context] Calendar fetch failed for open_day:', err)
     }
 
+    // Compute yesterday's date once for all open_day carry-forward blocks
+    const yesterdayStr = getYesterdayDateString(timezone)
+
     // Yesterday's day plan + journal cross-reference (for carry-forward)
     try {
-      const yesterdayStr = getYesterdayDateString(timezone)
       const [yesterdayDayPlan, yesterdayLog] = await Promise.all([
         ufs.readDayPlan(yesterdayStr).catch(() => null),
         ufs.readDailyLog(yesterdayStr).catch(() => null),
@@ -212,28 +214,33 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
 
     // Yesterday's structured priorities + open threads from day_plans DB table
     try {
-      const yesterdayStr = getYesterdayDateString(timezone)
       const yesterdayDbPlan = await getDayPlan(supabase, userId, yesterdayStr)
       if (yesterdayDbPlan) {
-        const uncompleted = yesterdayDbPlan.priorities?.filter(p => !p.completed) ?? []
-        const unresolvedThreads = yesterdayDbPlan.open_threads?.filter(t => t.status !== 'resolved') ?? []
+        const uncompleted = Array.isArray(yesterdayDbPlan.priorities)
+          ? yesterdayDbPlan.priorities.filter(p => !p.completed)
+          : []
+        const unresolvedThreads = Array.isArray(yesterdayDbPlan.open_threads)
+          ? yesterdayDbPlan.open_threads.filter(t => t.status !== 'resolved')
+          : []
 
         if (uncompleted.length > 0 || unresolvedThreads.length > 0) {
           parts.push('\n=== CARRY FORWARD FROM YESTERDAY ===')
+          parts.push('<user_data>')
           if (uncompleted.length > 0) {
             parts.push('\n### Uncompleted Priorities')
             for (const p of uncompleted) {
-              parts.push(`- [ ] ${p.text} (set yesterday, not completed)`)
+              parts.push(`- [ ] ${stripBlockTags(p.text)} (set yesterday, not completed)`)
             }
           }
           if (unresolvedThreads.length > 0) {
             parts.push('\n### Unresolved Open Threads')
             for (const t of unresolvedThreads) {
-              parts.push(`- ${t.text} (from ${t.provenance_label || 'yesterday'})`)
+              parts.push(`- ${stripBlockTags(t.text)} (from ${stripBlockTags(t.provenance_label ?? 'yesterday')})`)
             }
           }
+          parts.push('</user_data>')
           parts.push('\nNote: These items were on yesterday\'s plan but weren\'t completed. Surface them naturally — the user should decide whether to carry forward, defer, or drop.')
-        } else if (yesterdayDbPlan.priorities && yesterdayDbPlan.priorities.length > 0) {
+        } else if (Array.isArray(yesterdayDbPlan.priorities) && yesterdayDbPlan.priorities.length > 0) {
           parts.push('\n=== YESTERDAY\'S PRIORITIES: ALL COMPLETED ===')
           parts.push('The user completed everything on yesterday\'s plan. Acknowledge this positively.')
         }
@@ -244,8 +251,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
 
     // Yesterday's captures for the morning briefing (carry-forward)
     try {
-      const yesterdayCaptureDate = getYesterdayDateString(timezone)
-      const captureFilenames = await ufs.listCaptures(yesterdayCaptureDate, 10)
+      const captureFilenames = await ufs.listCaptures(yesterdayStr, 10)
       if (captureFilenames.length > 0) {
         const captureResults = await Promise.allSettled(
           captureFilenames.map((filename) => ufs.readCapture(filename))
@@ -262,7 +268,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
             const time = formatTimeInTimezone(capture.frontmatter.timestamp, timezone)
             const mode = capture.frontmatter.input_mode === 'voice' ? ' [voice]' : ''
             // Strip block tags to prevent prompt injection (documented pattern from M3 review)
-            const sanitized = capture.content.replace(/\[\/?(FILE_UPDATE|DOMAIN_SUMMARY|LIFE_MAP_SYNTHESIS|SESSION_SUMMARY|SUGGESTED_REPLIES|INLINE_CARD|INTENTION_CARD|DAY_PLAN_DATA)[^\]]*\]/g, '')
+            const sanitized = stripBlockTags(capture.content)
             parts.push(`- ${time}${mode}: "${sanitized}"`)
           }
         }
@@ -308,7 +314,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
             const time = formatTimeInTimezone(capture.frontmatter.timestamp, timezone)
             const mode = capture.frontmatter.input_mode === 'voice' ? ' [voice]' : ''
             // Strip block tags to prevent prompt injection from user content
-            const sanitized = capture.content.replace(/\[\/?(FILE_UPDATE|DOMAIN_SUMMARY|LIFE_MAP_SYNTHESIS|SESSION_SUMMARY|SUGGESTED_REPLIES|INLINE_CARD|INTENTION_CARD)[^\]]*\]/g, '')
+            const sanitized = stripBlockTags(capture.content)
             parts.push(`- ${time}${mode}: "${sanitized}"`)
           }
         }
@@ -384,34 +390,31 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
           .map((filename) => filename.replace('-journal.md', ''))
           .slice(0, 7) // Cap at 7 days for token budget
 
-        const weekDayPlans = await Promise.allSettled(
-          journalDates.map(date => getDayPlan(supabase, userId, date))
-        )
-        const validPlans = weekDayPlans
-          .filter((r): r is PromiseFulfilledResult<DayPlan | null> =>
-            r.status === 'fulfilled' && r.value != null)
-          .map(r => r.value!)
+        const weekDayPlans = await getDayPlansForDateRange(supabase, userId, journalDates[journalDates.length - 1], journalDates[0])
+        const validPlans = weekDayPlans.filter((d): d is DayPlan => d !== null)
 
         if (validPlans.length > 0) {
-          const totalPriorities = validPlans.reduce((sum, d) => sum + (d.priorities?.length || 0), 0)
+          const totalPriorities = validPlans.reduce((sum, d) => sum + (Array.isArray(d.priorities) ? d.priorities.length : 0), 0)
           const completedPriorities = validPlans.reduce((sum, d) =>
-            sum + (d.priorities?.filter(p => p.completed)?.length || 0), 0)
+            sum + (Array.isArray(d.priorities) ? d.priorities.filter(p => p.completed).length : 0), 0)
 
           parts.push('\n=== WEEK IN NUMBERS ===')
+          parts.push('<user_data>')
           parts.push(`Days with morning sessions: ${validPlans.length} / 7`)
           parts.push(`Priorities set: ${totalPriorities} | Completed: ${completedPriorities}`)
 
           parts.push('\n### Daily Intentions')
           for (const plan of validPlans) {
-            const allDone = plan.priorities?.length > 0 && plan.priorities.every(p => p.completed)
+            const hasPriorities = Array.isArray(plan.priorities) && plan.priorities.length > 0
+            const allDone = hasPriorities && plan.priorities.every(p => p.completed)
             const status = allDone ? '✅' : '—'
-            parts.push(`- **${plan.date}**: "${plan.intention || 'no intention set'}" ${status}`)
+            parts.push(`- **${plan.date}**: "${stripBlockTags(plan.intention ?? 'no intention set')}" ${status}`)
           }
 
           // Deduplicate unresolved threads by text
           const seen = new Set<string>()
           const unresolvedThreads = validPlans
-            .flatMap(d => (d.open_threads || []).filter(t => t.status !== 'resolved'))
+            .flatMap(d => (Array.isArray(d.open_threads) ? d.open_threads : []).filter(t => t.status !== 'resolved'))
             .filter(t => {
               const key = t.text.trim().toLowerCase()
               if (seen.has(key)) return false
@@ -422,9 +425,10 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
           if (unresolvedThreads.length > 0) {
             parts.push('\n### Unresolved Threads (persisted across multiple days)')
             for (const t of unresolvedThreads) {
-              parts.push(`- ${t.text} (first appeared: ${t.source_date || 'unknown'})`)
+              parts.push(`- ${stripBlockTags(t.text)} (first appeared: ${t.source_date ?? 'unknown'})`)
             }
           }
+          parts.push('</user_data>')
 
           parts.push('\nUse this operational data alongside daily journals to close the loop on planned vs. actual.')
         }
@@ -512,6 +516,11 @@ export async function buildConversationContext(
   }
 
   return prompt
+}
+
+/** Strip block tags from user-originated text to prevent prompt injection. */
+function stripBlockTags(text: string): string {
+  return text.replace(/\[\/?(FILE_UPDATE|DOMAIN_SUMMARY|LIFE_MAP_SYNTHESIS|SESSION_SUMMARY|SUGGESTED_REPLIES|INLINE_CARD|INTENTION_CARD|DAY_PLAN_DATA)[^\]]*\]/g, '')
 }
 
 /**

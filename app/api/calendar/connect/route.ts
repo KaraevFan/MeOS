@@ -12,8 +12,9 @@ import { randomBytes } from 'crypto'
 export async function GET(request: Request) {
   // Guard: Calendar OAuth requires Google credentials
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    console.warn('[calendar/connect] Calendar OAuth credentials not configured')
     return NextResponse.json(
-      { error: 'Calendar integration is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.' },
+      { error: 'Calendar integration is not available.' },
       { status: 503 }
     )
   }

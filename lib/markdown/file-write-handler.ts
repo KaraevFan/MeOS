@@ -6,9 +6,9 @@ import {
   MAX_FILE_UPDATE_BLOCKS_PER_MESSAGE,
   FILE_TYPES,
 } from './constants'
-import { getLocalDateString } from '@/lib/dates'
+import { getLocalDateString, shiftDate } from '@/lib/dates'
 import type { DomainName } from '@/types/chat'
-import type { DailyLogFrontmatter, DayPlanFrontmatter, WeeklyPlanFrontmatter } from '@/types/markdown-files'
+import type { DailyLogFrontmatter, DayPlanFrontmatter } from '@/types/markdown-files'
 
 export interface FileWriteResult {
   success: boolean
@@ -180,12 +180,10 @@ export async function handleFileUpdate(
         break
       }
       case FILE_TYPES.WEEKLY_PLAN: {
-        const weekOf = update.name ?? getLocalDateString(timezone)
-        const weeklyOverrides: Partial<WeeklyPlanFrontmatter> = {}
-        if (update.attributes?.reflection_day) {
-          weeklyOverrides.reflection_day = update.attributes.reflection_day
-        }
-        await ufs.writeWeeklyPlan(update.content, weekOf, weeklyOverrides)
+        const rawWeekOf = update.name ?? getLocalDateString(timezone)
+        // Normalize to Monday of the given week (Sage may provide a non-Monday date)
+        const weekOf = normalizeToMonday(rawWeekOf)
+        await ufs.writeWeeklyPlan(update.content, weekOf)
         break
       }
       default:
@@ -258,6 +256,15 @@ export async function handleAllFileUpdates(
  * Mark all of today's captures as folded into the journal.
  * Fire-and-forget — failures are logged, not thrown to the caller.
  */
+/** Normalize a YYYY-MM-DD date to the Monday of its ISO week. */
+function normalizeToMonday(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(Date.UTC(y, m - 1, d))
+  const dow = date.getUTCDay() // 0=Sun, 1=Mon ... 6=Sat
+  const daysToMonday = dow === 0 ? -6 : 1 - dow
+  return daysToMonday === 0 ? dateStr : shiftDate(dateStr, daysToMonday)
+}
+
 async function markCapturesFolded(ufs: UserFileSystem, timezone: string = 'UTC'): Promise<void> {
   const today = getLocalDateString(timezone)
   const filenames = await ufs.listCaptures(today)

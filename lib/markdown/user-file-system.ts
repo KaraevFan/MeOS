@@ -334,10 +334,8 @@ export class UserFileSystem {
 
     const parsed = WeeklyPlanFrontmatterSchema.safeParse(file.frontmatter)
     if (!parsed.success) {
-      return {
-        frontmatter: { type: 'weekly-plan' as const, week_of: '', last_updated: '', status: 'active' as const, priorities: [], version: 1, schema_version: 1 },
-        content: file.content,
-      }
+      console.warn('[UserFileSystem] Weekly plan frontmatter parse failed:', parsed.error.issues)
+      return null
     }
     return {
       frontmatter: parsed.data,
@@ -603,6 +601,7 @@ export class UserFileSystem {
   }
 
   private inferFileType(filePath: string): string {
+    // Exact matches MUST come before their prefix matches (e.g., overview before life-map/, weekly before life-plan/)
     if (filePath === 'life-map/_overview.md') return FILE_TYPES.OVERVIEW
     if (filePath.startsWith('life-map/')) return FILE_TYPES.DOMAIN
     if (filePath === 'life-plan/weekly.md') return FILE_TYPES.WEEKLY_PLAN

@@ -153,9 +153,6 @@ export function generateWeeklyPlanFrontmatter(
   return {
     type: 'weekly-plan',
     week_of: updates.week_of,
-    reflection_day: updates.reflection_day ?? existing?.reflection_day ?? 'Sunday',
-    priorities: updates.priorities ?? existing?.priorities ?? [],
-    status: updates.status ?? existing?.status ?? 'active',
     created_at: existing?.created_at ?? now(),
     last_updated: now(),
     version: bumpVersion(existing?.version),
