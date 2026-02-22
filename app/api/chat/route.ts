@@ -40,11 +40,15 @@ const ChatRequestSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string().max(10_000),
-  })).min(1).max(100),
+  })).max(100),
   pulseContextMode: z.enum(['none', 'onboarding_baseline', 'checkin_after_rerate', 'checkin_after_skip']).optional(),
   precheckin: z.boolean().optional(),
   exploreDomain: z.string().optional(),
-})
+}).refine(
+  // open_day sessions can start with zero messages (AI generates the opening)
+  (data) => data.messages.length > 0 || data.sessionType === 'open_day',
+  { message: 'Messages array must have at least 1 item', path: ['messages'] },
+)
 
 const PRE_CHECKIN_WARMUP_INSTRUCTION = `The user is doing a quick pre-checkin warmup before their weekly reflection.
 Guide a 2-minute prep with exactly two short reflective questions:

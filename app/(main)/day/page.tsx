@@ -4,6 +4,7 @@ import { getDayPlanWithCaptures } from '@/lib/supabase/day-plan-queries'
 import { DayPlanSwipeContainer } from '@/components/day-plan/day-plan-swipe-container'
 import { getUserTimezone } from '@/lib/get-user-timezone'
 import { getLocalDateString } from '@/lib/dates'
+import { getCalendarEvents, hasCalendarIntegration } from '@/lib/calendar/google-calendar'
 
 export default async function DayPage() {
   const supabase = await createClient()
@@ -15,7 +16,20 @@ export default async function DayPage() {
 
   const tz = await getUserTimezone(supabase, user.id)
   const today = getLocalDateString(tz)
-  const data = await getDayPlanWithCaptures(supabase, user.id, today, tz)
 
-  return <DayPlanSwipeContainer initialDate={today} today={today} initialData={data} />
+  const [data, hasCalendar, calendarEvents] = await Promise.all([
+    getDayPlanWithCaptures(supabase, user.id, today, tz),
+    hasCalendarIntegration(user.id),
+    getCalendarEvents(user.id, today, tz).catch(() => []),
+  ])
+
+  return (
+    <DayPlanSwipeContainer
+      initialDate={today}
+      today={today}
+      initialData={data}
+      calendarEvents={calendarEvents}
+      hasCalendarIntegration={hasCalendar}
+    />
+  )
 }

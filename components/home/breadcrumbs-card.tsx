@@ -1,4 +1,4 @@
-import { InfoCard } from './info-card'
+import { InfoCard } from '@/components/ui/info-card'
 
 interface BreadcrumbsCardProps {
   captures: string[]

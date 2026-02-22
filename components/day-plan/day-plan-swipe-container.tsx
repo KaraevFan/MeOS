@@ -4,11 +4,14 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { DayPlanView } from './day-plan-view'
 import { shiftDate } from '@/lib/dates'
 import type { DayPlanWithCaptures } from '@/types/day-plan'
+import type { CalendarEvent } from '@/lib/calendar/types'
 
 interface DayPlanSwipeContainerProps {
   initialDate: string
   today: string
   initialData: DayPlanWithCaptures
+  calendarEvents?: CalendarEvent[]
+  hasCalendarIntegration?: boolean
 }
 
 // Swipe gesture thresholds
@@ -33,7 +36,7 @@ function isDayPlanResponse(value: unknown): value is DayPlanWithCaptures {
   )
 }
 
-export function DayPlanSwipeContainer({ initialDate, today, initialData }: DayPlanSwipeContainerProps) {
+export function DayPlanSwipeContainer({ initialDate, today, initialData, calendarEvents, hasCalendarIntegration }: DayPlanSwipeContainerProps) {
   const [currentDate, setCurrentDate] = useState(initialDate)
   const [data, setData] = useState<DayPlanWithCaptures>(initialData)
   const [isLoading, setIsLoading] = useState(false)
@@ -202,7 +205,12 @@ export function DayPlanSwipeContainer({ initialDate, today, initialData }: DayPl
       )}
 
       {/* Day plan content */}
-      <DayPlanView data={data} date={currentDate} />
+      <DayPlanView
+        data={data}
+        date={currentDate}
+        calendarEvents={isToday ? calendarEvents : undefined}
+        hasCalendarIntegration={isToday ? hasCalendarIntegration : undefined}
+      />
     </div>
   )
 }

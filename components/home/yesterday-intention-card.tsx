@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { InfoCard } from './info-card'
+import { InfoCard } from '@/components/ui/info-card'
 
 interface YesterdayIntentionCardProps {
   intention: string

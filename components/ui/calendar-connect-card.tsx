@@ -11,9 +11,9 @@ const CalendarIcon = (
   </svg>
 )
 
-export function CalendarConnectCard() {
+export function CalendarConnectCard({ className }: { className?: string }) {
   return (
-    <InfoCard borderColor="amber">
+    <InfoCard borderColor="amber" className={className}>
       <a
         href="/api/calendar/connect"
         className="flex items-center justify-between gap-3"

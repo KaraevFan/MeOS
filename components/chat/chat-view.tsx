@@ -10,7 +10,7 @@ import { ChatInput } from './chat-input'
 import { BuildingCardPlaceholder } from './building-card-placeholder'
 import { SuggestionPills } from './suggestion-pills'
 import type { SuggestionPill } from './suggestion-pills'
-import { EnergyCheckChips } from './energy-check-chips'
+import { EnergyCheckCard } from './energy-check-card'
 import { ErrorMessage } from './error-message'
 import { PulseCheckCard } from './pulse-check-card'
 import { getOrCreateLifeMap, upsertDomain, updateLifeMapSynthesis } from '@/lib/supabase/life-map'
@@ -122,8 +122,6 @@ function getSageOpening(state: string, userName?: string, hasOnboardingPulse?: b
       return `Hey${name ? ',' + name : ''}. I'm here whenever. Anything on your mind?`
     case 'close_day':
       return `Hey${name ? ',' + name : ''}. Let's close out the day together.`
-    case 'open_day':
-      return `Good morning${name ? ',' + name : ''}. Let's set the tone for today.`
     case 'checkin_due':
       return `Hey${name ? ',' + name : ''} — it's check-in time. Ready to look at how this week went?`
     case 'checkin_overdue':
@@ -418,32 +416,38 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
             const needsPulseCheck = state === 'new_user' && sessionType === 'life_mapping' && !hasOnboardingPulse
 
-            // Add Sage's opening message — daily rhythm sessions use sessionType directly
-            const openingKey = sessionType === 'close_day' || sessionType === 'open_day' ? sessionType : state
-            const openingMessage = getSageOpening(openingKey, initialSessionState?.userName, hasOnboardingPulse)
+            // open_day: skip hard-coded opening — AI generates a context-rich greeting
+            if (sessionType === 'open_day') {
+              // Show typing indicator immediately so the user doesn't see a blank screen
+              setIsStreaming(true)
+            } else {
+              // Add Sage's opening message — daily rhythm sessions use sessionType directly
+              const openingKey = sessionType === 'close_day' ? sessionType : state
+              const openingMessage = getSageOpening(openingKey, initialSessionState?.userName, hasOnboardingPulse)
 
-            const { data: savedMsg, error: insertError } = await supabase
-              .from('messages')
-              .insert({
-                session_id: newSession.id,
-                role: 'assistant',
-                content: openingMessage,
-                has_structured_block: false,
-              })
-              .select()
-              .single()
+              const { data: savedMsg, error: insertError } = await supabase
+                .from('messages')
+                .insert({
+                  session_id: newSession.id,
+                  role: 'assistant',
+                  content: openingMessage,
+                  has_structured_block: false,
+                })
+                .select()
+                .single()
 
-            if (insertError) {
-              console.error('[ChatView] Failed to insert opening message:', insertError)
-            } else if (savedMsg) {
-              setMessages([{
-                id: savedMsg.id,
-                sessionId: savedMsg.session_id,
-                role: 'assistant',
-                content: savedMsg.content,
-                hasStructuredBlock: false,
-                createdAt: savedMsg.created_at,
-              }])
+              if (insertError) {
+                console.error('[ChatView] Failed to insert opening message:', insertError)
+              } else if (savedMsg) {
+                setMessages([{
+                  id: savedMsg.id,
+                  sessionId: savedMsg.session_id,
+                  role: 'assistant',
+                  content: savedMsg.content,
+                  hasStructuredBlock: false,
+                  createdAt: savedMsg.created_at,
+                }])
+              }
             }
 
             // Show pulse check for new users (only if no onboarding pulse data)
@@ -462,7 +466,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
                 triggerSageResponse('none')
               }, 100)
             } else if (sessionType === 'open_day' && !briefingData) {
-              // open_day without briefing: auto-trigger Sage to start Step 1 (energy check)
+              // open_day without briefing: auto-trigger Sage to generate context-rich greeting
               // When briefingData exists, the BriefingCard's onStart callback handles this
               setTimeout(() => {
                 triggerSageResponse('none')
@@ -1229,9 +1233,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               )}
               {activePills.length > 0 && (
                 <div className="mt-2">
-                  {/* Use EnergyCheckChips for open_day energy check (5 options at start of session) */}
+                  {/* Use EnergyCheckCard for open_day energy check (5 options at start of session) */}
                   {sessionType === 'open_day' && activePills.length >= 4 && messages.length <= 3 ? (
-                    <EnergyCheckChips
+                    <EnergyCheckCard
                       pills={activePills}
                       onSelect={handleSend}
                       disabled={isStreaming}

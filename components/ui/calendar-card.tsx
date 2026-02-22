@@ -7,6 +7,7 @@ import type { CalendarEvent } from '@/lib/calendar/types'
 interface CalendarCardProps {
   summary: string
   events: CalendarEvent[]
+  className?: string
 }
 
 function formatEventTime(event: CalendarEvent): string {
@@ -28,11 +29,11 @@ function formatDuration(event: CalendarEvent): string {
   return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`
 }
 
-export function CalendarCard({ summary, events }: CalendarCardProps) {
+export function CalendarCard({ summary, events, className }: CalendarCardProps) {
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <InfoCard borderColor="amber">
+    <InfoCard borderColor="amber" className={className}>
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full text-left flex flex-col gap-3"

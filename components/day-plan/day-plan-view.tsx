@@ -1,17 +1,24 @@
 'use client'
 
 import type { DayPlanWithCaptures } from '@/types/day-plan'
+import type { CalendarEvent } from '@/lib/calendar/types'
 import { IntentionCard } from './intention-card'
 import { MorningSnapshotCard } from './morning-snapshot-card'
 import { CapturedThoughts } from './captured-thoughts'
+import { CalendarCard } from '@/components/ui/calendar-card'
+import { CalendarConnectCard } from '@/components/ui/calendar-connect-card'
 
 interface DayPlanViewProps {
   data: DayPlanWithCaptures
   /** YYYY-MM-DD date to display. Defaults to today. */
   date?: string
+  /** Today's calendar events (only passed for today's date). */
+  calendarEvents?: CalendarEvent[]
+  /** Whether the user has a calendar integration connected. */
+  hasCalendarIntegration?: boolean
 }
 
-export function DayPlanView({ data, date }: DayPlanViewProps) {
+export function DayPlanView({ data, date, calendarEvents, hasCalendarIntegration }: DayPlanViewProps) {
   const { dayPlan, captures, streak } = data
   // Parse the date prop (YYYY-MM-DD) or fall back to today
   const displayDate = date ? new Date(date + 'T12:00:00') : new Date()
@@ -41,6 +48,11 @@ export function DayPlanView({ data, date }: DayPlanViewProps) {
         </div>
       )}
 
+      {/* Calendar connect prompt — show even in empty state */}
+      {!hasAnyContent && hasCalendarIntegration === false && (
+        <CalendarConnectCard className="mx-0 mt-0" />
+      )}
+
       {/* Intention Card — the emotional anchor */}
       {hasAnyContent && (
         <IntentionCard
@@ -49,6 +61,17 @@ export function DayPlanView({ data, date }: DayPlanViewProps) {
           morningCompleted={!!dayPlan?.morning_completed_at}
         />
       )}
+
+      {/* Calendar section — today only */}
+      {calendarEvents && calendarEvents.length > 0 ? (
+        <CalendarCard
+          summary={`${calendarEvents.length} event${calendarEvents.length === 1 ? '' : 's'} today`}
+          events={calendarEvents}
+          className="mx-0 mt-0"
+        />
+      ) : hasAnyContent && hasCalendarIntegration === false ? (
+        <CalendarConnectCard className="mx-0 mt-0" />
+      ) : null}
 
       {/* Morning Snapshot — Sage's briefing */}
       {dayPlan?.morning_completed_at && (
