@@ -217,6 +217,7 @@ export function generateCalendarAuthUrl(redirectUri: string, state: string): str
     prompt: 'consent',
     scope: [CALENDAR_SCOPE],
     state,
+    redirect_uri: redirectUri,
   })
 }
 
