@@ -180,7 +180,7 @@ export default async function ChatPage({
     : null
 
   // Fetch briefing data for open_day sessions
-  let briefingData: { firstName: string | null; todayIntention: string | null } | undefined
+  let briefingData: { firstName: string | null; todayIntention: string | null; timezone: string } | undefined
   if (sessionType === 'open_day') {
     const tz = await getUserTimezone(supabase, user.id)
     const ufs = new UserFileSystem(supabase, user.id)
@@ -198,6 +198,7 @@ export default async function ChatPage({
     briefingData = {
       firstName,
       todayIntention: todayPlan.status === 'fulfilled' ? todayPlan.value?.frontmatter.intention ?? null : null,
+      timezone: tz,
     }
   }
 

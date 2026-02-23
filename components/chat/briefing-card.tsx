@@ -5,13 +5,14 @@ import { getTimeGreeting } from '@/lib/utils'
 interface BriefingCardProps {
   firstName: string | null
   todayIntention: string | null
+  timezone: string
   onStart: () => void
 }
 
-export function BriefingCard({ firstName, todayIntention, onStart }: BriefingCardProps) {
+export function BriefingCard({ firstName, todayIntention, timezone, onStart }: BriefingCardProps) {
   const greeting = firstName
-    ? `${getTimeGreeting()}, ${firstName}`
-    : getTimeGreeting()
+    ? `${getTimeGreeting(timezone)}, ${firstName}`
+    : getTimeGreeting(timezone)
 
   const hook = todayIntention
     ? `You already have a plan for today: "${todayIntention}"`

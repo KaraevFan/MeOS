@@ -45,6 +45,7 @@ import { captureException } from '@/lib/monitoring/sentry'
 interface BriefingData {
   firstName: string | null
   todayIntention: string | null
+  timezone: string
 }
 
 interface ChatViewProps {
@@ -416,10 +417,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             const needsPulseCheck = state === 'new_user' && sessionType === 'life_mapping' && !hasOnboardingPulse
 
             // open_day: skip hard-coded opening — AI generates a context-rich greeting
-            if (sessionType === 'open_day') {
-              // Show typing indicator immediately so the user doesn't see a blank screen
+            if (sessionType === 'open_day' && !briefingData) {
+              // No briefing card → show typing indicator while we auto-trigger Sage
               setIsStreaming(true)
-            } else {
+            } else if (sessionType !== 'open_day') {
               // Add Sage's opening message — daily rhythm sessions use sessionType directly
               const openingKey = sessionType === 'close_day' ? sessionType : state
               const openingMessage = getSageOpening(openingKey, initialSessionState?.userName, hasOnboardingPulse)
@@ -1147,6 +1148,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           <BriefingCard
             firstName={briefingData.firstName}
             todayIntention={briefingData.todayIntention}
+            timezone={briefingData.timezone}
             onStart={() => {
               setShowBriefing(false)
               // Auto-trigger Claude (same pattern as close_day) — no user message
