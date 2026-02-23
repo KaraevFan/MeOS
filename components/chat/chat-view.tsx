@@ -45,7 +45,6 @@ import { captureException } from '@/lib/monitoring/sentry'
 interface BriefingData {
   firstName: string | null
   todayIntention: string | null
-  yesterdayIntention: string | null
 }
 
 interface ChatViewProps {
@@ -1148,7 +1147,6 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           <BriefingCard
             firstName={briefingData.firstName}
             todayIntention={briefingData.todayIntention}
-            yesterdayIntention={briefingData.yesterdayIntention}
             onStart={() => {
               setShowBriefing(false)
               // Auto-trigger Claude (same pattern as close_day) — no user message

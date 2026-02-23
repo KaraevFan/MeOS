@@ -95,6 +95,7 @@ export interface DayPlanDataBlock {
   intention?: string
   priorities?: { rank: number; text: string; completed: boolean }[]
   open_threads?: { text: string; source_session_type?: string; source_date?: string; provenance_label?: string; status: 'open' | 'resolved' }[]
+  coaching_note?: string
 }
 
 export type StructuredBlock =

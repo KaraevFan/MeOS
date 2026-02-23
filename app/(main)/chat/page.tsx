@@ -8,7 +8,7 @@ import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { extractCommitments } from '@/lib/markdown/extract'
 import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { getDisplayName } from '@/lib/utils'
-import { getLocalDateString, getYesterdayDateString } from '@/lib/dates'
+import { getLocalDateString } from '@/lib/dates'
 import { getUserTimezone } from '@/lib/get-user-timezone'
 import type { Commitment } from '@/lib/markdown/extract'
 import { REFLECTIVE_PROMPTS } from '@/lib/constants/reflective-prompts'
@@ -180,17 +180,15 @@ export default async function ChatPage({
     : null
 
   // Fetch briefing data for open_day sessions
-  let briefingData: { firstName: string | null; todayIntention: string | null; yesterdayIntention: string | null } | undefined
+  let briefingData: { firstName: string | null; todayIntention: string | null } | undefined
   if (sessionType === 'open_day') {
     const tz = await getUserTimezone(supabase, user.id)
     const ufs = new UserFileSystem(supabase, user.id)
     const todayStr = getLocalDateString(tz)
-    const yesterday = getYesterdayDateString(tz)
 
-    const [userResult, todayPlan, yesterdayPlan] = await Promise.allSettled([
+    const [userResult, todayPlan] = await Promise.allSettled([
       supabase.from('users').select('email, display_name').eq('id', user.id).single(),
       ufs.readDayPlan(todayStr),
-      ufs.readDayPlan(yesterday),
     ])
 
     const firstName = userResult.status === 'fulfilled'
@@ -200,7 +198,6 @@ export default async function ChatPage({
     briefingData = {
       firstName,
       todayIntention: todayPlan.status === 'fulfilled' ? todayPlan.value?.frontmatter.intention ?? null : null,
-      yesterdayIntention: yesterdayPlan.status === 'fulfilled' ? yesterdayPlan.value?.frontmatter.intention ?? null : null,
     }
   }
 
