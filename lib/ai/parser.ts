@@ -33,6 +33,7 @@ const DayPlanDataSchema = z.object({
     provenance_label: z.string().optional(),
     status: z.enum(['open', 'resolved']),
   })).optional(),
+  coaching_note: z.string().max(500).optional(),
 })
 
 const VALID_FILE_TYPES: Set<string> = new Set(Object.values(FILE_TYPES))

@@ -4,11 +4,11 @@ import { useState, useTransition } from 'react'
 import type { Priority, OpenThread, EnergyLevel } from '@/types/day-plan'
 
 const ENERGY_LABELS: Record<string, { emoji: string; label: string }> = {
-  fired_up: { emoji: '\uD83D\uDD25', label: 'Fired up' },
-  focused: { emoji: '\u26A1', label: 'Focused' },
+  fired_up: { emoji: '\uD83D\uDD25', label: 'Energized' },
+  focused: { emoji: '\uD83D\uDE0A', label: 'Good' },
   neutral: { emoji: '\uD83D\uDE10', label: 'Neutral' },
-  low: { emoji: '\uD83D\uDE34', label: 'Low energy' },
-  stressed: { emoji: '\uD83D\uDE24', label: 'Stressed' },
+  low: { emoji: '\uD83D\uDE14', label: 'Low' },
+  stressed: { emoji: '\uD83D\uDE23', label: 'Rough' },
 }
 
 interface MorningSnapshotCardProps {
