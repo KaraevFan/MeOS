@@ -313,14 +313,17 @@ export async function POST(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
+        // open_day sessions start with zero user messages — Sage speaks first.
+        // Anthropic API requires ≥1 message, so inject a synthetic user turn.
+        const apiMessages = messages.length > 0
+          ? messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+          : [{ role: 'user' as const, content: '[Start open_day session]' }]
+
         const messageStream = anthropic.messages.stream({
           model: 'claude-sonnet-4-5-20250929',
           max_tokens: 1024,
           system: systemPrompt,
-          messages: messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
+          messages: apiMessages,
         })
 
         messageStream.on('text', (text) => {
