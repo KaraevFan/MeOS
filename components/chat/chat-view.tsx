@@ -155,6 +155,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [previousRatings, setPreviousRatings] = useState<PulseCheckRating[]>([])
   const [showBriefing, setShowBriefing] = useState(sessionType === 'open_day' && !!briefingData)
   const [showExitSheet, setShowExitSheet] = useState(false)
+  // Tracks whether a terminal artifact card has rendered (fallback signal for session completion)
+  const [hasTerminalArtifact, setHasTerminalArtifact] = useState(false)
   // Two-phase close_day completion: card emitted (Phase A) → user confirms → session completes (Phase B)
   const awaitingJournalConfirmationRef = useRef(false)
 
@@ -224,10 +226,17 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   }, [messages, streamingText, scrollToBottom])
 
   // Exit session handler — decision tree:
+  // - Terminal artifact rendered (session functionally complete): navigate home directly
   // - Onboarding (life_mapping + new_user): always "Save & finish later" → leave active, navigate home
   // - 0-2 user messages: silent discard → abandon session, navigate home
   // - 3+ user messages: show pause confirmation sheet
   const handleExit = useCallback(() => {
+    // If a terminal artifact has rendered, the session is functionally done — skip modal
+    if (hasTerminalArtifact || sessionCompleted) {
+      router.push('/home')
+      return
+    }
+
     const userMessageCount = messagesRef.current.filter((m) => m.role === 'user').length
 
     if (isOnboarding) {
@@ -250,7 +259,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
     // Substantive session — ask user to pause or continue
     setShowExitSheet(true)
-  }, [isOnboarding, userId, router])
+  }, [isOnboarding, hasTerminalArtifact, sessionCompleted, userId, router])
 
   // Keep refs in sync with state for use in closures
   useEffect(() => { messagesRef.current = messages }, [messages])
@@ -575,7 +584,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exploreDomain, sessionId, isLoading])
 
-  /** Shared SSE streaming, message finalization, and DB persistence */
+  /** Shared SSE streaming, message finalization, and DB persistence.
+   *  Returns the accumulated response text. If the server signals session completion,
+   *  sessionCompleted state is set here (no client-side completeSession call needed). */
   async function streamAndFinalize(
     requestBody: Record<string, unknown>,
     forSessionId: string,
@@ -611,6 +622,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
         try {
           const parsed = JSON.parse(data)
           if (parsed.error) throw new Error(parsed.error)
+          if (parsed.sessionCompleted) {
+            // Server completed the session — set state, skip client-side completion
+            setSessionCompleted(true)
+          }
           if (parsed.text) {
             accumulated += parsed.text
             setStreamingText(accumulated)
@@ -791,7 +806,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             s.type === 'block' && s.blockType === 'life_map_synthesis'
         )
 
-        if (synthesisBlock) {
+        if (synthesisBlock && !sessionCompleted) {
           try {
             const lifeMap = await getOrCreateLifeMap(supabase, userId)
             await updateLifeMapSynthesis(supabase, lifeMap.id, synthesisBlock.data)
@@ -819,7 +834,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             s.type === 'block' && s.blockType === 'session_summary'
         )
 
-        if (summaryBlock) {
+        if (summaryBlock && !sessionCompleted) {
           try {
             const data = summaryBlock.data
             const summaryText = [
@@ -958,13 +973,18 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           const hasDailyLog = updates.some((u) => u.fileType === 'daily-log')
           const hasDayPlan = updates.some((u) => u.fileType === 'day-plan')
 
+          // Track terminal artifact rendering for exit modal fallback
+          if (hasDailyLog || hasDayPlan || hasOverview || hasCheckIn) {
+            setHasTerminalArtifact(true)
+          }
+
           if (hasDailyLog) {
             // Phase A: JournalCard emitted — defer session completion until user confirms the card.
             // Sage's prompt asks "Does this capture the day?" after the card.
             awaitingJournalConfirmationRef.current = true
           }
 
-          if (hasDayPlan) {
+          if (hasDayPlan && !sessionCompleted) {
             completeSession(supabase, sessionId).then(() => {
               setSessionCompleted(true)
 
@@ -1017,7 +1037,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             })
           }
 
-          if (hasOverview || hasCheckIn) {
+          if ((hasOverview || hasCheckIn) && !sessionCompleted) {
             completeSession(supabase, sessionId).then(() => {
               setNextCheckinDate(addDaysIso(new Date(), 7))
               setSessionCompleted(true)
@@ -1055,7 +1075,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
         sessionType === 'close_day' &&
         awaitingJournalConfirmationRef.current &&
         !hasDailyLogInResponse &&
-        !hasSuggestedReplies
+        !hasSuggestedReplies &&
+        !sessionCompleted
       ) {
         awaitingJournalConfirmationRef.current = false
         completeSession(supabase, sessionId).then(() => {
@@ -1122,7 +1143,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
         sessionType={sessionType}
         exploreDomain={exploreDomain}
         nudgeContext={nudgeContext}
-        onExit={sessionCompleted ? undefined : handleExit}
+        onExit={handleExit}
       />
 
       {/* Life Map Progress Pill — shown during life_mapping sessions after pulse check */}

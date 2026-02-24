@@ -1,15 +1,18 @@
 'use client'
 
 import type { FileUpdateData } from '@/types/chat'
+import { JOURNAL_ENERGY_MAP, ENERGY_DISPLAY } from '@/lib/energy-levels'
 
 interface JournalCardProps {
   data: FileUpdateData
 }
 
-const ENERGY_INDICATORS: Record<string, { label: string; color: string }> = {
-  high: { label: 'High energy', color: 'bg-accent-sage' },
-  moderate: { label: 'Moderate energy', color: 'bg-primary' },
-  low: { label: 'Low energy', color: 'bg-accent-terra' },
+const ENERGY_COLORS: Record<string, string> = {
+  energized: 'bg-accent-sage',
+  good: 'bg-primary',
+  neutral: 'bg-primary',
+  low: 'bg-accent-terra',
+  rough: 'bg-accent-terra',
 }
 
 function extractFirstParagraph(content: string): string {
@@ -27,7 +30,9 @@ export function JournalCard({ data }: JournalCardProps) {
   const moodSignal = data.attributes?.mood_signal
   const domainsTouched = data.attributes?.domains_touched?.split(',').map((s) => s.trim()).filter(Boolean) ?? []
   const summary = extractFirstParagraph(data.content)
-  const energyInfo = energy ? ENERGY_INDICATORS[energy] : null
+  const canonicalEnergy = energy ? JOURNAL_ENERGY_MAP[energy] ?? energy : null
+  const energyDisplay = canonicalEnergy ? ENERGY_DISPLAY[canonicalEnergy as keyof typeof ENERGY_DISPLAY] : null
+  const energyColor = canonicalEnergy ? ENERGY_COLORS[canonicalEnergy] ?? 'bg-primary' : null
 
   return (
     <div className="w-full max-w-[95%] rounded-2xl bg-bg-sage/60 border border-border p-5 shadow-sm animate-fade-up">
@@ -36,11 +41,11 @@ export function JournalCard({ data }: JournalCardProps) {
         <span className="text-[13px] font-medium text-text-secondary tracking-wide">
           {formatDate()}
         </span>
-        {energyInfo && (
+        {energyDisplay && (
           <div className="flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full ${energyInfo.color}`} />
+            <span className={`w-2 h-2 rounded-full ${energyColor}`} />
             <span className="text-[12px] text-text-secondary">
-              {moodSignal ? moodSignal.replace(/-/g, ' ') : energyInfo.label}
+              {moodSignal ? moodSignal.replace(/-/g, ' ') : energyDisplay.label}
             </span>
           </div>
         )}

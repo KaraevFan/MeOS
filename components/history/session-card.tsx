@@ -8,6 +8,9 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
   monthly_review: 'Monthly Review',
   quarterly_review: 'Quarterly Review',
   ad_hoc: 'Conversation',
+  close_day: 'Evening Reflection',
+  open_day: 'Morning Session',
+  quick_capture: 'Quick Capture',
 }
 
 interface SessionCardProps {

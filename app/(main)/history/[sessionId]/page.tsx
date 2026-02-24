@@ -40,6 +40,9 @@ export default async function SessionDetailPage({ params }: SessionDetailPagePro
     monthly_review: 'Monthly Review',
     quarterly_review: 'Quarterly Review',
     ad_hoc: 'Conversation',
+    close_day: 'Evening Reflection',
+    open_day: 'Morning Session',
+    quick_capture: 'Quick Capture',
   }
 
   const typeLabel = SESSION_TYPE_LABELS[session.session_type] || session.session_type

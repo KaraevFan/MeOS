@@ -4,6 +4,8 @@ import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
 import { captureException } from '@/lib/monitoring/sentry'
 import { getUserTimezone } from '@/lib/get-user-timezone'
+import { detectTerminalArtifact } from '@/lib/ai/completion-detection'
+import { completeSession } from '@/lib/supabase/sessions'
 import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import type { PulseContextMode } from '@/types/chat'
@@ -201,6 +203,17 @@ Now proceed with the closing synthesis: write the FILE_UPDATE blocks.`
   return _exhaustive
 }
 
+/** Fire-and-forget call to generate an AI summary for a completed session */
+async function triggerSummaryGeneration(sessionId: string): Promise<void> {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+  await fetch(`${baseUrl}/api/session/generate-summary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId }),
+  })
+}
+
 export async function POST(request: Request) {
   // Validate auth
   const supabase = await createClient()
@@ -307,6 +320,10 @@ export async function POST(request: Request) {
     })
   }
 
+  // Check if this close_day session has a pending_completion flag from Phase A
+  const existingMetadata = (sessionCheck.metadata ?? {}) as Record<string, unknown>
+  const isPendingCloseDay = sessionType === 'close_day' && existingMetadata.pending_completion === true
+
   // Stream Claude response via SSE
   const encoder = new TextEncoder()
 
@@ -326,7 +343,11 @@ export async function POST(request: Request) {
           messages: apiMessages,
         })
 
+        // Accumulate response text for post-stream completion detection
+        let accumulated = ''
+
         messageStream.on('text', (text) => {
+          accumulated += text
           const data = JSON.stringify({ text })
           controller.enqueue(encoder.encode(`data: ${data}\n\n`))
         })
@@ -339,6 +360,51 @@ export async function POST(request: Request) {
         })
 
         await messageStream.finalMessage()
+
+        // Post-stream: detect terminal artifacts and complete session server-side
+        try {
+          if (isPendingCloseDay) {
+            // close_day Phase B: previous response emitted journal, user confirmed.
+            // If this response has no new journal and no suggested replies, session is done.
+            const hasNewJournal = accumulated.includes('[FILE_UPDATE type="daily-log"')
+            const hasSuggestedReplies = accumulated.includes('[SUGGESTED_REPLIES]')
+
+            if (!hasNewJournal && !hasSuggestedReplies) {
+              await completeSession(supabase, sessionId)
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              const { pending_completion: _pendingFlag, ...cleanMetadata } = existingMetadata
+              await supabase.from('sessions')
+                .update({ metadata: cleanMetadata })
+                .eq('id', sessionId)
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ sessionCompleted: true })}\n\n`))
+
+              // Fire-and-forget summary generation
+              triggerSummaryGeneration(sessionId).catch(() => {})
+            }
+          } else {
+            const signal = detectTerminalArtifact(accumulated, sessionType)
+
+            if (signal === 'complete') {
+              await completeSession(supabase, sessionId)
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ sessionCompleted: true })}\n\n`))
+
+              // Fire-and-forget summary generation
+              triggerSummaryGeneration(sessionId).catch(() => {})
+            } else if (signal === 'pending_completion') {
+              // close_day Phase A: journal emitted, awaiting user confirmation
+              await supabase.from('sessions')
+                .update({ metadata: { ...existingMetadata, pending_completion: true } })
+                .eq('id', sessionId)
+            }
+          }
+        } catch (completionError) {
+          // Non-fatal: log but don't break the stream
+          captureException(completionError, {
+            tags: { route: '/api/chat', stage: 'completion_detection' },
+            extra: { sessionId, sessionType },
+          })
+        }
+
         controller.enqueue(encoder.encode('data: [DONE]\n\n'))
         controller.close()
       } catch (error) {
