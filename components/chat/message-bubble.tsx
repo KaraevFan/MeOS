@@ -138,6 +138,18 @@ function SegmentRenderer({
   return null
 }
 
+/** Check if a segment is a terminal block (signals session completion) */
+function isTerminalBlock(segment: ParsedSegment): boolean {
+  if (segment.type !== 'block') return false
+  if (segment.blockType === 'day_plan_data') return true
+  if (segment.blockType === 'life_map_synthesis') return true
+  if (segment.blockType === 'session_summary') return true
+  if (segment.blockType === 'file_update') {
+    return ['daily-log', 'overview', 'check-in', 'day-plan'].includes(segment.data.fileType)
+  }
+  return false
+}
+
 export function MessageBubble({ message, parsedContent, onCorrectDomain }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const hasAnyBlock = parsedContent.segments.some((s) => s.type === 'block')
@@ -151,16 +163,28 @@ export function MessageBubble({ message, parsedContent, onCorrectDomain }: Messa
     )
   }
 
+  // Find the last terminal block index to suppress trailing text (prevents duplicate send-off)
+  const lastTerminalIdx = parsedContent.segments.reduce(
+    (last, s, i) => (isTerminalBlock(s) ? i : last),
+    -1
+  )
+
   return (
     <div className={cn('flex flex-col w-full gap-2', isUser ? 'items-end' : 'items-start')}>
-      {parsedContent.segments.map((segment, i) => (
-        <SegmentRenderer
-          key={i}
-          segment={segment}
-          isUser={isUser}
-          onCorrectDomain={onCorrectDomain}
-        />
-      ))}
+      {parsedContent.segments.map((segment, i) => {
+        // Suppress text segments after the last terminal block (duplicate send-off)
+        if (lastTerminalIdx >= 0 && segment.type === 'text' && i > lastTerminalIdx) {
+          return null
+        }
+        return (
+          <SegmentRenderer
+            key={i}
+            segment={segment}
+            isUser={isUser}
+            onCorrectDomain={onCorrectDomain}
+          />
+        )
+      })}
     </div>
   )
 }

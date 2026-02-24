@@ -1,14 +1,7 @@
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { SESSION_TYPE_LABELS } from '@/lib/session-labels'
 import type { Session } from '@/types/database'
-
-const SESSION_TYPE_LABELS: Record<string, string> = {
-  life_mapping: 'Life Mapping',
-  weekly_checkin: 'Weekly Check-In',
-  monthly_review: 'Monthly Review',
-  quarterly_review: 'Quarterly Review',
-  ad_hoc: 'Conversation',
-}
 
 interface SessionCardProps {
   session: Session
