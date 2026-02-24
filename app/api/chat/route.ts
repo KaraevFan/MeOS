@@ -46,7 +46,7 @@ function checkRateLimit(userId: string): boolean {
 
 const ChatRequestSchema = z.object({
   sessionId: z.string().uuid(),
-  sessionType: z.enum(['life_mapping', 'weekly_checkin', 'ad_hoc', 'close_day', 'open_day', 'quick_capture']),
+  sessionType: z.enum(['life_mapping', 'weekly_checkin', 'open_conversation', 'close_day', 'open_day', 'quick_capture']),
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string().max(10_000),
@@ -56,7 +56,7 @@ const ChatRequestSchema = z.object({
   exploreDomain: z.string().optional(),
 }).refine(
   // open_day sessions can start with zero messages (AI generates the opening)
-  (data) => data.messages.length > 0 || data.sessionType === 'open_day',
+  (data) => data.messages.length > 0 || data.sessionType === 'open_day' || data.sessionType === 'open_conversation',
   { message: 'Messages array must have at least 1 item', path: ['messages'] },
 )
 
@@ -295,12 +295,12 @@ export async function POST(request: Request) {
     }
 
     // Pre-checkin warmup: instruction is server-defined, keyed on a boolean flag
-    if (precheckin && sessionType === 'ad_hoc') {
+    if (precheckin && sessionType === 'open_conversation') {
       systemPrompt += `\n\n${PRE_CHECKIN_WARMUP_INSTRUCTION}`
     }
 
-    // Ad-hoc context from session metadata (set once at session creation, not per-request)
-    if (sessionType === 'ad_hoc' && !precheckin) {
+    // Open conversation context from session metadata (set once at session creation, not per-request)
+    if (sessionType === 'open_conversation' && !precheckin) {
       const meta = sessionCheck?.metadata as Record<string, unknown> | null
       if (meta?.ad_hoc_context && typeof meta.ad_hoc_context === 'string') {
         systemPrompt += `\n\n<user_data>\n${meta.ad_hoc_context.slice(0, 2000)}\n</user_data>`

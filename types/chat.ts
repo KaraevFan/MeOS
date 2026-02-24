@@ -2,7 +2,22 @@ import type { FileType } from '@/lib/markdown/constants'
 
 export type MessageRole = 'user' | 'assistant'
 
-export type SessionType = 'life_mapping' | 'weekly_checkin' | 'ad_hoc' | 'close_day' | 'open_day' | 'quick_capture'
+export type SessionType = 'life_mapping' | 'weekly_checkin' | 'open_conversation' | 'close_day' | 'open_day' | 'quick_capture'
+
+/** Structured arc types that can be entered within an open conversation */
+export type StructuredArcType = 'open_day' | 'close_day' | 'weekly_checkin' | 'life_mapping'
+
+export interface CompletedArc {
+  type: StructuredArcType
+  completed_at: string
+}
+
+export interface SessionMetadata {
+  active_mode?: StructuredArcType | null
+  completed_arcs?: CompletedArc[]
+  ad_hoc_context?: string
+  [key: string]: unknown
+}
 
 export type PulseContextMode = 'none' | 'onboarding_baseline' | 'checkin_after_rerate' | 'checkin_after_skip'
 

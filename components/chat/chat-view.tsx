@@ -401,7 +401,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
           // Build ad-hoc context to store in session metadata (read server-side, not per-request)
           let adHocContext: string | undefined
-          if (sessionType === 'ad_hoc' && state === 'mapping_complete') {
+          if (sessionType === 'open_conversation' && state === 'mapping_complete') {
             if (sessionContext) {
               adHocContext = sessionContext
             } else if (nudgeContext) {
@@ -882,7 +882,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           const updates: FileUpdateData[] = fileUpdateBlocks.map((b) => b.data)
 
           // Fire writes asynchronously — don't block the UI
-          const writeSessionType = (sessionType === 'ad_hoc' && exploreDomain) ? 'ad_hoc_explore' : sessionType
+          const writeSessionType = (sessionType === 'open_conversation' && exploreDomain) ? 'open_conversation_explore' : sessionType
           const fileWriteTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
           handleAllFileUpdates(ufs, updates, writeSessionType, fileWriteTimezone).then((results) => {
             for (const r of results) {

@@ -491,7 +491,7 @@ export async function buildConversationContext(
   } else if (sessionType === 'open_day') {
     // Shouldn't reach here if skill file exists, but safety fallback
     basePrompt = 'You are Sage, conducting a morning "Open the Day" session. Help the user commit to one clear intention for the day.'
-  } else if (sessionType === 'ad_hoc') {
+  } else if (sessionType === 'open_conversation') {
     basePrompt = getAdHocPrompt(options?.exploreDomain)
   } else {
     basePrompt = getWeeklyCheckinBasePrompt()

@@ -46,7 +46,7 @@ export function detectTerminalArtifact(
       }
       return 'none'
 
-    case 'ad_hoc':
+    case 'open_conversation':
     case 'quick_capture':
       return 'none'
 

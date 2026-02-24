@@ -41,7 +41,7 @@ export interface LifeMapDomain {
 export interface Session {
   id: string
   user_id: string
-  session_type: 'life_mapping' | 'weekly_checkin' | 'monthly_review' | 'quarterly_review' | 'ad_hoc' | 'close_day' | 'open_day' | 'quick_capture'
+  session_type: 'life_mapping' | 'weekly_checkin' | 'monthly_review' | 'quarterly_review' | 'open_conversation' | 'close_day' | 'open_day' | 'quick_capture'
   status: 'active' | 'completed' | 'abandoned' | 'expired'
   ai_summary: string | null
   sentiment: string | null

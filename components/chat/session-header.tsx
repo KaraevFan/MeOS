@@ -3,7 +3,7 @@ import type { SessionType } from '@/types/chat'
 const SESSION_LABELS: Record<SessionType, string> = {
   life_mapping: 'Life Mapping',
   weekly_checkin: 'Weekly Check-In',
-  ad_hoc: 'Open Conversation',
+  open_conversation: 'Open Conversation',
   close_day: 'Close the Day',
   open_day: 'Open the Day',
   quick_capture: 'Quick Capture',
@@ -27,7 +27,7 @@ export function SessionHeader({ sessionType, exploreDomain, nudgeContext, onExit
   let label = SESSION_LABELS[sessionType] || 'Conversation'
 
   // Contextual labels for ad-hoc sessions
-  if (sessionType === 'ad_hoc') {
+  if (sessionType === 'open_conversation') {
     if (exploreDomain) {
       label = `Exploring ${exploreDomain}`
     } else if (nudgeContext) {

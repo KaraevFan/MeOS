@@ -6,7 +6,7 @@ export const SESSION_TYPE_LABELS: Record<string, string> = {
   weekly_checkin: 'Weekly Check-In',
   monthly_review: 'Monthly Review',
   quarterly_review: 'Quarterly Review',
-  ad_hoc: 'Conversation',
+  open_conversation: 'Conversation',
   close_day: 'Evening Reflection',
   open_day: 'Morning Session',
   quick_capture: 'Quick Capture',
@@ -16,7 +16,7 @@ export const SESSION_TYPE_LABELS: Record<string, string> = {
 export const SESSION_TYPE_LABELS_LOWER: Record<SessionType, string> = {
   life_mapping: 'life mapping',
   weekly_checkin: 'weekly check-in',
-  ad_hoc: 'conversation',
+  open_conversation: 'conversation',
   close_day: 'evening reflection',
   open_day: 'morning session',
   quick_capture: 'quick capture',
