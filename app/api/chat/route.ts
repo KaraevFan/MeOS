@@ -8,7 +8,7 @@
  * - [DONE]                        — Terminal sentinel, stream ends
  */
 import { createClient } from '@/lib/supabase/server'
-import { buildConversationContext, expireStaleOpenDaySessions, expireStaleOpenConversations } from '@/lib/ai/context'
+import { buildConversationContext, expireStaleOpenDaySessions, expireStaleCloseDaySessions, expireStaleOpenConversations } from '@/lib/ai/context'
 import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
 import { captureException } from '@/lib/monitoring/sentry'
@@ -287,6 +287,9 @@ export async function POST(request: Request) {
   // Expire stale sessions before building context
   if (sessionType === 'close_day') {
     await expireStaleOpenDaySessions(user.id, timezone)
+  }
+  if (sessionType === 'open_day') {
+    await expireStaleCloseDaySessions(user.id, timezone)
   }
   if (sessionType === 'open_conversation') {
     await expireStaleOpenConversations(user.id)

@@ -5,6 +5,7 @@ import { getLocalDateString, getYesterdayDateString, getLocalMidnight, getHourIn
 import { getCalendarEvents, hasCalendarIntegration as checkCalendarIntegration } from '@/lib/calendar/google-calendar'
 import type { CalendarEvent } from '@/lib/calendar/types'
 import type { SessionType, CompletedArc } from '@/types/chat'
+import { expireStaleOpenDaySessions, expireStaleCloseDaySessions, expireStaleOpenConversations } from '@/lib/ai/context'
 
 export interface HomeData {
   greeting: string
@@ -70,6 +71,13 @@ export async function getHomeData(
   let checkinResponse: 'yes' | 'not-yet' | 'snooze' | null = null
 
   if (onboardingCompleted) {
+    // Expire stale sessions so the home screen doesn't show yesterday's lingering sessions
+    await Promise.all([
+      expireStaleOpenDaySessions(userId, timezone),
+      expireStaleCloseDaySessions(userId, timezone),
+      expireStaleOpenConversations(userId),
+    ])
+
     const ufs = new UserFileSystem(supabase, userId)
 
     const todayStr = getLocalDateString(timezone)

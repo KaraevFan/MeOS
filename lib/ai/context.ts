@@ -477,6 +477,24 @@ export async function expireStaleOpenDaySessions(userId: string, timezone: strin
 }
 
 /**
+ * Expire stale close_day sessions for a user. Same logic as open_day:
+ * any active close_day session created before today (in the user's timezone)
+ * is expired. Called from the chat route and from getHomeData().
+ */
+export async function expireStaleCloseDaySessions(userId: string, timezone: string = 'UTC'): Promise<void> {
+  const supabase = await createClient()
+  const todayStr = getLocalDateString(timezone)
+  const todayStart = getLocalMidnight(todayStr, timezone)
+  await supabase
+    .from('sessions')
+    .update({ status: 'expired' })
+    .eq('user_id', userId)
+    .eq('session_type', 'close_day')
+    .eq('status', 'active')
+    .lt('created_at', todayStart)
+}
+
+/**
  * Expire stale open_conversation sessions for a user. Called before creating
  * a new open_conversation session and from getHomeData() for home screen status.
  * Sessions idle for >30 minutes are expired.
