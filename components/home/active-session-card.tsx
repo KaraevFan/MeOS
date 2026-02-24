@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { SESSION_TYPE_LABELS_LOWER } from '@/lib/session-labels'
 import type { SessionType } from '@/types/chat'
 
 interface ActiveSessionCardProps {
@@ -8,17 +9,8 @@ interface ActiveSessionCardProps {
   sessionType: SessionType
 }
 
-const SESSION_TYPE_LABELS: Record<SessionType, string> = {
-  life_mapping: 'life mapping',
-  weekly_checkin: 'weekly check-in',
-  ad_hoc: 'conversation',
-  close_day: 'evening reflection',
-  open_day: 'morning session',
-  quick_capture: 'quick capture',
-}
-
 export function ActiveSessionCard({ sessionId, sessionType }: ActiveSessionCardProps) {
-  const typeLabel = SESSION_TYPE_LABELS[sessionType]
+  const typeLabel = SESSION_TYPE_LABELS_LOWER[sessionType]
 
   return (
     <div className="flex flex-col gap-2">

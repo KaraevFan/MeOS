@@ -1,7 +1,7 @@
 'use client'
 
 import type { FileUpdateData } from '@/types/chat'
-import { JOURNAL_ENERGY_MAP, ENERGY_DISPLAY } from '@/lib/energy-levels'
+import { toJournalEnergy, ENERGY_DISPLAY } from '@/lib/energy-levels'
 
 interface JournalCardProps {
   data: FileUpdateData
@@ -30,8 +30,8 @@ export function JournalCard({ data }: JournalCardProps) {
   const moodSignal = data.attributes?.mood_signal
   const domainsTouched = data.attributes?.domains_touched?.split(',').map((s) => s.trim()).filter(Boolean) ?? []
   const summary = extractFirstParagraph(data.content)
-  const canonicalEnergy = energy ? JOURNAL_ENERGY_MAP[energy] ?? energy : null
-  const energyDisplay = canonicalEnergy ? ENERGY_DISPLAY[canonicalEnergy as keyof typeof ENERGY_DISPLAY] : null
+  const canonicalEnergy = energy ? toJournalEnergy(energy) : null
+  const energyDisplay = canonicalEnergy ? ENERGY_DISPLAY[canonicalEnergy] : null
   const energyColor = canonicalEnergy ? ENERGY_COLORS[canonicalEnergy] ?? 'bg-primary' : null
 
   return (

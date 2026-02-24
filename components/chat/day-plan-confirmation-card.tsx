@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import type { DayPlanDataBlock } from '@/types/chat'
-import { DAY_PLAN_ENERGY_MAP, ENERGY_DISPLAY } from '@/lib/energy-levels'
+import { toDayPlanEnergy, ENERGY_DISPLAY } from '@/lib/energy-levels'
 
 interface DayPlanConfirmationCardProps {
   data: DayPlanDataBlock
@@ -44,7 +44,7 @@ export function DayPlanConfirmationCard({ data }: DayPlanConfirmationCardProps) 
 
       <div className="flex items-center gap-3 mt-2 text-[13px] text-text-secondary">
         {data.energy_level && (
-          <span>{ENERGY_DISPLAY[DAY_PLAN_ENERGY_MAP[data.energy_level] ?? 'neutral']?.label ?? data.energy_level}</span>
+          <span>{ENERGY_DISPLAY[toDayPlanEnergy(data.energy_level)]?.label ?? data.energy_level}</span>
         )}
         {data.priorities && data.priorities.length > 0 && (
           <span>{data.priorities.length} priorit{data.priorities.length === 1 ? 'y' : 'ies'}</span>

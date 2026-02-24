@@ -157,6 +157,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [showExitSheet, setShowExitSheet] = useState(false)
   // Tracks whether a terminal artifact card has rendered (fallback signal for session completion)
   const [hasTerminalArtifact, setHasTerminalArtifact] = useState(false)
+  // Ref-based guard: prevents duplicate completeSession() calls from server+client race.
+  // React batches setSessionCompleted(true), so state guards read stale values in the same tick.
+  const sessionCompletedRef = useRef(false)
   // Two-phase close_day completion: card emitted (Phase A) → user confirms → session completes (Phase B)
   const awaitingJournalConfirmationRef = useRef(false)
 
@@ -623,7 +626,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           const parsed = JSON.parse(data)
           if (parsed.error) throw new Error(parsed.error)
           if (parsed.sessionCompleted) {
-            // Server completed the session — set state, skip client-side completion
+            // Server completed the session — set ref + state, skip client-side completion
+            sessionCompletedRef.current = true
             setSessionCompleted(true)
           }
           if (parsed.text) {
@@ -806,7 +810,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             s.type === 'block' && s.blockType === 'life_map_synthesis'
         )
 
-        if (synthesisBlock && !sessionCompleted) {
+        if (synthesisBlock && !sessionCompletedRef.current) {
+          sessionCompletedRef.current = true
           try {
             const lifeMap = await getOrCreateLifeMap(supabase, userId)
             await updateLifeMapSynthesis(supabase, lifeMap.id, synthesisBlock.data)
@@ -834,7 +839,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             s.type === 'block' && s.blockType === 'session_summary'
         )
 
-        if (summaryBlock && !sessionCompleted) {
+        if (summaryBlock && !sessionCompletedRef.current) {
+          sessionCompletedRef.current = true
           try {
             const data = summaryBlock.data
             const summaryText = [
@@ -984,7 +990,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             awaitingJournalConfirmationRef.current = true
           }
 
-          if (hasDayPlan && !sessionCompleted) {
+          if (hasDayPlan && !sessionCompletedRef.current) {
+            sessionCompletedRef.current = true
             completeSession(supabase, sessionId).then(() => {
               setSessionCompleted(true)
 
@@ -1037,7 +1044,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             })
           }
 
-          if ((hasOverview || hasCheckIn) && !sessionCompleted) {
+          if ((hasOverview || hasCheckIn) && !sessionCompletedRef.current) {
+            sessionCompletedRef.current = true
             completeSession(supabase, sessionId).then(() => {
               setNextCheckinDate(addDaysIso(new Date(), 7))
               setSessionCompleted(true)
@@ -1076,9 +1084,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
         awaitingJournalConfirmationRef.current &&
         !hasDailyLogInResponse &&
         !hasSuggestedReplies &&
-        !sessionCompleted
+        !sessionCompletedRef.current
       ) {
         awaitingJournalConfirmationRef.current = false
+        sessionCompletedRef.current = true
         completeSession(supabase, sessionId).then(() => {
           setSessionCompleted(true)
         }).catch((err) => {

@@ -7,6 +7,7 @@ import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { getCalendarEvents } from '@/lib/calendar/google-calendar'
 import { getDayPlan, getDayPlansForDateRange } from '@/lib/supabase/day-plan-queries'
 import { getLocalDateString, getLocalDayOfWeek, getYesterdayDateString, getLocalMidnight, formatTimeInTimezone, getStartOfWeek } from '@/lib/dates'
+import { stripBlockTags } from '@/lib/ai/sanitize'
 import type { SessionType, DomainName } from '@/types/chat'
 import type { DayPlan } from '@/types/day-plan'
 
@@ -516,11 +517,6 @@ export async function buildConversationContext(
   }
 
   return prompt
-}
-
-/** Strip block tags from user-originated text to prevent prompt injection. */
-function stripBlockTags(text: string): string {
-  return text.replace(/\[\/?(FILE_UPDATE|DOMAIN_SUMMARY|LIFE_MAP_SYNTHESIS|SESSION_SUMMARY|SUGGESTED_REPLIES|INLINE_CARD|INTENTION_CARD|DAY_PLAN_DATA)[^\]]*\]/g, '')
 }
 
 /**

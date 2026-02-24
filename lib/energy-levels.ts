@@ -10,8 +10,10 @@ export const ENERGY_DISPLAY: Record<EnergyLevel, { label: string; emoji: string 
   rough: { label: 'Rough', emoji: '😤' },
 }
 
-/** Map DayPlanDataSchema energy levels to canonical */
-export const DAY_PLAN_ENERGY_MAP: Record<string, EnergyLevel> = {
+type DayPlanEnergyKey = 'fired_up' | 'focused' | 'neutral' | 'low' | 'stressed'
+type JournalEnergyKey = 'high' | 'moderate' | 'low'
+
+const DAY_PLAN_ENERGY_MAP: Record<DayPlanEnergyKey, EnergyLevel> = {
   fired_up: 'energized',
   focused: 'good',
   neutral: 'neutral',
@@ -19,9 +21,18 @@ export const DAY_PLAN_ENERGY_MAP: Record<string, EnergyLevel> = {
   stressed: 'rough',
 }
 
-/** Map JournalCard energy levels to canonical */
-export const JOURNAL_ENERGY_MAP: Record<string, EnergyLevel> = {
+const JOURNAL_ENERGY_MAP: Record<JournalEnergyKey, EnergyLevel> = {
   high: 'energized',
   moderate: 'good',
   low: 'low',
+}
+
+/** Safely map a day plan energy string to canonical, defaulting to 'neutral' */
+export function toDayPlanEnergy(raw: string): EnergyLevel {
+  return DAY_PLAN_ENERGY_MAP[raw as DayPlanEnergyKey] ?? 'neutral'
+}
+
+/** Safely map a journal energy string to canonical, defaulting to 'neutral' */
+export function toJournalEnergy(raw: string): EnergyLevel {
+  return JOURNAL_ENERGY_MAP[raw as JournalEnergyKey] ?? 'neutral'
 }

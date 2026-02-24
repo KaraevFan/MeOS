@@ -1,3 +1,10 @@
+/**
+ * SSE Event Protocol:
+ * - { text: string }           — Streaming token from Claude
+ * - { error: string }          — Error message
+ * - { sessionCompleted: true } — Session was completed server-side
+ * - [DONE]                     — Terminal sentinel, stream ends
+ */
 import { createClient } from '@/lib/supabase/server'
 import { buildConversationContext, expireStaleOpenDaySessions } from '@/lib/ai/context'
 import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
@@ -6,6 +13,7 @@ import { captureException } from '@/lib/monitoring/sentry'
 import { getUserTimezone } from '@/lib/get-user-timezone'
 import { detectTerminalArtifact } from '@/lib/ai/completion-detection'
 import { completeSession } from '@/lib/supabase/sessions'
+import { generateSessionSummary } from '@/lib/ai/generate-session-summary'
 import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import type { PulseContextMode } from '@/types/chat'
@@ -203,17 +211,6 @@ Now proceed with the closing synthesis: write the FILE_UPDATE blocks.`
   return _exhaustive
 }
 
-/** Fire-and-forget call to generate an AI summary for a completed session */
-async function triggerSummaryGeneration(sessionId: string): Promise<void> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
-    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
-  await fetch(`${baseUrl}/api/session/generate-summary`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId }),
-  })
-}
-
 export async function POST(request: Request) {
   // Validate auth
   const supabase = await createClient()
@@ -378,8 +375,10 @@ export async function POST(request: Request) {
                 .eq('id', sessionId)
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ sessionCompleted: true })}\n\n`))
 
-              // Fire-and-forget summary generation
-              triggerSummaryGeneration(sessionId).catch(() => {})
+              // Generate summary with the already-authenticated client
+              await generateSessionSummary(supabase, sessionId).catch((err) => {
+                captureException(err, { tags: { route: '/api/chat', stage: 'summary_generation' }, extra: { sessionId } })
+              })
             }
           } else {
             const signal = detectTerminalArtifact(accumulated, sessionType)
@@ -388,8 +387,10 @@ export async function POST(request: Request) {
               await completeSession(supabase, sessionId)
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ sessionCompleted: true })}\n\n`))
 
-              // Fire-and-forget summary generation
-              triggerSummaryGeneration(sessionId).catch(() => {})
+              // Generate summary with the already-authenticated client
+              await generateSessionSummary(supabase, sessionId).catch((err) => {
+                captureException(err, { tags: { route: '/api/chat', stage: 'summary_generation' }, extra: { sessionId } })
+              })
             } else if (signal === 'pending_completion') {
               // close_day Phase A: journal emitted, awaiting user confirmation
               await supabase.from('sessions')

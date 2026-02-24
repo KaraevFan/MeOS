@@ -46,7 +46,13 @@ export function detectTerminalArtifact(
       }
       return 'none'
 
-    default:
+    case 'ad_hoc':
+    case 'quick_capture':
       return 'none'
+
+    default: {
+      const _exhaustive: never = sessionType
+      return _exhaustive
+    }
   }
 }

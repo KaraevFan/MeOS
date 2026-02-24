@@ -142,6 +142,8 @@ function SegmentRenderer({
 function isTerminalBlock(segment: ParsedSegment): boolean {
   if (segment.type !== 'block') return false
   if (segment.blockType === 'day_plan_data') return true
+  if (segment.blockType === 'life_map_synthesis') return true
+  if (segment.blockType === 'session_summary') return true
   if (segment.blockType === 'file_update') {
     return ['daily-log', 'overview', 'check-in', 'day-plan'].includes(segment.data.fileType)
   }
