@@ -474,7 +474,7 @@ export async function expireStaleOpenDaySessions(userId: string, timezone: strin
   const todayStart = getLocalMidnight(todayStr, timezone)
   const { error } = await supabase
     .from('sessions')
-    .update({ status: 'expired' })
+    .update({ status: 'abandoned' })
     .eq('user_id', userId)
     .eq('session_type', 'open_day')
     .eq('status', 'active')
@@ -493,7 +493,7 @@ export async function expireStaleCloseDaySessions(userId: string, timezone: stri
   const todayStart = getLocalMidnight(todayStr, timezone)
   const { error } = await supabase
     .from('sessions')
-    .update({ status: 'expired' })
+    .update({ status: 'abandoned' })
     .eq('user_id', userId)
     .eq('session_type', 'close_day')
     .eq('status', 'active')
@@ -511,7 +511,7 @@ export async function expireStaleOpenConversations(userId: string, client?: Supa
   const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()
   const { error } = await supabase
     .from('sessions')
-    .update({ status: 'expired' })
+    .update({ status: 'abandoned' })
     .eq('user_id', userId)
     .eq('session_type', 'open_conversation')
     .eq('status', 'active')
