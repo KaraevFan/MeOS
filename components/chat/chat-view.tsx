@@ -155,6 +155,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [previousRatings, setPreviousRatings] = useState<PulseCheckRating[]>([])
   const [showBriefing, setShowBriefing] = useState(sessionType === 'open_day' && !!briefingData)
   const [showExitSheet, setShowExitSheet] = useState(false)
+  // Active mode within open_conversation (e.g. 'open_day', 'close_day')
+  const [activeMode, setActiveMode] = useState<string | null>(null)
   // Tracks whether a terminal artifact card has rendered (fallback signal for session completion)
   const [hasTerminalArtifact, setHasTerminalArtifact] = useState(false)
   // Ref-based guard: prevents duplicate completeSession() calls from server+client race.
@@ -399,26 +401,26 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
           const state = initialSessionState?.state || 'new_user'
 
-          // Build ad-hoc context to store in session metadata (read server-side, not per-request)
-          let adHocContext: string | undefined
-          if (sessionType === 'open_conversation' && state === 'mapping_complete') {
+          // Build opening context to store in session metadata (read server-side, not per-request)
+          let openingContext: string | undefined
+          if (sessionType === 'open_conversation') {
             if (sessionContext) {
-              adHocContext = sessionContext
+              openingContext = sessionContext
             } else if (nudgeContext) {
-              adHocContext = `The user is responding to this reflection prompt: "${nudgeContext}". Open by acknowledging it and asking how it's landing.`
+              openingContext = `The user is responding to this reflection prompt: "${nudgeContext}". Open by acknowledging it and asking how it's landing.`
             } else {
-              adHocContext = 'Generate your opening message. Look at the user\'s life context and open with something specific.'
+              openingContext = 'Generate your opening message. Look at the user\'s life context and open with something specific.'
             }
           }
 
-          // Create new session (store ad-hoc context in metadata for server-side retrieval)
+          // Create new session (store opening context in metadata for server-side retrieval)
           const { data: newSession } = await supabase
             .from('sessions')
             .insert({
               user_id: userId,
               session_type: sessionType,
               status: 'active',
-              ...(adHocContext ? { metadata: { ad_hoc_context: adHocContext } } : {}),
+              ...(openingContext ? { metadata: { ad_hoc_context: openingContext } } : {}),
             })
             .select()
             .single()
@@ -428,9 +430,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
             const needsPulseCheck = state === 'new_user' && sessionType === 'life_mapping' && !hasOnboardingPulse
 
-            // open_day: skip hard-coded opening — AI generates a context-rich greeting
-            if (sessionType === 'open_day' && !briefingData) {
-              // No briefing card → show typing indicator while we auto-trigger Sage
+            // AI-generated openings: skip hard-coded opening for open_day and open_conversation
+            const aiGeneratedOpening = (sessionType === 'open_day' && !briefingData) || sessionType === 'open_conversation'
+            if (aiGeneratedOpening) {
+              // Show typing indicator while we auto-trigger Sage
               setIsStreaming(true)
             } else if (sessionType !== 'open_day') {
               // Add Sage's opening message — daily rhythm sessions use sessionType directly
@@ -483,7 +486,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               setTimeout(() => {
                 triggerSageResponse('none')
               }, 100)
-            } else if (adHocContext) {
+            } else if (openingContext) {
               // Context from session metadata (nudge, session history, or generic opening)
               setTimeout(() => {
                 triggerSageResponse('none')
@@ -629,6 +632,13 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             // Server completed the session — set ref + state, skip client-side completion
             sessionCompletedRef.current = true
             setSessionCompleted(true)
+          }
+          if (parsed.modeChange) {
+            setActiveMode(parsed.modeChange)
+          }
+          if (parsed.arcCompleted) {
+            // Structured arc finished within open_conversation — return to base layer
+            setActiveMode(null)
           }
           if (parsed.text) {
             accumulated += parsed.text
@@ -780,6 +790,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
       if (hasBlock) {
         const parsed = parseMessage(accumulated)
 
+        // Arc-mode guard: when inside a structured arc within open_conversation,
+        // the server sends arcCompleted — skip client-side completeSession calls.
+        const isArcMode = activeMode != null && sessionType === 'open_conversation'
+
         // Extract all domain summary blocks from the message
         const domainBlocks = parsed.segments.filter(
           (s): s is Extract<typeof s, { type: 'block'; blockType: 'domain_summary' }> =>
@@ -810,7 +824,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             s.type === 'block' && s.blockType === 'life_map_synthesis'
         )
 
-        if (synthesisBlock && !sessionCompletedRef.current) {
+        if (synthesisBlock && !sessionCompletedRef.current && !isArcMode) {
           sessionCompletedRef.current = true
           try {
             const lifeMap = await getOrCreateLifeMap(supabase, userId)
@@ -839,7 +853,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             s.type === 'block' && s.blockType === 'session_summary'
         )
 
-        if (summaryBlock && !sessionCompletedRef.current) {
+        if (summaryBlock && !sessionCompletedRef.current && !isArcMode) {
           sessionCompletedRef.current = true
           try {
             const data = summaryBlock.data
@@ -882,7 +896,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           const updates: FileUpdateData[] = fileUpdateBlocks.map((b) => b.data)
 
           // Fire writes asynchronously — don't block the UI
-          const writeSessionType = (sessionType === 'open_conversation' && exploreDomain) ? 'open_conversation_explore' : sessionType
+          const writeSessionType = sessionType
           const fileWriteTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
           handleAllFileUpdates(ufs, updates, writeSessionType, fileWriteTimezone).then((results) => {
             for (const r of results) {
@@ -991,23 +1005,25 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           }
 
           if (hasDayPlan && !sessionCompletedRef.current) {
-            sessionCompletedRef.current = true
-            completeSession(supabase, sessionId).then(() => {
-              setSessionCompleted(true)
+            if (!isArcMode) {
+              sessionCompletedRef.current = true
+              completeSession(supabase, sessionId).then(() => {
+                setSessionCompleted(true)
 
-              // Fire-and-forget: schedule mid-day nudge referencing morning intention
-              const dayPlanUpdate = updates.find((u) => u.fileType === 'day-plan')
-              const intention = dayPlanUpdate?.attributes?.intention ?? null
-              if (intention) {
-                scheduleMidDayNudge(supabase, userId, intention, Intl.DateTimeFormat().resolvedOptions().timeZone).catch(() => {
-                  console.error('Failed to schedule mid-day nudge')
-                })
-              }
-            }).catch(() => {
-              console.error('Failed to complete open_day session')
-            })
+                // Fire-and-forget: schedule mid-day nudge referencing morning intention
+                const dayPlanUpdate = updates.find((u) => u.fileType === 'day-plan')
+                const intention = dayPlanUpdate?.attributes?.intention ?? null
+                if (intention) {
+                  scheduleMidDayNudge(supabase, userId, intention, Intl.DateTimeFormat().resolvedOptions().timeZone).catch(() => {
+                    console.error('Failed to schedule mid-day nudge')
+                  })
+                }
+              }).catch(() => {
+                console.error('Failed to complete open_day session')
+              })
+            }
 
-            // Write structured day plan data to Postgres (fire-and-forget)
+            // Write structured day plan data to Postgres (fire-and-forget) — always runs, even during arcs
             const dayPlanDataBlock = parsed.segments.find(
               (s): s is Extract<typeof s, { type: 'block'; blockType: 'day_plan_data' }> =>
                 s.type === 'block' && s.blockType === 'day_plan_data'
@@ -1044,7 +1060,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             })
           }
 
-          if ((hasOverview || hasCheckIn) && !sessionCompletedRef.current) {
+          if ((hasOverview || hasCheckIn) && !sessionCompletedRef.current && !isArcMode) {
             sessionCompletedRef.current = true
             completeSession(supabase, sessionId).then(() => {
               setNextCheckinDate(addDaysIso(new Date(), 7))
@@ -1152,6 +1168,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
         sessionType={sessionType}
         exploreDomain={exploreDomain}
         nudgeContext={nudgeContext}
+        activeMode={activeMode}
         onExit={handleExit}
       />
 

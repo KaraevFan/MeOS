@@ -20,14 +20,17 @@ interface SessionHeaderProps {
   sessionType: SessionType
   exploreDomain?: string
   nudgeContext?: string
+  activeMode?: string | null
   onExit?: () => void
 }
 
-export function SessionHeader({ sessionType, exploreDomain, nudgeContext, onExit }: SessionHeaderProps) {
-  let label = SESSION_LABELS[sessionType] || 'Conversation'
+export function SessionHeader({ sessionType, exploreDomain, nudgeContext, activeMode, onExit }: SessionHeaderProps) {
+  // When in a structured arc within open_conversation, show the arc's label
+  const effectiveType = (activeMode as SessionType) ?? sessionType
+  let label = SESSION_LABELS[effectiveType] || 'Conversation'
 
-  // Contextual labels for ad-hoc sessions
-  if (sessionType === 'open_conversation') {
+  // Contextual labels for open_conversation without an active mode
+  if (sessionType === 'open_conversation' && !activeMode) {
     if (exploreDomain) {
       label = `Exploring ${exploreDomain}`
     } else if (nudgeContext) {
@@ -35,7 +38,7 @@ export function SessionHeader({ sessionType, exploreDomain, nudgeContext, onExit
     }
   }
 
-  const duration = SESSION_DURATIONS[sessionType]
+  const duration = SESSION_DURATIONS[effectiveType]
 
   return (
     <div className="relative flex items-center justify-center py-3">

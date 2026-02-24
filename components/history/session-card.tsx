@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { SESSION_TYPE_LABELS } from '@/lib/session-labels'
+import { getSessionDisplayLabel } from '@/lib/session-labels'
 import type { Session } from '@/types/database'
 
 interface SessionCardProps {
@@ -8,7 +8,7 @@ interface SessionCardProps {
 }
 
 export function SessionCard({ session }: SessionCardProps) {
-  const typeLabel = SESSION_TYPE_LABELS[session.session_type] || session.session_type
+  const typeLabel = getSessionDisplayLabel(session.session_type, session.metadata)
   const isCompleted = session.status === 'completed'
   const date = new Date(session.created_at)
 

@@ -75,17 +75,6 @@ export const SESSION_WRITE_PERMISSIONS: Record<string, string[]> = {
     'sage/',
     'captures/',
   ],
-  /** Open conversation with domain exploration */
-  open_conversation_explore: [
-    'day-plans/',
-    'daily-logs/',
-    'check-ins/',
-    'life-map/',
-    'life-plan/current.md',
-    'life-plan/weekly.md',
-    'sage/',
-    'captures/',
-  ],
   close_day: [
     'daily-logs/',
     'sage/context.md',

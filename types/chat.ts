@@ -8,15 +8,19 @@ export type SessionType = 'life_mapping' | 'weekly_checkin' | 'open_conversation
 export type StructuredArcType = 'open_day' | 'close_day' | 'weekly_checkin' | 'life_mapping'
 
 export interface CompletedArc {
-  type: StructuredArcType
+  mode: StructuredArcType
   completed_at: string
 }
 
 export interface SessionMetadata {
   active_mode?: StructuredArcType | null
   completed_arcs?: CompletedArc[]
+  /** @deprecated Stored as 'ad_hoc_context' in existing session metadata JSONB. Rename requires data migration. */
   ad_hoc_context?: string
-  [key: string]: unknown
+  pending_completion?: boolean
+  onboarding_intent?: string
+  onboarding_name?: string
+  onboarding_quick_replies?: unknown[]
 }
 
 export type PulseContextMode = 'none' | 'onboarding_baseline' | 'checkin_after_rerate' | 'checkin_after_skip'

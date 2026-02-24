@@ -89,7 +89,7 @@ export default async function ChatPage({
     sessionType = 'open_day'
   } else if (requestedType === 'quick_capture') {
     sessionType = 'quick_capture'
-  } else if (requestedType === 'open_conversation' || requestedType === 'open_conversation' || params.explore || params.mode === 'reflection') {
+  } else if (requestedType === 'open_conversation' || params.explore || params.mode === 'reflection') {
     // Open conversation, domain exploration from Life Map, or reflection from ambient card
     sessionType = 'open_conversation'
   } else if (sessionState.state === 'checkin_due' || sessionState.state === 'checkin_overdue') {
@@ -97,6 +97,35 @@ export default async function ChatPage({
   } else if (sessionState.state === 'mapping_complete') {
     // Between check-ins — default to open conversation
     sessionType = 'open_conversation'
+  }
+
+  // Session deduplication: resume recent active open_conversation instead of creating a new one.
+  // Only when navigating via orb (no special context params that warrant a fresh session).
+  let resumeOpenConversationId: string | undefined
+  if (
+    sessionType === 'open_conversation' &&
+    !params.explore &&
+    !params.nudge &&
+    !params.session_context &&
+    !params.precheckin
+  ) {
+    const { data: existingSession } = await supabase
+      .from('sessions')
+      .select('id, updated_at')
+      .eq('user_id', user.id)
+      .eq('session_type', 'open_conversation')
+      .eq('status', 'active')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (existingSession) {
+      const lastActivity = new Date(existingSession.updated_at).getTime()
+      const thirtyMinAgo = Date.now() - 30 * 60 * 1000
+      if (lastActivity > thirtyMinAgo) {
+        resumeOpenConversationId = existingSession.id
+      }
+    }
   }
 
   // Read commitments for weekly check-in pinned context card
@@ -208,6 +237,7 @@ export default async function ChatPage({
         <ChatView
           userId={user.id}
           sessionType={sessionType}
+          resumeSessionId={resumeOpenConversationId}
           initialSessionState={sessionState}
           initialCommitments={commitments}
           initialPulseRatings={initialPulseRatings ?? undefined}

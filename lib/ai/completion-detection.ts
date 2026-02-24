@@ -5,12 +5,17 @@ export type CompletionSignal = 'complete' | 'pending_completion' | 'none'
 /**
  * Detect terminal artifacts in the accumulated response text.
  * Returns a completion signal indicating whether the session should be completed.
+ *
+ * When activeMode is set (mid-transition within open_conversation), detection
+ * uses the mode's rules instead of the base session type.
  */
 export function detectTerminalArtifact(
   responseText: string,
-  sessionType: SessionType
+  sessionType: SessionType,
+  activeMode?: string | null
 ): CompletionSignal {
-  switch (sessionType) {
+  const effectiveType = (activeMode as SessionType) ?? sessionType
+  switch (effectiveType) {
     case 'open_day':
       if (
         responseText.includes('[FILE_UPDATE type="day-plan"') ||
@@ -51,7 +56,7 @@ export function detectTerminalArtifact(
       return 'none'
 
     default: {
-      const _exhaustive: never = sessionType
+      const _exhaustive: never = effectiveType
       return _exhaustive
     }
   }
