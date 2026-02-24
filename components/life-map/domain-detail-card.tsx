@@ -241,7 +241,7 @@ export function DomainDetailCard({ domain, pulseRating, trend }: DomainDetailCar
             </p>
             {isExplored && (
               <Link
-                href={`/chat?type=ad_hoc&explore=${encodeURIComponent(domain.domain_name)}`}
+                href={`/chat?type=open_conversation&explore=${encodeURIComponent(domain.domain_name)}`}
                 onClick={(e) => e.stopPropagation()}
                 className="text-xs font-medium text-primary hover:text-primary-hover transition-colors"
               >

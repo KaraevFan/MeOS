@@ -89,14 +89,43 @@ export default async function ChatPage({
     sessionType = 'open_day'
   } else if (requestedType === 'quick_capture') {
     sessionType = 'quick_capture'
-  } else if (requestedType === 'ad_hoc' || params.explore || params.mode === 'reflection') {
-    // Explicit ad-hoc, domain exploration from Life Map, or reflection from ambient card
-    sessionType = 'ad_hoc'
+  } else if (requestedType === 'open_conversation' || params.explore || params.mode === 'reflection') {
+    // Open conversation, domain exploration from Life Map, or reflection from ambient card
+    sessionType = 'open_conversation'
   } else if (sessionState.state === 'checkin_due' || sessionState.state === 'checkin_overdue') {
     sessionType = 'weekly_checkin'
   } else if (sessionState.state === 'mapping_complete') {
-    // Between check-ins — default to ad-hoc conversation
-    sessionType = 'ad_hoc'
+    // Between check-ins — default to open conversation
+    sessionType = 'open_conversation'
+  }
+
+  // Session deduplication: resume recent active open_conversation instead of creating a new one.
+  // Only when navigating via orb (no special context params that warrant a fresh session).
+  let resumeOpenConversationId: string | undefined
+  if (
+    sessionType === 'open_conversation' &&
+    !params.explore &&
+    !params.nudge &&
+    !params.session_context &&
+    !params.precheckin
+  ) {
+    const { data: existingSession } = await supabase
+      .from('sessions')
+      .select('id, updated_at')
+      .eq('user_id', user.id)
+      .eq('session_type', 'open_conversation')
+      .eq('status', 'active')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (existingSession) {
+      const lastActivity = new Date(existingSession.updated_at).getTime()
+      const thirtyMinAgo = Date.now() - 30 * 60 * 1000
+      if (lastActivity > thirtyMinAgo) {
+        resumeOpenConversationId = existingSession.id
+      }
+    }
   }
 
   // Read commitments for weekly check-in pinned context card
@@ -116,12 +145,12 @@ export default async function ChatPage({
 
   // Load reflection nudge context if navigating from home screen nudge
   let nudgeContext: string | undefined
-  if (params.mode === 'reflection' && params.prompt && sessionType === 'ad_hoc') {
+  if (params.mode === 'reflection' && params.prompt && sessionType === 'open_conversation') {
     // Ambient card reflection — validate against allowlist to prevent prompt injection
     if ((REFLECTIVE_PROMPTS as readonly string[]).includes(params.prompt)) {
       nudgeContext = params.prompt
     }
-  } else if (params.nudge && sessionType === 'ad_hoc') {
+  } else if (params.nudge && sessionType === 'open_conversation') {
     const { data: nudge } = await supabase
       .from('reflection_prompts')
       .select('prompt_text')
@@ -136,7 +165,7 @@ export default async function ChatPage({
 
   // Load session context if navigating from history "Talk to Sage about this"
   let sessionContext: string | undefined
-  if (params.session_context && sessionType === 'ad_hoc') {
+  if (params.session_context && sessionType === 'open_conversation') {
     const { data: pastSession } = await supabase
       .from('sessions')
       .select('session_type, ai_summary, key_themes, commitments_made, sentiment, created_at')
@@ -149,7 +178,7 @@ export default async function ChatPage({
         month: 'long', day: 'numeric', year: 'numeric',
       })
       const pastTypeLabel: Record<string, string> = {
-        life_mapping: 'life mapping', weekly_checkin: 'weekly check-in', ad_hoc: 'conversation',
+        life_mapping: 'life mapping', weekly_checkin: 'weekly check-in', open_conversation: 'conversation',
       }
       const parts = [
         `The user wants to revisit a past ${pastTypeLabel[pastSession.session_type] || 'session'} from ${pastDate}.`,
@@ -170,7 +199,7 @@ export default async function ChatPage({
   }
 
   // Pre-checkin warmup flag — instruction is defined server-side in the API route
-  const precheckin = params.precheckin === '1' && sessionType === 'ad_hoc'
+  const precheckin = params.precheckin === '1' && sessionType === 'open_conversation'
 
   // Pre-fetch baseline pulse ratings for life_mapping sessions (powers the spider chart).
   // Fetching server-side eliminates a client-side async round-trip that caused the spider
@@ -208,6 +237,7 @@ export default async function ChatPage({
         <ChatView
           userId={user.id}
           sessionType={sessionType}
+          resumeSessionId={resumeOpenConversationId}
           initialSessionState={sessionState}
           initialCommitments={commitments}
           initialPulseRatings={initialPulseRatings ?? undefined}

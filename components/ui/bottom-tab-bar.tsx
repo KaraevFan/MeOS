@@ -1,23 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useActiveSession } from '@/components/providers/active-session-provider'
 import { TAB_BAR_HEIGHT_PX } from '@/lib/constants'
 
-function getOrbHref(hour: number): string {
-  if (hour < 11) return '/chat?type=open_day' // Morning → Open Day
-  if (hour < 18) return '/home?capture=1'     // Mid-Day → Quick Capture (home screen capture bar)
-  return '/chat?type=close_day'               // Evening → Close Day
-}
-
-function getOrbLabel(hour: number): string {
-  if (hour < 11) return 'Open your day'
-  if (hour < 18) return 'Quick capture'
-  return 'Close your day'
-}
+const ORB_HREF = '/chat?type=open_conversation'
+const ORB_LABEL = 'Talk to Sage'
 
 const leftTabs = [
   {
@@ -101,12 +91,7 @@ interface BottomTabBarProps {
 
 export function BottomTabBar({ onboardingCompleted }: BottomTabBarProps) {
   const { hasActiveSession } = useActiveSession()
-  const [hour, setHour] = useState(12) // Default to midday for SSR
   const pathname = usePathname()
-
-  useEffect(() => {
-    setHour(new Date().getHours())
-  }, [])
 
   // State machine:
   // - pre-onboarding: hide tab bar + FAB entirely
@@ -129,8 +114,8 @@ export function BottomTabBar({ onboardingCompleted }: BottomTabBarProps) {
         {/* Background mask to blend orb into bar */}
         <div className="absolute top-5 left-1/2 -translate-x-1/2 w-[84px] h-[44px] bg-warm-bg/95 rounded-t-full backdrop-blur-xl" />
         <Link
-          href={getOrbHref(hour)}
-          aria-label={getOrbLabel(hour)}
+          href={ORB_HREF}
+          aria-label={ORB_LABEL}
           className="relative w-[64px] h-[64px] rounded-full flex items-center justify-center shadow-[0_6px_24px_rgba(245,158,11,0.3),0_2px_8px_rgba(245,158,11,0.15)] transition-transform active:scale-95 animate-orb-breathe z-10"
           style={{
             backgroundImage:

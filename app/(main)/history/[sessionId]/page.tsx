@@ -3,7 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { MessageBubble } from '@/components/chat/message-bubble'
 import { parseMessage } from '@/lib/ai/parser'
-import { SESSION_TYPE_LABELS } from '@/lib/session-labels'
+import { getSessionDisplayLabel } from '@/lib/session-labels'
 
 interface SessionDetailPageProps {
   params: Promise<{ sessionId: string }>
@@ -35,7 +35,7 @@ export default async function SessionDetailPage({ params }: SessionDetailPagePro
     .eq('session_id', sessionId)
     .order('created_at', { ascending: true })
 
-  const typeLabel = SESSION_TYPE_LABELS[session.session_type] || session.session_type
+  const typeLabel = getSessionDisplayLabel(session.session_type, session.metadata as Record<string, unknown> | null)
   const date = new Date(session.created_at).toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -98,7 +98,7 @@ export default async function SessionDetailPage({ params }: SessionDetailPagePro
           </p>
           <p className="text-sm text-text mb-3">{session.ai_summary}</p>
           <Link
-            href={`/chat?type=ad_hoc&session_context=${sessionId}`}
+            href={`/chat?type=open_conversation&session_context=${sessionId}`}
             className="inline-flex items-center justify-center w-full h-10 px-4 bg-primary text-white text-sm font-medium rounded-md
                        hover:bg-primary-hover transition-colors"
           >
