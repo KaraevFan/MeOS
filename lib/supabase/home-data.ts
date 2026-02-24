@@ -4,7 +4,8 @@ import { diffLocalCalendarDays, getDisplayName, getTimeGreeting } from '@/lib/ut
 import { getLocalDateString, getYesterdayDateString, getLocalMidnight, getHourInTimezone, formatTimeInTimezone } from '@/lib/dates'
 import { getCalendarEvents, hasCalendarIntegration as checkCalendarIntegration } from '@/lib/calendar/google-calendar'
 import type { CalendarEvent } from '@/lib/calendar/types'
-import type { SessionType } from '@/types/chat'
+import type { SessionType, CompletedArc } from '@/types/chat'
+import { expireStaleOpenDaySessions, expireStaleCloseDaySessions, expireStaleOpenConversations } from '@/lib/ai/context'
 
 export interface HomeData {
   greeting: string
@@ -70,15 +71,25 @@ export async function getHomeData(
   let checkinResponse: 'yes' | 'not-yet' | 'snooze' | null = null
 
   if (onboardingCompleted) {
+    // Expire stale sessions so the home screen doesn't show yesterday's lingering sessions
+    await Promise.all([
+      expireStaleOpenDaySessions(userId, timezone),
+      expireStaleCloseDaySessions(userId, timezone),
+      expireStaleOpenConversations(userId),
+    ])
+
     const ufs = new UserFileSystem(supabase, userId)
 
     const todayStr = getLocalDateString(timezone)
     const yesterday = getYesterdayDateString(timezone)
 
+    const todayMidnight = getLocalMidnight(todayStr, timezone)
+
     const [
       activeSessionResult,
       todayCloseDayResult,
       todayOpenDayResult,
+      conversationArcsResult,
       yesterdayJournalResult,
       todayDayPlanResult,
       yesterdayDayPlanResult,
@@ -101,7 +112,7 @@ export async function getHomeData(
         .eq('user_id', userId)
         .eq('session_type', 'close_day')
         .eq('status', 'completed')
-        .gte('completed_at', getLocalMidnight(todayStr, timezone))
+        .gte('completed_at', todayMidnight)
         .limit(1)
         .maybeSingle(),
       supabase
@@ -110,9 +121,18 @@ export async function getHomeData(
         .eq('user_id', userId)
         .eq('session_type', 'open_day')
         .eq('status', 'completed')
-        .gte('completed_at', getLocalMidnight(todayStr, timezone))
+        .gte('completed_at', todayMidnight)
         .limit(1)
         .maybeSingle(),
+      // Also check for completed arcs within open_conversation sessions today
+      supabase
+        .from('sessions')
+        .select('id, metadata')
+        .eq('user_id', userId)
+        .eq('session_type', 'open_conversation')
+        .gte('updated_at', todayMidnight)
+        .not('metadata', 'is', null)
+        .limit(10),
       ufs.readDailyLog(yesterday),
       ufs.readDayPlan(todayStr),
       ufs.readDayPlan(yesterday),
@@ -130,14 +150,25 @@ export async function getHomeData(
       }
     }
 
-    // Check if today's close_day session exists
-    if (todayCloseDayResult.status === 'fulfilled') {
-      todayClosed = !!todayCloseDayResult.value.data
+    // Helper: check if any open_conversation session has a completed arc of a given mode
+    const hasCompletedArc = (mode: string): boolean => {
+      if (conversationArcsResult.status !== 'fulfilled') return false
+      const sessions = conversationArcsResult.value.data ?? []
+      return sessions.some((s) => {
+        const meta = s.metadata as Record<string, unknown> | null
+        const arcs: CompletedArc[] = Array.isArray(meta?.completed_arcs) ? meta.completed_arcs as CompletedArc[] : []
+        return arcs.some((arc) => arc.mode === mode)
+      })
     }
 
-    // Check if today's open_day session completed
+    // Check if today's close_day session exists (direct or via open_conversation arc)
+    if (todayCloseDayResult.status === 'fulfilled') {
+      todayClosed = !!todayCloseDayResult.value.data || hasCompletedArc('close_day')
+    }
+
+    // Check if today's open_day session completed (direct or via open_conversation arc)
     if (todayOpenDayResult.status === 'fulfilled') {
-      openDayCompleted = !!todayOpenDayResult.value.data
+      openDayCompleted = !!todayOpenDayResult.value.data || hasCompletedArc('open_day')
     }
 
     // Extract yesterday's journal summary

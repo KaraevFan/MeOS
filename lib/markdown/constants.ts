@@ -65,13 +65,15 @@ export const SESSION_WRITE_PERMISSIONS: Record<string, string[]> = {
     'life-map/',
     'sage/',
   ],
-  ad_hoc: [
-    'sage/',
-  ],
-  /** Ad-hoc session with domain exploration — allows writing to the explored domain */
-  ad_hoc_explore: [
+  open_conversation: [
+    'day-plans/',
+    'daily-logs/',
+    'check-ins/',
     'life-map/',
+    'life-plan/current.md',
+    'life-plan/weekly.md',
     'sage/',
+    'captures/',
   ],
   close_day: [
     'daily-logs/',

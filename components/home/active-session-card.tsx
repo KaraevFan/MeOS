@@ -33,7 +33,7 @@ export function ActiveSessionCard({ sessionId, sessionType }: ActiveSessionCardP
         </div>
       </Link>
       <Link
-        href="/chat?type=ad_hoc"
+        href="/chat?type=open_conversation"
         className="text-[13px] text-warm-gray/60 hover:text-warm-gray text-center transition-colors"
       >
         Start a new conversation

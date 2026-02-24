@@ -6,7 +6,7 @@ import { UserFileSystem } from '@/lib/markdown/user-file-system'
 import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { getCalendarEvents } from '@/lib/calendar/google-calendar'
 import { getDayPlan, getDayPlansForDateRange } from '@/lib/supabase/day-plan-queries'
-import { getLocalDateString, getLocalDayOfWeek, getYesterdayDateString, getLocalMidnight, formatTimeInTimezone, getStartOfWeek } from '@/lib/dates'
+import { getLocalDateString, getLocalDayOfWeek, getLocalHour, getYesterdayDateString, getLocalMidnight, formatTimeInTimezone, getStartOfWeek } from '@/lib/dates'
 import { stripBlockTags } from '@/lib/ai/sanitize'
 import type { SessionType, DomainName } from '@/types/chat'
 import type { DayPlan } from '@/types/day-plan'
@@ -33,7 +33,14 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
   // Inject today's date for temporal grounding (all session types)
   const todayStr = getLocalDateString(timezone)
   const dayOfWeek = getLocalDayOfWeek(timezone)
+  const currentHour = getLocalHour(timezone)
   parts.push(`\nTODAY: ${dayOfWeek}, ${todayStr}`)
+
+  // For open_conversation: inject current time bracket so Sage can adapt tone
+  if (sessionType === 'open_conversation') {
+    const timeOfDay = currentHour < 12 ? 'morning' : currentHour < 17 ? 'afternoon' : 'evening'
+    parts.push(`TIME: ${timeOfDay} (${currentHour}:00 local)`)
+  }
 
   // Read all context sources in parallel
   const [sageContext, overview, lifePlan, weeklyPlan, checkInFilenames, patterns, pulseBaseline, dailyLogFilenames] =
@@ -87,8 +94,8 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
     const wp = weeklyPlan.value
     const currentWeekMonday = getStartOfWeek(timezone)
 
-    if (sessionType === 'open_day' && wp.frontmatter.week_of === currentWeekMonday) {
-      // Current week's plan — inject as primary anchor for the morning briefing
+    if ((sessionType === 'open_day' || sessionType === 'open_conversation') && wp.frontmatter.week_of === currentWeekMonday) {
+      // Current week's plan — inject as anchor for morning briefing or open conversation
       parts.push(`\n=== THIS WEEK'S PLAN (week of ${wp.frontmatter.week_of}) ===`)
       parts.push('<user_data>')
       parts.push(wp.content)
@@ -172,8 +179,12 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
     parts.push(patterns.value.content)
   }
 
-  // 8. Calendar events (open_day only)
-  if (sessionType === 'open_day') {
+  // Determine time-of-day bracket for open_conversation context tiering
+  const isMorning = sessionType === 'open_conversation' && currentHour < 12
+  const isEvening = sessionType === 'open_conversation' && currentHour >= 17
+
+  // 8. Calendar events (open_day + open_conversation morning)
+  if (sessionType === 'open_day' || isMorning) {
     try {
       const events = await getCalendarEvents(userId, todayStr, timezone)
       if (events.length > 0) {
@@ -279,8 +290,8 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
     }
   }
 
-  // 8b. Today's day plan (close_day: reference the morning intention)
-  if (sessionType === 'close_day') {
+  // 8b. Today's day plan (close_day + open_conversation: reference the morning intention)
+  if (sessionType === 'close_day' || sessionType === 'open_conversation') {
     try {
       const todayDayPlan = await ufs.readDayPlan(todayStr)
       if (todayDayPlan) {
@@ -295,8 +306,8 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
     }
   }
 
-  // 8b2. Today's captures (close_day: fold into evening synthesis)
-  if (sessionType === 'close_day') {
+  // 8b2. Today's captures (close_day + open_conversation evening: fold into synthesis)
+  if (sessionType === 'close_day' || isEvening) {
     try {
       const captureFilenames = await ufs.listCaptures(todayStr, 10) // max 10 for token budget
       if (captureFilenames.length > 0) {
@@ -329,8 +340,8 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
   if (dailyLogFilenames.status === 'fulfilled' && dailyLogFilenames.value.length > 0) {
     const logFilenames = dailyLogFilenames.value
 
-    if (sessionType === 'close_day') {
-      // For close_day: inject yesterday's journal for continuity (skip today's log)
+    if (sessionType === 'close_day' || sessionType === 'open_conversation') {
+      // For close_day and open_conversation: inject yesterday's journal for continuity (skip today's log)
       // Reuses todayStr from top of function (local timezone, not UTC)
       const yesterdayLog = logFilenames.find((f) => {
         const dateFromFile = f.replace('-journal.md', '')
@@ -466,6 +477,41 @@ export async function expireStaleOpenDaySessions(userId: string, timezone: strin
 }
 
 /**
+ * Expire stale close_day sessions for a user. Same logic as open_day:
+ * any active close_day session created before today (in the user's timezone)
+ * is expired. Called from the chat route and from getHomeData().
+ */
+export async function expireStaleCloseDaySessions(userId: string, timezone: string = 'UTC'): Promise<void> {
+  const supabase = await createClient()
+  const todayStr = getLocalDateString(timezone)
+  const todayStart = getLocalMidnight(todayStr, timezone)
+  await supabase
+    .from('sessions')
+    .update({ status: 'expired' })
+    .eq('user_id', userId)
+    .eq('session_type', 'close_day')
+    .eq('status', 'active')
+    .lt('created_at', todayStart)
+}
+
+/**
+ * Expire stale open_conversation sessions for a user. Called before creating
+ * a new open_conversation session and from getHomeData() for home screen status.
+ * Sessions idle for >30 minutes are expired.
+ */
+export async function expireStaleOpenConversations(userId: string): Promise<void> {
+  const supabase = await createClient()
+  const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+  await supabase
+    .from('sessions')
+    .update({ status: 'expired' })
+    .eq('user_id', userId)
+    .eq('session_type', 'open_conversation')
+    .eq('status', 'active')
+    .lt('updated_at', thirtyMinAgo)
+}
+
+/**
  * Build the full system prompt for a conversation.
  * Tries skill file first (skills/{session-type}.md), falls back to prompts.ts.
  * Injects life context from markdown files for all session types.
@@ -476,22 +522,25 @@ export async function expireStaleOpenDaySessions(userId: string, timezone: strin
 export async function buildConversationContext(
   sessionType: SessionType,
   userId: string,
-  options?: { exploreDomain?: string; timezone?: string }
+  options?: { exploreDomain?: string; timezone?: string; activeMode?: string | null }
 ): Promise<string> {
+  // Resolve effective type: if an active mode is set (mid-transition), load that skill instead
+  const effectiveType = (options?.activeMode as SessionType) ?? sessionType
+
   // Try skill file first, fall back to prompts.ts
-  const skill = loadSkill(sessionType)
+  const skill = loadSkill(effectiveType)
   let basePrompt: string
 
   if (skill) {
     basePrompt = skill.prompt
-  } else if (sessionType === 'life_mapping') {
+  } else if (effectiveType === 'life_mapping') {
     basePrompt = getLifeMappingPrompt()
-  } else if (sessionType === 'close_day') {
+  } else if (effectiveType === 'close_day') {
     basePrompt = getCloseDayPrompt(options?.timezone)
-  } else if (sessionType === 'open_day') {
+  } else if (effectiveType === 'open_day') {
     // Shouldn't reach here if skill file exists, but safety fallback
     basePrompt = 'You are Sage, conducting a morning "Open the Day" session. Help the user commit to one clear intention for the day.'
-  } else if (sessionType === 'ad_hoc') {
+  } else if (effectiveType === 'open_conversation') {
     basePrompt = getAdHocPrompt(options?.exploreDomain)
   } else {
     basePrompt = getWeeklyCheckinBasePrompt()
@@ -503,7 +552,7 @@ export async function buildConversationContext(
     basePrompt += SUGGESTED_REPLIES_FORMAT
   }
 
-  const fileContext = await fetchAndInjectFileContext(userId, options?.exploreDomain, sessionType, options?.timezone)
+  const fileContext = await fetchAndInjectFileContext(userId, options?.exploreDomain, effectiveType, options?.timezone)
 
   if (!fileContext) {
     return basePrompt // New user, no context to inject
@@ -511,7 +560,7 @@ export async function buildConversationContext(
 
   let prompt = `${basePrompt}\n\n${fileContext}`
 
-  if (sessionType === 'weekly_checkin') {
+  if (effectiveType === 'weekly_checkin') {
     prompt += `\n\nThe user's pulse check baseline is included above. When discussing domains, reference how things have shifted since their initial self-assessment. For example: "When we first talked, you rated career as 'struggling' — it sounds like things have moved to a better place."`
     prompt += `\n\nIf daily journal entries are available above, use them as the week's narrative. Reference specific observations the user made in their evening reflections rather than asking "how was your week?" cold. For example: "Looking at your week, you mentioned feeling stuck on onboarding three times in your evening reflections — what's going on there?"`
   }

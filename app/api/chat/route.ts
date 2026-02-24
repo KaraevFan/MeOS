@@ -1,18 +1,21 @@
 /**
  * SSE Event Protocol:
- * - { text: string }           — Streaming token from Claude
- * - { error: string }          — Error message
- * - { sessionCompleted: true } — Session was completed server-side
- * - [DONE]                     — Terminal sentinel, stream ends
+ * - { text: string }              — Streaming token from Claude
+ * - { error: string }             — Error message
+ * - { sessionCompleted: true }    — Session was completed server-side
+ * - { modeChange: string }        — Entered a structured arc (e.g. 'open_day')
+ * - { arcCompleted: string }      — Structured arc completed, returned to open conversation
+ * - [DONE]                        — Terminal sentinel, stream ends
  */
 import { createClient } from '@/lib/supabase/server'
-import { buildConversationContext, expireStaleOpenDaySessions } from '@/lib/ai/context'
+import { buildConversationContext, expireStaleOpenDaySessions, expireStaleCloseDaySessions, expireStaleOpenConversations } from '@/lib/ai/context'
 import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 import { INTENT_CONTEXT_LABELS } from '@/lib/onboarding'
 import { captureException } from '@/lib/monitoring/sentry'
 import { getUserTimezone } from '@/lib/get-user-timezone'
 import { detectTerminalArtifact } from '@/lib/ai/completion-detection'
 import { completeSession } from '@/lib/supabase/sessions'
+import type { SessionMetadata, CompletedArc, StructuredArcType } from '@/types/chat'
 import { generateSessionSummary } from '@/lib/ai/generate-session-summary'
 import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
@@ -46,7 +49,7 @@ function checkRateLimit(userId: string): boolean {
 
 const ChatRequestSchema = z.object({
   sessionId: z.string().uuid(),
-  sessionType: z.enum(['life_mapping', 'weekly_checkin', 'ad_hoc', 'close_day', 'open_day', 'quick_capture']),
+  sessionType: z.enum(['life_mapping', 'weekly_checkin', 'open_conversation', 'close_day', 'open_day', 'quick_capture']),
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string().max(10_000),
@@ -56,7 +59,7 @@ const ChatRequestSchema = z.object({
   exploreDomain: z.string().optional(),
 }).refine(
   // open_day sessions can start with zero messages (AI generates the opening)
-  (data) => data.messages.length > 0 || data.sessionType === 'open_day',
+  (data) => data.messages.length > 0 || data.sessionType === 'open_day' || data.sessionType === 'open_conversation',
   { message: 'Messages array must have at least 1 item', path: ['messages'] },
 )
 
@@ -268,12 +271,28 @@ export async function POST(request: Request) {
     })
   }
 
+  // Extract session metadata once, used for active_mode, pending_completion, ad_hoc_context
+  const existingMetadata = (sessionCheck.metadata ?? {}) as SessionMetadata
+
+  // Validate and extract active_mode once — reused in context building and post-stream processing
+  const VALID_ARC_MODES: readonly StructuredArcType[] = ['open_day', 'close_day', 'weekly_checkin', 'life_mapping']
+  const activeMode: StructuredArcType | null = typeof existingMetadata.active_mode === 'string'
+    && VALID_ARC_MODES.includes(existingMetadata.active_mode as StructuredArcType)
+    ? existingMetadata.active_mode as StructuredArcType
+    : null
+
   // Resolve user timezone for date-aware context injection
   const timezone = await getUserTimezone(supabase, user.id)
 
-  // Expire stale open_day sessions before building close_day context
+  // Expire stale sessions before building context
   if (sessionType === 'close_day') {
     await expireStaleOpenDaySessions(user.id, timezone)
+  }
+  if (sessionType === 'open_day') {
+    await expireStaleCloseDaySessions(user.id, timezone)
+  }
+  if (sessionType === 'open_conversation') {
+    await expireStaleOpenConversations(user.id)
   }
 
   // Build system prompt with context (session type already validated by Zod schema)
@@ -286,6 +305,7 @@ export async function POST(request: Request) {
     systemPrompt = await buildConversationContext(sessionType, user.id, {
       exploreDomain: validatedExploreDomain,
       timezone,
+      activeMode,
     })
 
     const mode = pulseContextMode ?? 'none'
@@ -295,15 +315,30 @@ export async function POST(request: Request) {
     }
 
     // Pre-checkin warmup: instruction is server-defined, keyed on a boolean flag
-    if (precheckin && sessionType === 'ad_hoc') {
+    if (precheckin && sessionType === 'open_conversation') {
       systemPrompt += `\n\n${PRE_CHECKIN_WARMUP_INSTRUCTION}`
     }
 
-    // Ad-hoc context from session metadata (set once at session creation, not per-request)
-    if (sessionType === 'ad_hoc' && !precheckin) {
-      const meta = sessionCheck?.metadata as Record<string, unknown> | null
-      if (meta?.ad_hoc_context && typeof meta.ad_hoc_context === 'string') {
-        systemPrompt += `\n\n<user_data>\n${meta.ad_hoc_context.slice(0, 2000)}\n</user_data>`
+    // Open conversation context from session metadata (set once at session creation, not per-request)
+    if (sessionType === 'open_conversation' && !precheckin) {
+      if (existingMetadata.ad_hoc_context && typeof existingMetadata.ad_hoc_context === 'string') {
+        systemPrompt += `\n\n<user_data>\n${existingMetadata.ad_hoc_context.slice(0, 2000)}\n</user_data>`
+      }
+    }
+
+    // Inject completed arcs context so Sage knows what just happened when returning from a mode
+    if (sessionType === 'open_conversation' && !activeMode) {
+      const completedArcs: CompletedArc[] = Array.isArray(existingMetadata.completed_arcs) ? existingMetadata.completed_arcs as CompletedArc[] : []
+      if (completedArcs.length > 0) {
+        const arcLabels: Record<string, string> = {
+          open_day: 'morning session (Open the Day)',
+          close_day: 'evening reflection (Close the Day)',
+          weekly_checkin: 'weekly check-in',
+          life_mapping: 'life mapping session',
+        }
+        const latest = completedArcs[completedArcs.length - 1]
+        const label = arcLabels[latest.mode] || latest.mode
+        systemPrompt += `\n\nCONTEXT: The user just completed a ${label} within this conversation. Acknowledge it briefly and stay available — don't re-greet or re-introduce yourself. See "Returning From a Completed Arc" in your skill instructions.`
       }
     }
   } catch (error) {
@@ -318,7 +353,6 @@ export async function POST(request: Request) {
   }
 
   // Check if this close_day session has a pending_completion flag from Phase A
-  const existingMetadata = (sessionCheck.metadata ?? {}) as Record<string, unknown>
   const isPendingCloseDay = sessionType === 'close_day' && existingMetadata.pending_completion === true
 
   // Stream Claude response via SSE
@@ -331,7 +365,7 @@ export async function POST(request: Request) {
         // Anthropic API requires ≥1 message, so inject a synthetic user turn.
         const apiMessages = messages.length > 0
           ? messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
-          : [{ role: 'user' as const, content: '[Start open_day session]' }]
+          : [{ role: 'user' as const, content: `[Start ${sessionType} session]` }]
 
         const messageStream = anthropic.messages.stream({
           model: 'claude-sonnet-4-5-20250929',
@@ -381,21 +415,51 @@ export async function POST(request: Request) {
               })
             }
           } else {
-            const signal = detectTerminalArtifact(accumulated, sessionType)
+            const signal = detectTerminalArtifact(accumulated, sessionType, activeMode)
 
             if (signal === 'complete') {
-              await completeSession(supabase, sessionId)
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ sessionCompleted: true })}\n\n`))
+              if (activeMode && sessionType === 'open_conversation') {
+                // Arc completed within open_conversation — return to base layer
+                const completedArcs: CompletedArc[] = Array.isArray(existingMetadata.completed_arcs)
+                  ? existingMetadata.completed_arcs as CompletedArc[]
+                  : []
+                completedArcs.push({ mode: activeMode, completed_at: new Date().toISOString() })
+                const arcMetadata = {
+                  ...existingMetadata,
+                  active_mode: null,
+                  completed_arcs: completedArcs,
+                }
+                await supabase.from('sessions')
+                  .update({ metadata: arcMetadata })
+                  .eq('id', sessionId)
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ arcCompleted: activeMode })}\n\n`))
+              } else {
+                // Standard session completion
+                await completeSession(supabase, sessionId)
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ sessionCompleted: true })}\n\n`))
 
-              // Generate summary with the already-authenticated client
-              await generateSessionSummary(supabase, sessionId).catch((err) => {
-                captureException(err, { tags: { route: '/api/chat', stage: 'summary_generation' }, extra: { sessionId } })
-              })
+                // Generate summary with the already-authenticated client
+                await generateSessionSummary(supabase, sessionId).catch((err) => {
+                  captureException(err, { tags: { route: '/api/chat', stage: 'summary_generation' }, extra: { sessionId } })
+                })
+              }
             } else if (signal === 'pending_completion') {
               // close_day Phase A: journal emitted, awaiting user confirmation
               await supabase.from('sessions')
                 .update({ metadata: { ...existingMetadata, pending_completion: true } })
                 .eq('id', sessionId)
+            }
+          }
+
+          // Detect [ENTER_MODE] signal for dynamic mode transitions
+          const enterModeMatch = accumulated.match(/\[ENTER_MODE:\s*(\w+)\]/)
+          if (enterModeMatch) {
+            const newMode = enterModeMatch[1]
+            if (VALID_ARC_MODES.includes(newMode as StructuredArcType)) {
+              await supabase.from('sessions')
+                .update({ metadata: { ...existingMetadata, active_mode: newMode } })
+                .eq('id', sessionId)
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ modeChange: newMode })}\n\n`))
             }
           }
         } catch (completionError) {
