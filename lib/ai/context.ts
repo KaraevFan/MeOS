@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { getLifeMappingPrompt, getWeeklyCheckinBasePrompt, getAdHocPrompt, getCloseDayPrompt, SUGGESTED_REPLIES_FORMAT } from './prompts'
 import { loadSkill } from './skill-loader'
@@ -462,18 +463,23 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
  * Expire stale open_day sessions for a user. Called from the API route
  * before building close_day context, separated from prompt building to
  * keep buildConversationContext free of write side-effects.
+ *
+ * Accepts an optional Supabase client. When called from getHomeData(),
+ * the caller's authenticated client is passed directly. When called from
+ * the chat API route, falls back to createClient().
  */
-export async function expireStaleOpenDaySessions(userId: string, timezone: string = 'UTC'): Promise<void> {
-  const supabase = await createClient()
+export async function expireStaleOpenDaySessions(userId: string, timezone: string = 'UTC', client?: SupabaseClient): Promise<void> {
+  const supabase = client ?? await createClient()
   const todayStr = getLocalDateString(timezone)
   const todayStart = getLocalMidnight(todayStr, timezone)
-  await supabase
+  const { error } = await supabase
     .from('sessions')
     .update({ status: 'expired' })
     .eq('user_id', userId)
     .eq('session_type', 'open_day')
     .eq('status', 'active')
     .lt('created_at', todayStart)
+  if (error) console.error('[expireStaleOpenDaySessions]', error.message)
 }
 
 /**
@@ -481,17 +487,18 @@ export async function expireStaleOpenDaySessions(userId: string, timezone: strin
  * any active close_day session created before today (in the user's timezone)
  * is expired. Called from the chat route and from getHomeData().
  */
-export async function expireStaleCloseDaySessions(userId: string, timezone: string = 'UTC'): Promise<void> {
-  const supabase = await createClient()
+export async function expireStaleCloseDaySessions(userId: string, timezone: string = 'UTC', client?: SupabaseClient): Promise<void> {
+  const supabase = client ?? await createClient()
   const todayStr = getLocalDateString(timezone)
   const todayStart = getLocalMidnight(todayStr, timezone)
-  await supabase
+  const { error } = await supabase
     .from('sessions')
     .update({ status: 'expired' })
     .eq('user_id', userId)
     .eq('session_type', 'close_day')
     .eq('status', 'active')
     .lt('created_at', todayStart)
+  if (error) console.error('[expireStaleCloseDaySessions]', error.message)
 }
 
 /**
@@ -499,16 +506,17 @@ export async function expireStaleCloseDaySessions(userId: string, timezone: stri
  * a new open_conversation session and from getHomeData() for home screen status.
  * Sessions idle for >30 minutes are expired.
  */
-export async function expireStaleOpenConversations(userId: string): Promise<void> {
-  const supabase = await createClient()
+export async function expireStaleOpenConversations(userId: string, client?: SupabaseClient): Promise<void> {
+  const supabase = client ?? await createClient()
   const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()
-  await supabase
+  const { error } = await supabase
     .from('sessions')
     .update({ status: 'expired' })
     .eq('user_id', userId)
     .eq('session_type', 'open_conversation')
     .eq('status', 'active')
     .lt('updated_at', thirtyMinAgo)
+  if (error) console.error('[expireStaleOpenConversations]', error.message)
 }
 
 /**

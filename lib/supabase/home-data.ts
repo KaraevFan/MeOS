@@ -71,11 +71,12 @@ export async function getHomeData(
   let checkinResponse: 'yes' | 'not-yet' | 'snooze' | null = null
 
   if (onboardingCompleted) {
-    // Expire stale sessions so the home screen doesn't show yesterday's lingering sessions
+    // Expire stale sessions so the home screen doesn't show yesterday's lingering sessions.
+    // Pass the caller's authenticated Supabase client to avoid creating new clients.
     await Promise.all([
-      expireStaleOpenDaySessions(userId, timezone),
-      expireStaleCloseDaySessions(userId, timezone),
-      expireStaleOpenConversations(userId),
+      expireStaleOpenDaySessions(userId, timezone, supabase),
+      expireStaleCloseDaySessions(userId, timezone, supabase),
+      expireStaleOpenConversations(userId, supabase),
     ])
 
     const ufs = new UserFileSystem(supabase, userId)
