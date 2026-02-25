@@ -224,7 +224,7 @@ export async function getHomeData(
       const existingFiles = domainFilesResult.value
       unmappedDomains = ALL_DOMAINS.filter((d) => {
         const filename = DOMAIN_FILE_MAP[d]
-        return !existingFiles.some((f) => f.includes(filename))
+        return !existingFiles.some((f) => f.endsWith(`/${filename}.md`) || f === `${filename}.md`)
       })
     }
 

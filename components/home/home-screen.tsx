@@ -282,9 +282,7 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             />
           )}
 
-          {data.unmappedDomains.length > 0 && (
-            <LifeMapNudge unmappedDomains={data.unmappedDomains} />
-          )}
+          <LifeMapNudge unmappedDomains={data.unmappedDomains} />
 
           <AmbientCard onTap={handleReflectionTap} />
         </>
@@ -316,9 +314,7 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             <BreadcrumbsCard captures={data.todayCaptures} />
           )}
 
-          {data.unmappedDomains.length > 0 && (
-            <LifeMapNudge unmappedDomains={data.unmappedDomains} />
-          )}
+          <LifeMapNudge unmappedDomains={data.unmappedDomains} />
         </>
       )}
 
@@ -362,9 +358,7 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             </InfoCard>
           )}
 
-          {data.unmappedDomains.length > 0 && (
-            <LifeMapNudge unmappedDomains={data.unmappedDomains} />
-          )}
+          <LifeMapNudge unmappedDomains={data.unmappedDomains} />
 
           <AmbientCard onTap={handleReflectionTap} />
         </>

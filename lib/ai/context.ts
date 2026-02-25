@@ -9,6 +9,7 @@ import { getCalendarEvents } from '@/lib/calendar/google-calendar'
 import { getDayPlan, getDayPlansForDateRange } from '@/lib/supabase/day-plan-queries'
 import { getLocalDateString, getLocalDayOfWeek, getLocalHour, getYesterdayDateString, getLocalMidnight, formatTimeInTimezone, getStartOfWeek } from '@/lib/dates'
 import { stripBlockTags } from '@/lib/ai/sanitize'
+import { ALL_DOMAINS } from '@/lib/constants'
 import type { SessionType, DomainName } from '@/types/chat'
 import type { DayPlan } from '@/types/day-plan'
 
@@ -44,7 +45,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
   }
 
   // Read all context sources in parallel
-  const [sageContext, overview, lifePlan, weeklyPlan, checkInFilenames, patterns, pulseBaseline, dailyLogFilenames] =
+  const [sageContext, overview, lifePlan, weeklyPlan, checkInFilenames, patterns, pulseBaseline, dailyLogFilenames, domainFileListing] =
     await Promise.allSettled([
       ufs.readSageContext(),
       ufs.readOverview(),
@@ -54,6 +55,7 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
       ufs.readPatterns(),
       getBaselineRatings(supabase, userId),
       ufs.listDailyLogs(7),
+      ufs.listFiles('life-map/'),
     ])
 
   // 1. Pulse check baseline (still from relational DB)
@@ -171,6 +173,21 @@ async function fetchAndInjectFileContext(userId: string, exploreDomain?: string,
           // Domain file may not exist yet — that's fine
         }
       }
+    }
+  }
+
+  // 6c. Life map domain coverage — so Sage knows which domains are mapped vs unmapped
+  if (domainFileListing.status === 'fulfilled') {
+    const existingFiles = domainFileListing.value
+    const mapped = ALL_DOMAINS.filter((d) => {
+      const filename = DOMAIN_FILE_MAP[d]
+      return existingFiles.some((f) => f.endsWith(`/${filename}.md`) || f === `${filename}.md`)
+    })
+    const unmapped = ALL_DOMAINS.filter((d) => !mapped.includes(d))
+    if (unmapped.length > 0 && unmapped.length < ALL_DOMAINS.length) {
+      parts.push('\nLIFE MAP COVERAGE:')
+      parts.push(`Mapped: ${mapped.join(', ')}`)
+      parts.push(`Unmapped: ${unmapped.join(', ')}`)
     }
   }
 

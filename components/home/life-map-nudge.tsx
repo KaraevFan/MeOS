@@ -34,7 +34,7 @@ export function LifeMapNudge({ unmappedDomains }: LifeMapNudgeProps) {
         </p>
         <Link
           href="/chat?type=life_mapping"
-          className="text-[12px] font-semibold text-amber-600 hover:text-amber-700 transition-colors self-start"
+          className="text-[12px] font-semibold text-amber-600 hover:text-amber-700 transition-colors self-start py-2"
         >
           Continue mapping
         </Link>

@@ -1055,7 +1055,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
               await updateDayPlan(supabase, userId, dayPlan.date, updateData)
             } catch (err) {
-              console.error('[ChatView] Day plan write failed:', err)
+              captureException(err, { tags: { component: 'chat-view', stage: 'day_plan_write' } })
             }
           }
 

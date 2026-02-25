@@ -101,15 +101,10 @@ export default async function ChatPage({
 
   // Session deduplication: resume recent active open_conversation instead of creating a new one.
   // Only when navigating via orb (no special context params that warrant a fresh session).
+  // Centralized context check — add new params here when they warrant a fresh session.
+  const hasExplicitContext = !!(params.explore || params.nudge || params.session_context || params.precheckin || params.mode)
   let resumeOpenConversationId: string | undefined
-  if (
-    sessionType === 'open_conversation' &&
-    !params.explore &&
-    !params.nudge &&
-    !params.session_context &&
-    !params.precheckin &&
-    !params.mode // Reflection prompts and other mode-driven navigation warrant fresh session
-  ) {
+  if (sessionType === 'open_conversation' && !hasExplicitContext) {
     const { data: existingSession } = await supabase
       .from('sessions')
       .select('id, updated_at')
