@@ -14,8 +14,9 @@ import { CalendarConnectCard } from '@/components/ui/calendar-connect-card'
 import { YesterdayIntentionCard } from './yesterday-intention-card'
 import { CheckinCard } from './checkin-card'
 import { BreadcrumbsCard } from './breadcrumbs-card'
+import { LifeMapNudge } from './life-map-nudge'
 import type { CalendarEvent } from '@/lib/calendar/types'
-import type { SessionType } from '@/types/chat'
+import type { SessionType, DomainName } from '@/types/chat'
 
 export type TimeState = 'morning' | 'midday' | 'evening'
 
@@ -37,6 +38,7 @@ export interface HomeScreenData {
   activeSessionId: string | null
   activeSessionType: SessionType | null
   checkinResponse: 'yes' | 'not-yet' | 'snooze' | null
+  unmappedDomains: DomainName[]
 }
 
 function detectTimeState(): TimeState {
@@ -280,6 +282,10 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
             />
           )}
 
+          {data.unmappedDomains.length > 0 && (
+            <LifeMapNudge unmappedDomains={data.unmappedDomains} />
+          )}
+
           <AmbientCard onTap={handleReflectionTap} />
         </>
       )}
@@ -308,6 +314,10 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
           {/* Breadcrumbs — mid-day captures */}
           {data.todayCaptures.length > 0 && (
             <BreadcrumbsCard captures={data.todayCaptures} />
+          )}
+
+          {data.unmappedDomains.length > 0 && (
+            <LifeMapNudge unmappedDomains={data.unmappedDomains} />
           )}
         </>
       )}
@@ -350,6 +360,10 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
                 </p>
               </div>
             </InfoCard>
+          )}
+
+          {data.unmappedDomains.length > 0 && (
+            <LifeMapNudge unmappedDomains={data.unmappedDomains} />
           )}
 
           <AmbientCard onTap={handleReflectionTap} />

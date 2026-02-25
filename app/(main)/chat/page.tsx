@@ -107,7 +107,8 @@ export default async function ChatPage({
     !params.explore &&
     !params.nudge &&
     !params.session_context &&
-    !params.precheckin
+    !params.precheckin &&
+    !params.mode // Reflection prompts and other mode-driven navigation warrant fresh session
   ) {
     const { data: existingSession } = await supabase
       .from('sessions')

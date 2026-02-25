@@ -4,8 +4,10 @@ import { diffLocalCalendarDays, getDisplayName, getTimeGreeting } from '@/lib/ut
 import { getLocalDateString, getYesterdayDateString, getLocalMidnight, getHourInTimezone, formatTimeInTimezone } from '@/lib/dates'
 import { getCalendarEvents, hasCalendarIntegration as checkCalendarIntegration } from '@/lib/calendar/google-calendar'
 import type { CalendarEvent } from '@/lib/calendar/types'
-import type { SessionType, CompletedArc } from '@/types/chat'
+import type { SessionType, CompletedArc, DomainName } from '@/types/chat'
 import { expireStaleOpenDaySessions, expireStaleCloseDaySessions, expireStaleOpenConversations } from '@/lib/ai/context'
+import { ALL_DOMAINS } from '@/lib/constants'
+import { DOMAIN_FILE_MAP } from '@/lib/markdown/constants'
 
 export interface HomeData {
   greeting: string
@@ -26,6 +28,7 @@ export interface HomeData {
   calendarSummary: string | null
   hasCalendarIntegration: boolean
   checkinResponse: 'yes' | 'not-yet' | 'snooze' | null
+  unmappedDomains: DomainName[]
 }
 
 export async function getHomeData(
@@ -69,6 +72,7 @@ export async function getHomeData(
   let calendarSummary: string | null = null
   let hasCalendar = false
   let checkinResponse: 'yes' | 'not-yet' | 'snooze' | null = null
+  let unmappedDomains: DomainName[] = ALL_DOMAINS
 
   if (onboardingCompleted) {
     // Expire stale sessions so the home screen doesn't show yesterday's lingering sessions.
@@ -97,6 +101,7 @@ export async function getHomeData(
       calendarResult,
       captureFilenamesResult,
       calendarIntegrationResult,
+      domainFilesResult,
     ] = await Promise.allSettled([
       supabase
         .from('sessions')
@@ -140,6 +145,7 @@ export async function getHomeData(
       getCalendarEvents(userId, todayStr, timezone),
       ufs.listCaptures(todayStr),
       checkCalendarIntegration(userId),
+      ufs.listFiles('life-map/'),
     ])
 
     // Extract active session from parallel result
@@ -213,6 +219,15 @@ export async function getHomeData(
       }
     }
 
+    // Compute unmapped domains by checking which domain files exist
+    if (domainFilesResult.status === 'fulfilled') {
+      const existingFiles = domainFilesResult.value
+      unmappedDomains = ALL_DOMAINS.filter((d) => {
+        const filename = DOMAIN_FILE_MAP[d]
+        return !existingFiles.some((f) => f.includes(filename))
+      })
+    }
+
     // Extract today's captures (text content for BreadcrumbsCard)
     if (captureFilenamesResult.status === 'fulfilled' && captureFilenamesResult.value.length > 0) {
       const captureFilenames = captureFilenamesResult.value
@@ -248,5 +263,6 @@ export async function getHomeData(
     calendarSummary,
     hasCalendarIntegration: hasCalendar,
     checkinResponse,
+    unmappedDomains,
   }
 }
