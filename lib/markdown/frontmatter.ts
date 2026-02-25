@@ -81,7 +81,7 @@ export function generateCheckInFrontmatter(
 ): CheckInFileFrontmatter {
   return {
     type: metadata.type ?? 'weekly-check-in',
-    date: metadata.date ?? new Date().toISOString().split('T')[0], // Fallback only — callers always pass date
+    date: metadata.date ?? (() => { throw new Error('generateCheckInFrontmatter: date is required') })(),
     duration_minutes: metadata.duration_minutes,
     domains_discussed: metadata.domains_discussed ?? [],
     mood: metadata.mood,

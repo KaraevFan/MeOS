@@ -52,6 +52,7 @@ export default async function HomePage() {
           activeSessionId: homeData.activeSessionId,
           activeSessionType: homeData.activeSessionType,
           checkinResponse: homeData.checkinResponse,
+          unmappedDomains: homeData.unmappedDomains,
         }}
       />
     </div>

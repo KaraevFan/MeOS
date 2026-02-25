@@ -1023,7 +1023,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
               })
             }
 
-            // Write structured day plan data to Postgres (fire-and-forget) — always runs, even during arcs
+            // Write structured day plan data to Postgres — awaited to ensure data is available before user navigates
             const dayPlanDataBlock = parsed.segments.find(
               (s): s is Extract<typeof s, { type: 'block'; blockType: 'day_plan_data' }> =>
                 s.type === 'block' && s.blockType === 'day_plan_data'
@@ -1032,7 +1032,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             const dayPlanIntention = dayPlanDataBlock?.data.intention ?? dayPlanFileUpdate?.attributes?.intention ?? null
 
             const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-            getOrCreateTodayDayPlan(supabase, userId, clientTimezone).then((dayPlan) => {
+            try {
+              const dayPlan = await getOrCreateTodayDayPlan(supabase, userId, clientTimezone)
               const updateData: Partial<Pick<DayPlan,
                 'intention' | 'energy_level' | 'morning_session_id' | 'morning_completed_at' |
                 'priorities' | 'open_threads'
@@ -1052,12 +1053,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
                 resolved_at: null,
               }))
 
-              updateDayPlan(supabase, userId, dayPlan.date, updateData).catch((err) => {
-                console.error('[ChatView] Failed to update day_plans:', err)
-              })
-            }).catch((err) => {
-              console.error('[ChatView] Failed to get/create day plan:', err)
-            })
+              await updateDayPlan(supabase, userId, dayPlan.date, updateData)
+            } catch (err) {
+              captureException(err, { tags: { component: 'chat-view', stage: 'day_plan_write' } })
+            }
           }
 
           if ((hasOverview || hasCheckIn) && !sessionCompletedRef.current && !isArcMode) {
