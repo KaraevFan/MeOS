@@ -265,6 +265,12 @@ function normalizeToMonday(dateStr: string): string {
   return daysToMonday === 0 ? dateStr : shiftDate(dateStr, daysToMonday)
 }
 
+/**
+ * Mark all of today's captures as folded into the journal.
+ * Exported for use by the tool executor (server-side close_day post-processing).
+ */
+export { markCapturesFolded as markCapturesFoldedForToolUse }
+
 async function markCapturesFolded(ufs: UserFileSystem, timezone: string = 'UTC'): Promise<void> {
   const today = getLocalDateString(timezone)
   const filenames = await ufs.listCaptures(today)

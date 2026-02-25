@@ -640,6 +640,18 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             // Structured arc finished within open_conversation — return to base layer
             setActiveMode(null)
           }
+          // Tool-use events (Phase 1: acknowledge without UI changes)
+          if (parsed.toolCall || parsed.roundBoundary) {
+            // toolCall: tool execution in progress (shimmer indicator — future sprint)
+            // roundBoundary: paragraph break between agentic loop rounds
+            continue
+          }
+          if (parsed.showPulseCheck || parsed.showOptions) {
+            // Split-conversation tools — full client integration in future sprint.
+            // For now, the stream ends normally and the existing text-block
+            // parsing handles suggested replies and pulse checks.
+            continue
+          }
           if (parsed.text) {
             accumulated += parsed.text
             setStreamingText(accumulated)
