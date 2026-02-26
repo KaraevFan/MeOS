@@ -1022,8 +1022,12 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
                 console.error('Failed to complete open_day session')
               })
             }
+          }
 
-            // Write structured day plan data to Postgres — awaited to ensure data is available before user navigates
+          // Write structured day plan data to Postgres — runs unconditionally when a day-plan
+          // FILE_UPDATE is present (the sessionCompleted guard above is for lifecycle only;
+          // the Postgres row must exist regardless or the Day page shows "No plan for this day").
+          if (hasDayPlan) {
             const dayPlanDataBlock = parsed.segments.find(
               (s): s is Extract<typeof s, { type: 'block'; blockType: 'day_plan_data' }> =>
                 s.type === 'block' && s.blockType === 'day_plan_data'
