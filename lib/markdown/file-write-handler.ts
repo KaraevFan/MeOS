@@ -58,6 +58,11 @@ export function resolveFileUpdatePath(update: FileUpdateData, timezone: string =
     }
     case FILE_TYPES.WEEKLY_PLAN:
       return 'life-plan/weekly.md'
+    case FILE_TYPES.CAPTURE: {
+      const date = todayFallback()
+      const slug = update.name ?? Date.now().toString(36)
+      return `captures/${date}-${slug}.md`
+    }
     default:
       console.warn(`[FileWriteHandler] Unknown file type: ${update.fileType}`)
       return null
@@ -186,6 +191,12 @@ export async function handleFileUpdate(
         await ufs.writeWeeklyPlan(update.content, weekOf)
         break
       }
+      case FILE_TYPES.CAPTURE: {
+        const captureDate = getLocalDateString(timezone)
+        const timeCode = update.name ?? Date.now().toString(36)
+        await ufs.writeCapture(captureDate, timeCode, update.content)
+        break
+      }
       default:
         return {
           success: false,
@@ -264,6 +275,12 @@ function normalizeToMonday(dateStr: string): string {
   const daysToMonday = dow === 0 ? -6 : 1 - dow
   return daysToMonday === 0 ? dateStr : shiftDate(dateStr, daysToMonday)
 }
+
+/**
+ * Mark all of today's captures as folded into the journal.
+ * Exported for use by the tool executor (server-side close_day post-processing).
+ */
+export { markCapturesFolded as markCapturesFoldedForToolUse }
 
 async function markCapturesFolded(ufs: UserFileSystem, timezone: string = 'UTC'): Promise<void> {
   const today = getLocalDateString(timezone)

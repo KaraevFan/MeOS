@@ -159,6 +159,10 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
   const [activeMode, setActiveMode] = useState<string | null>(null)
   // Tracks whether a terminal artifact card has rendered (fallback signal for session completion)
   const [hasTerminalArtifact, setHasTerminalArtifact] = useState(false)
+  // Tracks active tool execution for shimmer indicator
+  const [pendingToolCall, setPendingToolCall] = useState<string | null>(null)
+  // Tool-driven suggestion pills (from show_options tool)
+  const [toolDrivenOptions, setToolDrivenOptions] = useState<string[] | null>(null)
   // Ref-based guard: prevents duplicate completeSession() calls from server+client race.
   // React batches setSessionCompleted(true), so state guards read stale values in the same tick.
   const sessionCompletedRef = useRef(false)
@@ -632,6 +636,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             // Server completed the session — set ref + state, skip client-side completion
             sessionCompletedRef.current = true
             setSessionCompleted(true)
+            // Signal Day tab to refresh on next mount (avoids unconditional router.refresh)
+            sessionStorage.setItem('dayPlanStale', '1')
           }
           if (parsed.modeChange) {
             setActiveMode(parsed.modeChange)
@@ -640,7 +646,67 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
             // Structured arc finished within open_conversation — return to base layer
             setActiveMode(null)
           }
+          // Tool-use events: show shimmer during save_file execution
+          if (parsed.toolCall) {
+            if (parsed.toolCall.name === 'save_file') {
+              setPendingToolCall(parsed.toolCall.name)
+            }
+            continue
+          }
+          if (parsed.roundBoundary) {
+            setPendingToolCall(null)
+            continue
+          }
+          // Domain rating update from tool-use — update spider chart live
+          if (parsed.domainUpdate) {
+            const { domain, updatedRating } = parsed.domainUpdate as { domain: string; updatedRating: number }
+            if (domain && typeof updatedRating === 'number' && updatedRating >= 1 && updatedRating <= 5) {
+              setPulseCheckRatings((prev) => {
+                if (!prev) return prev
+                const existing = prev.find((r) => r.domain === domain)
+                if (existing) {
+                  return prev.map((r) =>
+                    r.domain === domain ? { ...r, ratingNumeric: updatedRating } : r
+                  )
+                }
+                return prev
+              })
+              // Persist to pulse_check_ratings for trend tracking (fire-and-forget)
+              if (sessionId) {
+                const ratingLabel = (['in_crisis', 'struggling', 'okay', 'good', 'thriving'] as const)[updatedRating - 1]
+                supabase.from('pulse_check_ratings').insert({
+                  session_id: sessionId,
+                  user_id: userId,
+                  domain_name: domain,
+                  rating: ratingLabel,
+                  rating_numeric: updatedRating,
+                  is_baseline: false,
+                }).then(() => { /* fire-and-forget */ })
+              }
+            }
+            continue
+          }
+          if (parsed.showPulseCheck) {
+            // Tool-driven pulse check — trigger the existing check-in pulse UI
+            try {
+              const ratings = await getLatestRatingsPerDomain(supabase, userId)
+              setPreviousRatings(ratings)
+            } catch {
+              setPreviousRatings([])
+            }
+            setShowCheckinPulse(true)
+            continue
+          }
+          if (parsed.showOptions) {
+            // Tool-driven suggestion pills — store options for rendering after stream ends
+            const opts = parsed.showOptions as { options?: string[] }
+            if (Array.isArray(opts.options)) {
+              setToolDrivenOptions(opts.options)
+            }
+            continue
+          }
           if (parsed.text) {
+            if (pendingToolCall) setPendingToolCall(null)
             accumulated += parsed.text
             setStreamingText(accumulated)
           }
@@ -716,6 +782,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
       if (streamAbortRef.current === controller) {
         streamAbortRef.current = null
       }
+      setPendingToolCall(null)
       setIsStreaming(false)
     }
   }
@@ -1124,6 +1191,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
       if (streamAbortRef.current === controller) {
         streamAbortRef.current = null
       }
+      setPendingToolCall(null)
       setIsStreaming(false)
     }
   }
@@ -1134,6 +1202,8 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
 
   function handleSend(text: string) {
     setPrefillText(undefined)
+    // Clear tool-driven options when user sends a message (they chose or typed instead)
+    if (toolDrivenOptions) setToolDrivenOptions(null)
 
     // Detect domain exploration for sidebar active domain
     const exploreMatch = text.match(/^Let's explore (.+)$/i)
@@ -1244,7 +1314,9 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
           // Only compute for the last message to avoid unnecessary work
           let activePills: SuggestionPill[] = []
           if (isLastMessage && !isStreaming && !sessionCompleted && !hasIntentionCard) {
-            if (hasSuggestedReplies && suggestedReplies.type === 'block' && suggestedReplies.blockType === 'suggested_replies') {
+            if (toolDrivenOptions && toolDrivenOptions.length > 0) {
+              activePills = toolDrivenOptions.map((o) => ({ label: o, value: o }))
+            } else if (hasSuggestedReplies && suggestedReplies.type === 'block' && suggestedReplies.blockType === 'suggested_replies') {
               activePills = suggestedReplies.data.replies.map((r) => ({ label: r, value: r }))
             } else if (showDomainQuickReplies) {
               // Top 3 unexplored domains by pulse rating
@@ -1313,7 +1385,7 @@ export function ChatView({ userId, sessionType = 'life_mapping', initialSessionS
                 </div>
               </div>
             ) : null}
-            {streamingDisplay.pendingBlock && (
+            {(streamingDisplay.pendingBlock || pendingToolCall === 'save_file') && (
               <div className="w-full max-w-[95%]">
                 <BuildingCardPlaceholder />
               </div>

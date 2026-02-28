@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { DayPlanView } from './day-plan-view'
 import { shiftDate } from '@/lib/dates'
 import type { DayPlanWithCaptures } from '@/types/day-plan'
@@ -37,6 +38,7 @@ function isDayPlanResponse(value: unknown): value is DayPlanWithCaptures {
 }
 
 export function DayPlanSwipeContainer({ initialDate, today, initialData, calendarEvents, hasCalendarIntegration }: DayPlanSwipeContainerProps) {
+  const router = useRouter()
   const [currentDate, setCurrentDate] = useState(initialDate)
   const [data, setData] = useState<DayPlanWithCaptures>(initialData)
   const [isLoading, setIsLoading] = useState(false)
@@ -141,6 +143,15 @@ export function DayPlanSwipeContainer({ initialDate, today, initialData, calenda
       setData(initialData)
     }
   }, [initialDate, initialData, currentDate])
+
+  // Force server re-render on mount only when data is known stale
+  // (session completion sets this flag; cleared after refresh to avoid repeated fetches)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('dayPlanStale')) {
+      sessionStorage.removeItem('dayPlanStale')
+      router.refresh()
+    }
+  }, [router])
 
   // Clean up abort controller on unmount
   useEffect(() => {

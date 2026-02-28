@@ -77,16 +77,21 @@ export async function saveMessage(
 
 export async function completeSession(
   supabase: SupabaseClient,
-  sessionId: string
+  sessionId: string,
+  userId?: string
 ) {
-  // Complete the session
-  const { data: session, error } = await supabase
+  // Complete the session (userId adds defense-in-depth beyond RLS)
+  let query = supabase
     .from('sessions')
     .update({
       status: 'completed',
       completed_at: new Date().toISOString(),
     })
     .eq('id', sessionId)
+  if (userId) {
+    query = query.eq('user_id', userId)
+  }
+  const { data: session, error } = await query
     .select('user_id')
     .single()
 

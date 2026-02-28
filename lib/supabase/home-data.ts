@@ -15,6 +15,7 @@ export interface HomeData {
   onboardingCompleted: boolean
   nextCheckinDate: string | null
   checkinOverdue: boolean
+  checkinDue: boolean
   activeSessionId: string | null
   activeSessionType: SessionType | null
   todayClosed: boolean
@@ -53,10 +54,13 @@ export async function getHomeData(
   // Use next_checkin_at from users table (set by completeSession)
   let nextCheckinDate: string | null = null
   let checkinOverdue = false
+  let checkinDue = false
 
   if (onboardingCompleted && user?.next_checkin_at) {
     nextCheckinDate = user.next_checkin_at
-    checkinOverdue = diffLocalCalendarDays(user.next_checkin_at) <= 0
+    const daysUntil = diffLocalCalendarDays(user.next_checkin_at)
+    checkinOverdue = daysUntil <= 0
+    checkinDue = daysUntil <= 0  // Due today or past
   }
 
   let activeSessionId: string | null = null
@@ -250,6 +254,7 @@ export async function getHomeData(
     onboardingCompleted,
     nextCheckinDate,
     checkinOverdue,
+    checkinDue,
     activeSessionId,
     activeSessionType,
     todayClosed,

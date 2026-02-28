@@ -1,10 +1,7 @@
 -- Migration: Rename ad_hoc → open_conversation session type
 -- Part of conversation architecture: two-layer model with open conversation base + structured modes
 
--- 1. Rename existing ad_hoc sessions
-UPDATE sessions SET session_type = 'open_conversation' WHERE session_type = 'ad_hoc';
-
--- 2. Drop the session_type check constraint (by name lookup) and recreate with open_conversation
+-- 1. Drop the session_type check constraint FIRST (must happen before UPDATE)
 DO $$
 DECLARE
   constraint_name text;
@@ -24,6 +21,10 @@ BEGIN
 END
 $$;
 
+-- 2. Rename existing ad_hoc sessions (now safe — constraint removed)
+UPDATE sessions SET session_type = 'open_conversation' WHERE session_type = 'ad_hoc';
+
+-- 3. Recreate constraint with all valid session types
 ALTER TABLE sessions ADD CONSTRAINT sessions_session_type_check
   CHECK (session_type IN (
     'life_mapping', 'weekly_checkin', 'monthly_review',

@@ -38,6 +38,7 @@ export default async function HomePage() {
           displayName,
           onboardingCompleted: homeData.onboardingCompleted,
           checkinOverdue: homeData.checkinOverdue,
+          checkinDue: homeData.checkinDue,
           nextCheckinDate: homeData.nextCheckinDate,
           todayClosed: homeData.todayClosed,
           openDayCompleted: homeData.openDayCompleted,
