@@ -2,6 +2,7 @@
 
 import type { FileUpdateData } from '@/types/chat'
 import { toJournalEnergy, ENERGY_DISPLAY } from '@/lib/energy-levels'
+import { escapeHtml, renderInlineMarkdownToHtml } from '@/lib/markdown/render-inline'
 
 interface JournalCardProps {
   data: FileUpdateData
@@ -53,9 +54,10 @@ export function JournalCard({ data }: JournalCardProps) {
 
       {/* Summary */}
       {summary && (
-        <p className="text-[15px] text-text leading-relaxed mb-3">
-          {summary}
-        </p>
+        <div
+          className="text-[15px] text-text leading-relaxed mb-3"
+          dangerouslySetInnerHTML={{ __html: renderInlineMarkdownToHtml(escapeHtml(summary)) }}
+        />
       )}
 
       {/* Domain tags */}

@@ -6,14 +6,14 @@ export async function getCurrentLifeMap(
   supabase: SupabaseClient,
   userId: string
 ): Promise<(LifeMap & { domains: LifeMapDomain[] }) | null> {
-  const { data: lifeMap, error } = await supabase
+  const { data: lifeMap } = await supabase
     .from('life_maps')
     .select('*')
     .eq('user_id', userId)
     .eq('is_current', true)
-    .single()
+    .maybeSingle()
 
-  if (error || !lifeMap) return null
+  if (!lifeMap) return null
 
   const { data: domains } = await supabase
     .from('life_map_domains')

@@ -15,9 +15,8 @@ export const SAVE_FILE_TOOL: Anthropic.Tool = {
   description:
     'Save or update a markdown file in the user\'s life context store. ' +
     'Use this for all content writes: domains, overview, life plan, check-ins, ' +
-    'daily logs, day plans, weekly plans, sage context, sage patterns, captures, ' +
-    'and reflection prompts. The system generates YAML frontmatter automatically — ' +
-    'write only the markdown body.',
+    'daily logs, day plans, weekly plans, sage context, and sage patterns. ' +
+    'The system generates YAML frontmatter automatically — write only the markdown body.',
   input_schema: {
     type: 'object' as const,
     required: ['file_type', 'content'],
@@ -27,7 +26,7 @@ export const SAVE_FILE_TOOL: Anthropic.Tool = {
         enum: [
           'domain', 'overview', 'life-plan', 'check-in', 'daily-log',
           'day-plan', 'weekly-plan', 'sage-context', 'sage-patterns',
-          'capture', 'reflection-prompt',
+          'session-insights', 'capture',
         ],
         description: 'The type of file to save. Determines the storage path and frontmatter schema.',
       },
@@ -57,8 +56,8 @@ export const SAVE_FILE_TOOL: Anthropic.Tool = {
           },
           energy: {
             type: 'string',
-            enum: ['high', 'moderate', 'low'],
-            description: 'Energy level (for daily-log file_type).',
+            enum: ['fired_up', 'focused', 'neutral', 'low', 'stressed'],
+            description: 'Energy level (for day-plan and daily-log file_type).',
           },
           mood_signal: {
             type: 'string',

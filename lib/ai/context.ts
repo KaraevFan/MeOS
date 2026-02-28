@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
-import { getLifeMappingPrompt, getWeeklyCheckinBasePrompt, getAdHocPrompt, getCloseDayPrompt, SUGGESTED_REPLIES_FORMAT } from './prompts'
+import { getLifeMappingPrompt, getWeeklyCheckinBasePrompt, getAdHocPrompt, getCloseDayPrompt } from './prompts'
 import { loadSkill } from './skill-loader'
 import { getBaselineRatings } from '@/lib/supabase/pulse-check'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
@@ -571,10 +571,9 @@ export async function buildConversationContext(
     basePrompt = getWeeklyCheckinBasePrompt()
   }
 
-  // Add FILE_UPDATE format instructions if not already in skill prompt
+  // Add tool-use guidance for skill-based prompts
   if (skill) {
-    basePrompt += getFileUpdateFormatInstructions()
-    basePrompt += SUGGESTED_REPLIES_FORMAT
+    basePrompt += TOOL_USE_GUIDANCE
   }
 
   const fileContext = await fetchAndInjectFileContext(userId, options?.exploreDomain, effectiveType, options?.timezone)
@@ -594,32 +593,20 @@ export async function buildConversationContext(
 }
 
 /**
- * FILE_UPDATE format instructions appended to skill-based prompts.
+ * Brief tool-use guidance appended to skill-based prompts.
+ * Replaces the legacy [FILE_UPDATE] and [SUGGESTED_REPLIES] format instructions.
+ * Tools are defined in lib/ai/tool-definitions.ts — the model sees their full schemas.
  */
-function getFileUpdateFormatInstructions(): string {
-  return `
+const TOOL_USE_GUIDANCE = `
 
-Output format — [FILE_UPDATE] blocks:
-When you create or update user data, output it as [FILE_UPDATE] blocks. The system handles file storage and metadata (YAML frontmatter) — you write only the markdown body.
+## Tools
 
-Block syntax:
-[FILE_UPDATE type="<file_type>" name="<optional_name>"]
-<markdown body content — no YAML frontmatter>
-[/FILE_UPDATE]
+Use the **save_file** tool to persist all artifacts (domains, overview, life plan, check-ins, daily logs, day plans, weekly plans, sage context, sage patterns). Write only the markdown body — the system generates YAML frontmatter automatically. Each save replaces the entire file.
 
-Available file types:
-- type="domain" name="<Domain Name>" — Update a life domain
-- type="overview" — Update the life map overview
-- type="life-plan" — Update the life plan
-- type="weekly-plan" name="{YYYY-MM-DD}" — Create/update this week's focus plan (name = Monday of the week)
-- type="check-in" — Create a check-in summary
-- type="daily-log" name="{YYYY-MM-DD}" — Create a daily journal entry (supports energy, mood_signal, domains_touched attributes)
-- type="day-plan" name="{YYYY-MM-DD}" — Create or update a day plan
-- type="sage-context" — Update your working model of the user
-- type="sage-patterns" — Update observed patterns
+Use **complete_session** when the conversation reaches its natural conclusion — after all artifacts are saved and the user has confirmed. Use type "session" to end the session, or type "arc" to return to open conversation from a structured arc.
 
-Critical rules:
-- Do NOT include YAML frontmatter. The system adds metadata automatically.
-- Write the FULL file content, not a partial update. Each block replaces the entire file body.
-- Emit each [FILE_UPDATE] block as its own section.`
-}
+Use **show_options** to present bounded choices (e.g., mood options, topic suggestions). Do NOT use show_options after open-ended questions — let the user speak freely.
+
+Use **show_pulse_check** during weekly check-ins or when domain re-rating would be valuable.
+
+Use **enter_structured_arc** (only in open conversation) to transition into a structured flow when the user agrees.`

@@ -24,6 +24,7 @@ export interface HomeScreenData {
   displayName: string | null
   onboardingCompleted: boolean
   checkinOverdue: boolean
+  checkinDue: boolean
   nextCheckinDate: string | null
   todayClosed: boolean
   openDayCompleted: boolean
@@ -364,8 +365,8 @@ export function HomeScreen({ data }: { data: HomeScreenData }) {
         </>
       )}
 
-      {/* Check-in nudge — shown across all states when overdue */}
-      {data.checkinOverdue && data.nextCheckinDate && <CheckinDueCard />}
+      {/* Check-in nudge — shown across all states when due or overdue */}
+      {(data.checkinDue || data.checkinOverdue) && data.nextCheckinDate && <CheckinDueCard />}
     </div>
   )
 }

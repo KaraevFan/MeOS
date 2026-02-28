@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { RadarChart } from '@/components/ui/radar-chart'
 import { DomainSlotCompact } from './domain-slot-compact'
 import { ALL_DOMAINS, DOMAIN_SHORT_NAMES } from '@/lib/constants'
+import { escapeHtml, renderInlineMarkdownToHtml } from '@/lib/markdown/render-inline'
 import type { DomainName } from '@/types/chat'
 
 export interface PillDomain {
@@ -112,9 +113,10 @@ export function LifeMapPillShelf({
           <h4 className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary/70 mb-1.5">
             Emerging Patterns
           </h4>
-          <p className="text-xs text-text-secondary leading-relaxed whitespace-pre-line">
-            {insightsContent}
-          </p>
+          <div
+            className="text-xs text-text-secondary leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: renderInlineMarkdownToHtml(escapeHtml(insightsContent)) }}
+          />
         </div>
       )}
     </motion.div>

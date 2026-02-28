@@ -109,6 +109,12 @@ If daily utility is weak but check-ins are strong:
 - [ ] Session state machine expansion (daily_planning, daily_journal, capture session types)
 - [ ] Prompt engineering for POS module conversations (different tone than reflections)
 
+### User File Management
+
+- [ ] Direct file editing — let users view and edit the raw markdown behind any artifact (life map domains, day plans, journals, sage context, etc.) with an in-app editor
+- [ ] File browser / "My Files" view — surface the full file tree so users can see what Sage has written, rewrite content themselves, or delete files they don't want
+- [ ] Version history / diff view — show what changed between file versions so users can review or revert Sage's edits
+
 ### Design & Polish
 
 - [ ] Accessibility audit (screen reader, contrast, focus management)

@@ -5,11 +5,14 @@ import {
   markCapturesFoldedForToolUse,
 } from '@/lib/markdown/file-write-handler'
 import { UserFileSystem } from '@/lib/markdown/user-file-system'
-import { SESSION_WRITE_PERMISSIONS } from '@/lib/markdown/constants'
+import { FILE_TYPES, SESSION_WRITE_PERMISSIONS } from '@/lib/markdown/constants'
+import type { FileType } from '@/lib/markdown/constants'
 import { completeSession } from '@/lib/supabase/sessions'
+import { getOrCreateTodayDayPlan, updateDayPlan } from '@/lib/supabase/day-plan-queries'
 import { captureException } from '@/lib/monitoring/sentry'
 import { addDaysIso } from '@/lib/utils'
 import type { FileUpdateData, SessionType, StructuredArcType, CompletedArc, SessionMetadata } from '@/types/chat'
+import type { EnergyLevel } from '@/types/day-plan'
 
 /** Maximum tool calls allowed per request (rate limit within agentic loop) */
 const MAX_TOOL_CALLS_PER_REQUEST = 15
@@ -22,21 +25,14 @@ export interface ToolExecutionContext {
   timezone: string
   supabase: SupabaseClient
   metadata: SessionMetadata
+  /** Mutable counter tracking tool calls within this request. Passed by reference via object wrapper. */
+  toolCallCount: { value: number }
 }
 
 export interface ToolResult {
   success: boolean
   data?: Record<string, unknown>
   error?: string
-}
-
-/** Track tool call count per request to enforce rate limiting.
- * Safe on Vercel serverless (each invocation gets its own isolate).
- * If moving to a long-lived server, pass this through ToolExecutionContext instead. */
-let requestToolCallCount = 0
-
-export function resetToolCallCounter(): void {
-  requestToolCallCount = 0
 }
 
 /**
@@ -48,9 +44,9 @@ export async function executeTool(
   toolInput: Record<string, unknown>,
   context: ToolExecutionContext
 ): Promise<ToolResult> {
-  // Rate limit: max tool calls per request
-  requestToolCallCount++
-  if (requestToolCallCount > MAX_TOOL_CALLS_PER_REQUEST) {
+  // Rate limit: max tool calls per request (counter lives in context, not module scope)
+  context.toolCallCount.value++
+  if (context.toolCallCount.value > MAX_TOOL_CALLS_PER_REQUEST) {
     return { success: false, error: `Rate limit: max ${MAX_TOOL_CALLS_PER_REQUEST} tool calls per request` }
   }
 
@@ -85,6 +81,12 @@ async function executeSaveFile(
     return { success: false, error: 'file_type is required and must be a string' }
   }
 
+  // Validate file_type against allowed set
+  const validFileTypes = Object.values(FILE_TYPES) as string[]
+  if (!validFileTypes.includes(fileType)) {
+    return { success: false, error: `Invalid file_type: "${fileType}". Must be one of: ${validFileTypes.join(', ')}` }
+  }
+
   const content = input.content
   if (typeof content !== 'string' || content.length === 0) {
     return { success: false, error: 'content is required and must be a non-empty string' }
@@ -96,19 +98,38 @@ async function executeSaveFile(
   }
 
   const fileName = typeof input.file_name === 'string' ? input.file_name : undefined
-  const attributes = input.attributes as Record<string, unknown> | undefined
+
+  // Validate attributes is an object if provided
+  const attributes = (input.attributes !== null && typeof input.attributes === 'object' && !Array.isArray(input.attributes))
+    ? input.attributes as Record<string, unknown>
+    : undefined
 
   // Validate file_name doesn't contain path traversal
   if (fileName && (fileName.includes('..') || fileName.includes('/') || fileName.includes('\\'))) {
     return { success: false, error: 'file_name must not contain path separators or traversal sequences' }
   }
 
+  // Validate file_name is a YYYY-MM-DD date for date-based file types
+  const DATE_FILE_TYPES = ['daily-log', 'day-plan', 'check-in']
+  if (fileName && DATE_FILE_TYPES.includes(fileType)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fileName)) {
+      return { success: false, error: `file_name must be a YYYY-MM-DD date for ${fileType} file type` }
+    }
+  }
+
+  // Validate status against domain status enum if provided
+  const VALID_DOMAIN_STATUSES = ['thriving', 'stable', 'needs_attention', 'in_crisis'] as const
+  const rawStatus = attributes?.status
+  const validatedStatus = (typeof rawStatus === 'string' && (VALID_DOMAIN_STATUSES as readonly string[]).includes(rawStatus))
+    ? rawStatus as FileUpdateData['status']
+    : undefined
+
   // Build FileUpdateData from tool input (bridge to existing handler)
   const fileData: FileUpdateData = {
-    fileType: fileType as FileUpdateData['fileType'],
+    fileType: fileType as FileType,
     name: fileName,
     content,
-    status: attributes?.status as FileUpdateData['status'],
+    status: validatedStatus,
     previewLine: typeof attributes?.preview_line === 'string' ? attributes.preview_line : undefined,
     attributes: attributes ? normalizeAttributes(attributes) : undefined,
   }
@@ -144,13 +165,46 @@ async function executeSaveFile(
     })
   }
 
+  // Post-processing: dual-write day plan data to Postgres for the Day page.
+  // Storage write (above) saves the markdown narrative; this writes structured fields
+  // so the Day Plan page can display intention, energy, session linkage.
+  if (result.success && fileType === 'day-plan') {
+    await writeDayPlanToPostgres(attributes, context).catch((err) => {
+      captureException(err, {
+        tags: { tool: 'save_file', stage: 'day_plan_postgres_write' },
+        extra: { sessionId: context.sessionId },
+      })
+    })
+  }
+
+  // Post-processing: dual-write evening journal data to Postgres for the Day page.
+  // Same pattern as day-plan dual-write: Storage holds the markdown, Postgres holds structured fields.
+  if (result.success && fileType === 'daily-log') {
+    await writeJournalToPostgres(content, attributes, context).catch((err: unknown) => {
+      captureException(err, {
+        tags: { tool: 'save_file', stage: 'journal_postgres_write' },
+        extra: { sessionId: context.sessionId },
+      })
+    })
+  }
+
   if (!result.success) {
     return { success: false, error: result.error ?? 'File write failed' }
   }
 
+  // Include domainUpdate data when a domain file has updated_rating —
+  // the route emits this as an SSE event so the client can update the spider chart live.
+  const responseData: Record<string, unknown> = { path: result.path, bytes: content.length }
+  if (fileType === 'domain' && attributes?.updated_rating && fileData.name) {
+    const rating = Math.round(Number(attributes.updated_rating))
+    if (rating >= 1 && rating <= 5) {
+      responseData.domainUpdate = { domain: fileData.name, updatedRating: rating }
+    }
+  }
+
   return {
     success: true,
-    data: { path: result.path, bytes: content.length },
+    data: responseData,
   }
 }
 
@@ -167,10 +221,12 @@ async function executeCompleteSession(
   }
 
   // Check current session status (institutional learning: CHECK constraint)
+  // Defense-in-depth: user_id filter alongside RLS (consistent with completeSession)
   const { data: session } = await context.supabase
     .from('sessions')
     .select('status')
     .eq('id', context.sessionId)
+    .eq('user_id', context.userId)
     .single()
 
   if (!session) {
@@ -191,10 +247,10 @@ async function executeCompleteSession(
       return { success: false, error: 'No active arc to complete' }
     }
 
-    const completedArcs: CompletedArc[] = Array.isArray(context.metadata.completed_arcs)
+    const existingArcs: CompletedArc[] = Array.isArray(context.metadata.completed_arcs)
       ? context.metadata.completed_arcs as CompletedArc[]
       : []
-    completedArcs.push({ mode: context.activeMode, completed_at: new Date().toISOString() })
+    const completedArcs = [...existingArcs, { mode: context.activeMode, completed_at: new Date().toISOString() }]
 
     await context.supabase.from('sessions')
       .update({
@@ -205,6 +261,7 @@ async function executeCompleteSession(
         },
       })
       .eq('id', context.sessionId)
+      .eq('user_id', context.userId)
 
     return {
       success: true,
@@ -215,8 +272,8 @@ async function executeCompleteSession(
     }
   }
 
-  // Session completion
-  await completeSession(context.supabase, context.sessionId)
+  // Session completion (pass userId for defense-in-depth beyond RLS)
+  await completeSession(context.supabase, context.sessionId, context.userId)
 
   // Clean up pending_completion flag if it exists
   if (context.metadata.pending_completion) {
@@ -225,6 +282,7 @@ async function executeCompleteSession(
     await context.supabase.from('sessions')
       .update({ metadata: cleanMetadata })
       .eq('id', context.sessionId)
+      .eq('user_id', context.userId)
   }
 
   // Note: summary generation is handled by the route after all text has been streamed.
@@ -266,6 +324,7 @@ async function executeEnterStructuredArc(
       metadata: { ...context.metadata, active_mode: arcType },
     })
     .eq('id', context.sessionId)
+    .eq('user_id', context.userId)
 
   return {
     success: true,
@@ -274,6 +333,69 @@ async function executeEnterStructuredArc(
       message: `Entered ${arcType} arc.`,
     },
   }
+}
+
+const VALID_ENERGY_LEVELS: readonly string[] = ['fired_up', 'focused', 'neutral', 'low', 'stressed']
+
+/**
+ * Write structured day plan fields to Postgres day_plans table.
+ * Called as post-processing after the Storage markdown write succeeds.
+ * Failure here is non-fatal — logged to Sentry but does not fail the tool call.
+ */
+async function writeDayPlanToPostgres(
+  attributes: Record<string, unknown> | undefined,
+  context: ToolExecutionContext
+): Promise<void> {
+  const dayPlan = await getOrCreateTodayDayPlan(context.supabase, context.userId, context.timezone)
+
+  const updateData: Record<string, unknown> = {
+    morning_session_id: context.sessionId,
+    morning_completed_at: new Date().toISOString(),
+  }
+
+  // Extract flat attributes that Claude passes via tool input
+  const intention = attributes?.intention
+  if (typeof intention === 'string' && intention.length > 0) {
+    updateData.intention = intention
+  }
+
+  const energyLevel = attributes?.energy
+  if (typeof energyLevel === 'string' && VALID_ENERGY_LEVELS.includes(energyLevel)) {
+    updateData.energy_level = energyLevel as EnergyLevel
+  }
+
+  await updateDayPlan(context.supabase, context.userId, dayPlan.date, updateData)
+}
+
+/**
+ * Write evening journal fields to Postgres day_plans table.
+ * Called as post-processing after the Storage markdown write succeeds for daily-log files.
+ * Failure here is non-fatal — logged to Sentry but does not fail the tool call.
+ */
+async function writeJournalToPostgres(
+  content: string,
+  attributes: Record<string, unknown> | undefined,
+  context: ToolExecutionContext
+): Promise<void> {
+  const dayPlan = await getOrCreateTodayDayPlan(context.supabase, context.userId, context.timezone)
+
+  // Extract first paragraph as summary (same logic as journal-card.tsx)
+  const summaryLines = content.split('\n').filter((l) => l.trim() && !l.startsWith('#'))
+  const summary = summaryLines[0]?.trim() ?? content.slice(0, 200)
+
+  const updateData: Record<string, unknown> = {
+    evening_session_id: context.sessionId,
+    evening_completed_at: new Date().toISOString(),
+    evening_reflection: {
+      mood: typeof attributes?.mood_signal === 'string' ? attributes.mood_signal : null,
+      energy: typeof attributes?.energy === 'string' ? attributes.energy : null,
+      sage_synthesis: summary,
+      went_well: [],
+      carry_forward: [],
+    },
+  }
+
+  await updateDayPlan(context.supabase, context.userId, dayPlan.date, updateData)
 }
 
 /**

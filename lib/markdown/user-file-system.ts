@@ -72,30 +72,40 @@ export class UserFileSystem {
    * Read a markdown file from storage. Returns null if file doesn't exist.
    * Uses gray-matter to parse YAML frontmatter + markdown body.
    */
-  async readFile(path: string): Promise<ParsedMarkdownFile | null> {
+  async readFile(path: string, retryOn404 = false): Promise<ParsedMarkdownFile | null> {
     this.validatePath(path)
 
     const fullPath = `${this.basePath}/${path}`
-    const { data, error } = await this.supabase.storage
-      .from(STORAGE_BUCKET)
-      .download(fullPath)
+    const maxAttempts = retryOn404 ? 3 : 1
 
-    if (error) {
-      // Most read errors are "file doesn't exist yet" — expected and non-fatal.
-      // Only log at debug level to avoid noisy dev console errors.
-      if (process.env.NODE_ENV === 'development') {
-        console.debug(`[UserFileSystem] Read error for ${path} (likely missing file)`)
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const { data, error } = await this.supabase.storage
+        .from(STORAGE_BUCKET)
+        .download(fullPath)
+
+      if (error) {
+        // Retry on 404 if enabled (handles Storage write propagation delay)
+        if (retryOn404 && attempt < maxAttempts - 1) {
+          await sleep(300 * (attempt + 1))
+          continue
+        }
+        // Most read errors are "file doesn't exist yet" — expected and non-fatal.
+        if (process.env.NODE_ENV === 'development') {
+          console.debug(`[UserFileSystem] Read error for ${path} (likely missing file)`)
+        }
+        return null
       }
-      return null
+
+      const text = await data.text()
+      const parsed = matter(text)
+
+      return {
+        frontmatter: parsed.data as Record<string, unknown>,
+        content: parsed.content.trim(),
+      }
     }
 
-    const text = await data.text()
-    const parsed = matter(text)
-
-    return {
-      frontmatter: parsed.data as Record<string, unknown>,
-      content: parsed.content.trim(),
-    }
+    return null
   }
 
   /**

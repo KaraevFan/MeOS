@@ -58,6 +58,11 @@ export function resolveFileUpdatePath(update: FileUpdateData, timezone: string =
     }
     case FILE_TYPES.WEEKLY_PLAN:
       return 'life-plan/weekly.md'
+    case FILE_TYPES.CAPTURE: {
+      const date = todayFallback()
+      const slug = update.name ?? Date.now().toString(36)
+      return `captures/${date}-${slug}.md`
+    }
     default:
       console.warn(`[FileWriteHandler] Unknown file type: ${update.fileType}`)
       return null
@@ -184,6 +189,12 @@ export async function handleFileUpdate(
         // Normalize to Monday of the given week (Sage may provide a non-Monday date)
         const weekOf = normalizeToMonday(rawWeekOf)
         await ufs.writeWeeklyPlan(update.content, weekOf)
+        break
+      }
+      case FILE_TYPES.CAPTURE: {
+        const captureDate = getLocalDateString(timezone)
+        const timeCode = update.name ?? Date.now().toString(36)
+        await ufs.writeCapture(captureDate, timeCode, update.content)
         break
       }
       default:

@@ -4,6 +4,7 @@ import type { DayPlanWithCaptures } from '@/types/day-plan'
 import type { CalendarEvent } from '@/lib/calendar/types'
 import { IntentionCard } from './intention-card'
 import { MorningSnapshotCard } from './morning-snapshot-card'
+import { EveningReflectionCard } from './evening-reflection-card'
 import { CapturedThoughts } from './captured-thoughts'
 import { CalendarCard } from '@/components/ui/calendar-card'
 import { CalendarConnectCard } from '@/components/ui/calendar-connect-card'
@@ -82,6 +83,14 @@ export function DayPlanView({ data, date, calendarEvents, hasCalendarIntegration
       {/* Captured Thoughts — accumulates through the day */}
       {(captures.length > 0 || dayPlan) && (
         <CapturedThoughts captures={captures} />
+      )}
+
+      {/* Evening Reflection — shows after Close Day session */}
+      {dayPlan?.evening_completed_at && dayPlan.evening_reflection && (
+        <EveningReflectionCard
+          reflection={dayPlan.evening_reflection}
+          eveningCompletedAt={dayPlan.evening_completed_at}
+        />
       )}
     </div>
   )

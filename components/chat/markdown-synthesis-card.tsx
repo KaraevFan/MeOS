@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import type { FileUpdateData } from '@/types/chat'
+import { escapeHtml, renderInlineMarkdownToHtml } from '@/lib/markdown/render-inline'
 
 interface MarkdownSynthesisCardProps {
   data: FileUpdateData
@@ -82,7 +83,10 @@ export function MarkdownSynthesisCard({ data }: MarkdownSynthesisCardProps) {
             }}
           >
             <div ref={contentRef}>
-              <p className="text-sm text-text leading-relaxed whitespace-pre-wrap">{narrative}</p>
+              <div
+                className="text-sm text-text leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: renderInlineMarkdownToHtml(escapeHtml(narrative)) }}
+              />
             </div>
           </div>
           {needsToggle && (
@@ -106,7 +110,7 @@ export function MarkdownSynthesisCard({ data }: MarkdownSynthesisCardProps) {
             {section.items.map((item, j) => (
               <li key={j} className="flex items-start gap-1.5">
                 <span className="text-primary mt-0.5">&bull;</span>
-                <span>{item}</span>
+                <span dangerouslySetInnerHTML={{ __html: renderInlineMarkdownToHtml(escapeHtml(item)) }} />
               </li>
             ))}
           </ul>
